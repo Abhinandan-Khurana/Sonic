@@ -57,7 +57,7 @@ class FridayDropsTest {
         ),
     )
 
-    private fun repo(h: FakeHttp, date: String = "2026-10-16") = DropsRepository(context, h, clock = { at(date) }, zone = utc)
+    private fun repo(h: FakeHttp, date: String = "2026-10-16") = DropsRepository(context, h, clock = { at(date) }, zone = utc, canDownload = { true }, publishDownload = { album, _ -> album })
 
     @Test
     fun `a new drop opens every Friday`() {
@@ -95,18 +95,59 @@ class FridayDropsTest {
     @Test
     fun `the download plan picks the best audio and the cover`() {
         val plan = DropsRepository.planDownload(JSONObject(Fixtures.text("ia/metadata_NS050.json")))
-        assertEquals("MP3", plan.codec) // this album has no FLAC, so its original MP3s
-        assertEquals(15, plan.tracks.size)
-        assertEquals((1..15).toList(), plan.tracks.map { it.track })
-        assertEquals("Christmas with Mr. Rice", plan.tracks[0].title)
-        assertEquals(240_900L, plan.tracks[0].lengthMs)
-        assertEquals("NS050_Cover.jpg", plan.coverName)
-        assertEquals("http://creativecommons.org/licenses/by-nc-sa/4.0/", plan.license)
+        assertEquals("NONE", plan.codec)
+        assertTrue(plan.tracks.isEmpty())
         val flac = DropsRepository.planDownload(JSONObject(String(metadataFor("x"))))
         assertEquals("FLAC", flac.codec)
         assertEquals(listOf("01 Opening.flac", "02 Lowlight.flac"), flac.tracks.map { it.name })
         assertEquals(2_000L, flac.tracks[1].lengthMs)
         assertEquals("https://archive.org/download/x/01%20Opening.flac", DropsRepository.fileUrl("x", "01 Opening.flac"))
+    }
+
+    @Test
+    fun `both sign in and FLAC availability are enforced before a claim is spent`() = runBlocking {
+        val deniedHttp = http()
+        val denied = DropsRepository(context, deniedHttp, clock = { at("2026-10-16") }, zone = utc)
+        val item = (denied.refresh() as DropState.Ready).week.items.first()
+        val before = deniedHttp.calls.size
+        assertTrue(denied.claim(item).exceptionOrNull()!!.message!!.contains("Sign in"))
+        assertEquals(before, deniedHttp.calls.size)
+        assertEquals(3, denied.claimsLeft)
+
+        val unavailableHttp = FakeHttp(mapOf(
+            "advancedsearch.php" to { Fixtures.bytes("ia/search_page1.json") },
+            "/metadata/" to { Fixtures.bytes("ia/metadata_NS050.json") },
+        ))
+        val unavailable = repo(unavailableHttp)
+        unavailable.refresh()
+        assertTrue(unavailable.claim(item).exceptionOrNull()!!.message!!.contains("unavailable in FLAC"))
+        assertEquals(3, unavailable.claimsLeft)
+        assertTrue(unavailable.albums.value.isEmpty())
+    }
+
+    @Test
+    fun `publication failure does not consume a claim`() = runBlocking {
+        val h = http()
+        val r = DropsRepository(context, h, clock = { at("2026-10-16") }, zone = utc,
+            canDownload = { true }, publishDownload = { _, _ -> error("Folder permission was lost") })
+        val item = (r.refresh() as DropState.Ready).week.items.first()
+        assertTrue(r.claim(item).isFailure)
+        assertEquals(3, r.claimsLeft)
+        assertTrue(r.albums.value.isEmpty())
+    }
+
+    @Test
+    fun `Archive FLAC labels cannot admit renamed MP3 bytes`() = runBlocking {
+        val h = FakeHttp(mapOf(
+            "advancedsearch.php" to { Fixtures.bytes("ia/search_page1.json") },
+            "/metadata/" to { metadataFor("x") },
+            ".flac" to { Fixtures.bytes("Music/Ines Varga/Paper Moons/01 Paper Moons.mp3") },
+        ))
+        val r = repo(h)
+        val item = (r.refresh() as DropState.Ready).week.items.first()
+        assertTrue(r.claim(item).exceptionOrNull()!!.message!!.contains("not valid FLAC"))
+        assertEquals(3, r.claimsLeft)
+        assertTrue(r.albums.value.isEmpty())
     }
 
     @Test

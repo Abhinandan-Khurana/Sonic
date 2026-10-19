@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.0] - 2026-10-19 (development)
+
+### Added
+- Soulseek FLAC search, track/folder downloads, private messages, contacts, optional selected-folder sharing and stay-online mode.
+- Pinned MIT Rust core with Android JNI libraries for four ABIs and local peer interoperability tests.
+- Room-backed transfers/conversations and optional Keystore-protected credentials.
+- User-selected download destination; completed files survive uninstalling Runout.
+
+### Changed
+- All music admission and playback is FLAC-only, with byte validation and non-destructive legacy migration.
+- Soulseek sign-in gates both Soulseek and Internet Archive downloads; offline playback remains account-free.
+- Nostr online UI and automatic relay publication are replaced; legacy local data are preserved.
+- Internet Archive MP3/Ogg fallback is removed; unavailable/failed FLAC downloads consume no claim.
+
+---
+
 ## [0.3.0] - 2026-10-19
 
 ### Added

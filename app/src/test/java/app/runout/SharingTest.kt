@@ -84,7 +84,7 @@ class SharingTest {
     @Test
     fun `other music goes as a card - sleeve and track list, never the audio`() = runBlocking {
         val sender = ShareRepository(context, SocialRepository(context).apply { rename("Maya") })
-        val album = Fixtures.paperMoons()
+        val album = Fixtures.nightDrive(license = null)
         val file = sender.exportAlbum(album)
         ZipFile(file).use { z -> assertTrue(z.entries().toList().none { it.name.startsWith("audio/") }) }
 
@@ -94,13 +94,13 @@ class SharingTest {
         assertEquals("Maya", result.fromName)
         assertTrue(result.album.tracks.all { it.uri.isEmpty() })
         assertTrue(receiver.received.value.isEmpty())
-        assertEquals(listOf("Paper Moons"), receiverSocial.friends.value.single().cards.map { it.title })
+        assertEquals(listOf("Night Drive"), receiverSocial.friends.value.single().cards.map { it.title })
     }
 
     @Test
     fun `your own music and pressings you made can travel with audio`() = runBlocking {
-        val file = ShareRepository(context, SocialRepository(context)).exportAlbum(Fixtures.paperMoons().copy(owned = true))
-        ZipFile(file).use { z -> assertEquals(3, z.entries().toList().count { it.name.startsWith("audio/") }) }
+        val file = ShareRepository(context, SocialRepository(context)).exportAlbum(Fixtures.nightDrive(owned = true, license = null))
+        ZipFile(file).use { z -> assertEquals(2, z.entries().toList().count { it.name.startsWith("audio/") }) }
     }
 
     @Test
@@ -124,18 +124,29 @@ class SharingTest {
     @Test
     fun `the package format round-trips`() {
         val dir = File(context.cacheDir, "pkg").apply { mkdirs() }
-        val audio = Fixtures.bytes("tones/tone_16_44.wav")
+        val audio = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
         val out = ByteArrayOutputStream()
-        val album = Fixtures.nightDrive().let { a -> a.copy(tracks = a.tracks.take(1).map { it.copy(fileName = "audio/01 Tone.wav") }) }
-        VinylPackage.write(out, VinylPackage.Kind.ALBUM, maya, album, listOf(ShelfItem("A", "B", 2020, "FLAC", null)), null, listOf("audio/01 Tone.wav" to { audio.inputStream() }))
+        val album = Fixtures.nightDrive().let { a -> a.copy(tracks = a.tracks.take(1).map { it.copy(fileName = "audio/01 Tone.flac") }) }
+        VinylPackage.write(out, VinylPackage.Kind.ALBUM, maya, album, listOf(ShelfItem("A", "B", 2020, "FLAC", null)), null, listOf("audio/01 Tone.flac" to { audio.inputStream() }))
         val c = VinylPackage.read(out.toByteArray().inputStream(), dir)
         assertEquals(VinylPackage.Kind.ALBUM, c.kind)
         assertEquals(maya, c.from)
         assertEquals("Night Drive", c.album!!.title)
         assertEquals(1, c.shelf.size)
         assertNull(c.sleeve)
-        assertArrayEquals(audio, c.audio.getValue("audio/01 Tone.wav").readBytes())
+        assertArrayEquals(audio, c.audio.getValue("audio/01 Tone.flac").readBytes())
         assertEquals("audio/03 AC DC Back.mp3", VinylPackage.entryNameFor(2, "AC/DC: Back?", "MP3"))
+    }
+
+    @Test
+    fun `unsupported music and renamed MP3 bytes cannot travel with audio`() = runBlocking {
+        assertTrue(runCatching { ShareRepository(context, SocialRepository(context)).exportAlbum(Fixtures.paperMoons()) }.isFailure)
+        val album = Fixtures.nightDrive().let { a -> a.copy(tracks = a.tracks.take(1).map { it.copy(fileName = "audio/01 Fake.flac") }) }
+        val bad = Fixtures.bytes("Music/Ines Varga/Paper Moons/01 Paper Moons.mp3")
+        assertTrue(invalid {
+            VinylPackage.write(ByteArrayOutputStream(), VinylPackage.Kind.ALBUM, maya, album,
+                audio = listOf("audio/01 Fake.flac" to { bad.inputStream() }))
+        }.contains("not valid FLAC"))
     }
 
     @Test

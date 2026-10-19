@@ -1,3 +1,5 @@
+> Historical v0.3 documentation: Soulseek replaces the online Nostr features in v0.4, and music is FLAC-only. See [current Soulseek behavior](SOULSEEK.md) and [build instructions](BUILDING.md).
+
 # Decentralized Identity & Nostr Relay Architecture
 
 One of Runout's core innovations is providing **cross-device user profiles, friend lists, and username search without operating any centralized servers**.

@@ -1,125 +1,69 @@
-# Runout Architecture & Internal Systems
+# Runout 0.4 architecture
 
-Runout is engineered with an emphasis on **audio fidelity**, **serverless decentralization**, and **tactile visual design**. This document outlines the technical design of its core subsystems.
+Runout is a single Android application module with a small Rust workspace for Soulseek. Kotlin owns user-visible policy, local persistence, document access and playback. The native library owns protocol framing, peer connections and network transfer machinery. There is no Runout account server.
 
----
-
-## High-Level Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              JETPACK COMPOSE UI                             │
-│  ListeningRoom ────► Turntable (Canvas) ────► Crate (3D Perspective)        │
-│       │                      │                         │                    │
-│       ▼                      ▼                         ▼                    │
-│  Panels (Glass)       Pixel Screen Canvas        Record Art (Picture Disc)  │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            PLAYBACK & DECK ENGINE                           │
-│  Deck.kt ◄─────────────────────────► PlaybackService (MediaSession)         │
-│  (Needle tracking, RPM, hold, flip)   │                                     │
-│                                       ▼                                     │
-│                             AndroidX Media3 ExoPlayer                       │
-│                                       │                                     │
-│                                       ▼                                     │
-│                             Runout DSP Float Sink                           │
-│                             ├─ ReplayGain                                   │
-│                             ├─ Automatic Headroom Preamp                    │
-│                             ├─ 10-Band Biquad EQ (or AutoEq)                │
-│                             ├─ Warmth Analog Shelf                          │
-│                             └─ 1.5ms Look-Ahead Peak Limiter                │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             DECENTRALIZED DATA                              │
-│  LibraryRepository (SAF Scan)       Nostr Relay Client (Damus, Nos, Primal) │
-│  TagReader (FLAC/MP3/WAV)           BIP-340 Schnorr / NIP-19 Bech32 Keys    │
-│  ShareRepository (.vinyl zip)       Friday Drops Client (Internet Archive)  │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    UI[Compose listening room and panels] --> Actions[RoomActions / MainActivity]
+    Actions --> Library[Library, pressing and record repositories]
+    Actions --> Soulseek[SoulseekRepository]
+    Actions --> Deck[Deck and PlaybackService]
+    Library --> FLAC[FlacPolicy]
+    Deck --> FLAC
+    Deck --> Audio[Media3 / SoundEngine / DspAudioSink]
+    Soulseek --> DB[(Local Room database)]
+    Soulseek --> Vault[Android Keystore credential vault]
+    Soulseek --> Storage[DownloadStorage / SAF]
+    Drops[DropsRepository / Internet Archive HTTPS] --> Storage
+    Soulseek --> Transport[SoulseekTransport / NativeSoulseek JNI]
+    Transport --> Bridge[Rust adapter]
+    Bridge --> Core[Vendored soulseek-rs-lib]
+    Core --> Network[Soulseek server and peers]
+    Storage --> FLAC
 ```
 
----
+The Archive publication callback passes through `SoulseekRepository` to enforce the same signed-in download policy and serialized publication. Archive traffic remains independent HTTPS and contains no Soulseek credentials.
 
-## 1. Custom 32-Bit Float DSP AudioSink
+## Composition and state
 
-### The Challenge
-Standard Android audio players (including standard Media3 / ExoPlayer setups) fold audio down to 16-bit integer PCM when software audio effects or equalizers are attached. This truncates 24-bit high-resolution audio files (such as 24-bit/96kHz or 24-bit/192kHz FLAC) and limits dynamic headroom.
+`RunoutApp.AppGraph` constructs shared repositories, an application coroutine scope and the deck once. It combines scanned folders, imported records, pressings, Archive albums and Soulseek albums into one crate. Document identity deduplication keeps a managed download from appearing again when its folder is scanned.
 
-### Runout's Solution: `DspAudioSink.kt`
-Runout implements a custom `AudioSink` wrapper positioned directly in front of Android's `AudioTrack`:
-1. **Dynamic Conversion:** Incoming audio buffers (whether 16-bit PCM, 24-bit packed PCM, 32-bit integer PCM, or float) are converted into standardized 32-bit floating-point arrays (`FloatArray`).
-2. **Float DSP Processing Chain:**
-   - **ReplayGain:** Applies gain adjustment derived from Vorbis/ID3 tags without clipping.
-   - **Automatic Headroom Calculation:** Pre-attenuates the master signal by $\max(0, \max(\text{EQ Boosts}))$, ensuring additive EQ curves cannot exceed digital full scale (0 dBFS).
-   - **10-Band Biquad Filter Bank:** Peaking filters with Q=1.414 calculated dynamically for the track's sample rate (44.1 kHz, 48 kHz, 96 kHz, 192 kHz).
-   - **Warmth Analog Emulation:** A subtle +1.5 dB low-shelf boost at 110 Hz combined with a -2 dB high-shelf rolloff above 9 kHz.
-   - **Look-Ahead Limiter:** A 1.5 ms circular buffer with fast attack and smooth exponential decay holding peak output at −0.3 dBFS.
-3. **Pure Mode Passthrough:** When Pure Mode is active, all DSP blocks are bypassed. The float or PCM buffer passes directly to `AudioTrack`.
-4. **Bit-Perfect DAC Output:** On Android 14+ (API 34+), Runout queries `AudioTrack` and the connected USB audio device for bit-perfect output mode, bypassing the Android system mixer entirely.
+`MainActivity` collects flows into `RoomState` and supplies `RoomActions` to Compose. It handles folder pickers, notification permission and activity lifecycle. Panels render state and request actions; they do not open sockets or query the database.
 
----
+The retained `account/`, `nostr/` and friend-card code supports legacy data/tests. The production graph creates no Nostr relay client or online Nostr account session. Local `.vinyl` sharing still uses the Android share sheet.
 
-## 2. Audio File Ingestion & Scoped Storage
+## Soulseek boundary
 
-### Zero Broad Storage Permissions
-To ensure user privacy and compatibility with modern Android security standards, Runout requires **no device-wide storage permissions** (`READ_MEDIA_AUDIO` or `MANAGE_EXTERNAL_STORAGE`).
+- `SoulseekRepository` coordinates sign-in, session generations, account-scoped state, commands, event handling and publication. A mutex serializes calls to the current native session. Blocking work runs on IO coroutines.
+- `SoulseekTransport` is the injectable command/event boundary. Unit tests provide a local fake; `NativeTransport` delegates to `NativeSoulseek` in the app.
+- `NativeSoulseek` owns the JNI handle. Requests and events use JSON; the bridge command reference is in [native/README.md](../native/README.md).
+- `native/bridge` adapts the pinned MIT core without exposing Android filesystem assumptions to the network layer. Kotlin gives it an explicit share manifest and opens requested files through opaque descriptor keys.
+- Foreground services cover transfers and optional stay-online behavior. Android timeouts disconnect and preserve resumable state. An idle background app disconnects unless stay-online is enabled.
 
-Instead, Runout operates via the **Storage Access Framework (SAF)**:
-- The user selects an album folder using `ACTION_OPEN_DOCUMENT_TREE`.
-- The app persists URI read permissions via `contentResolver.takePersistableUriPermission()`.
-- `LibraryScanner.kt` traverses the document tree up to 8 levels deep, ignoring hidden directories (starting with `.`).
+Search results are bounded to 5,000 entries and displayed in pages of 100. Folder downloads enqueue only the selected peer directory's FLAC files. Reachability still depends on peer availability and network conditions.
 
-### Native Streaming Tag Reader (`TagReader.kt`)
-Android's built-in `MediaMetadataRetriever` frequently fails on specialized FLAC block layouts or variable bitrate MP3s. Runout embeds a pure-Kotlin binary tag parser:
-- **FLAC:** Reads `fLaC` stream marker, extracts `STREAMINFO` block (sample rate, bit depth, channel count, sample count), parses `VORBIS_COMMENT` blocks for tags and ReplayGain metadata, and extracts `PICTURE` blocks.
-- **MP3:** Reads ID3v2.2, ID3v2.3, and ID3v2.4 headers, unpacks unsynchronized APIC frames, and measures duration from Xing, Info, or VBRI headers.
-- **WAV:** Traverses RIFF chunks, parses `fmt ` descriptors, and extracts `LIST` INFO chunks.
+## Persistence and identity
 
----
+`SoulseekDatabase` contains transfer, contact, message and downloaded-album tables. Transfers, contacts and conversations are scoped to the signed-in Soulseek username. Completed albums remain available offline across logout. Room flows drive the panels. Schema version 1 is exported in `app/schemas/`; future schema changes require migrations rather than destructive recreation.
 
-## 3. Serverless Social & Identity Mesh (Nostr)
+Incoming private messages commit before the explicit native acknowledgement. Stable server-message identities deduplicate replay after interruption. Outgoing messages persist as pending and become sent when accepted by the transport; this is not a delivery/read receipt.
 
-Runout operates without centralized user databases, authentication servers, or backend APIs.
+Remembered credentials use a Keystore AES-GCM key and a ciphertext file in `noBackupFilesDir`. Remembering is optional, and logout clears saved credentials. Backup rules also exclude the private chat database and legacy account secrets. The Soulseek protocol itself is plaintext.
 
-```
-Phone A (User @abhi·7F3A)                  Public Nostr Relays
-┌────────────────────────┐              ┌──────────────────────┐
-│ Generates secp256k1 key│              │   relay.damus.io     │
-│ Signs Kind 33760 Event ├─────────────►│   nos.lol            │
-│ (Profile + 600 albums) │              │   relay.primal.net   │
-└────────────────────────┘              └──────────┬───────────┘
-                                                   │
-Phone B (Search "abhi")                            │
-┌────────────────────────┐                         │
-│ Query prefix tag: abhi ├─────────────────────────┘
-│ Validates BIP-340 sig  │
-│ Renders Friend's shelf │
-└────────────────────────┘
-```
+## Music admission and publication
 
-### Identity Specification
-- **Keys:** 256-bit private key generated on device using `SecureRandom`. Encoded as `nsec1...` and `npub1...` via Bech32 (NIP-19).
-- **Signatures:** Pure-Kotlin implementation of **BIP-340 Schnorr signatures** over the `secp256k1` elliptic curve. Verified against all official Bitcoin test vectors.
-- **Event Kind 33760:** An addressable, replaceable event storing user display metadata and catalog JSON.
-- **Tag Prefix Search:** Relays index events with tag arrays: `["n", "a"]`, `["n", "ab"]`, `["n", "abh"]`, `["n", "abhi"]`. This enables instant prefix queries across public relays.
+`FlacPolicy` is the common admission boundary for scanning, imports, pressing, sharing, playback and download publication. It checks names and FLAC structure, including STREAMINFO and an encoded frame header; valid ID3-prefixed FLAC is accepted. This establishes format, not the source recording's provenance or absence of lossy transcoding.
 
----
+`DownloadStorage` handles private staging paths, writable destination checks, album folders and validated document copies for both download sources. The repository retains account checks, partial-document naming, final renaming and database commits. Completed music is stored through SAF in the user's chosen folder and survives app removal. Cancellation never deletes already published music.
 
-## 4. Division of Vinyl Sides
+Soulseek completion follows: private staged bytes → path/size/FLAC validation → hidden destination document → destination validation → FLAC rename → album and transfer database transaction. Paused or failed work retains enough state for retry. Archive uses the same storage/publication boundary and consumes a weekly claim only after successful publication.
 
-Real vinyl records have physical capacity limits (~22 minutes per side). Runout translates digital album tracklists into authentic physical vinyl structures via `RecordModel.kt`:
-1. Total album duration is calculated.
-2. Albums under ~26 minutes become a single-sided LP (Side A).
-3. Albums between 26 and 48 minutes are divided into Side A and Side B using a partition algorithm that balances side durations without ever splitting an individual track.
-4. Albums over 48 minutes are pressed as Double LPs (Sides A, B, C, D).
+Legacy JSON indexes retain valid FLAC tracks from mixed albums and back up changed indexes as `*.json.before-flac`. Original non-FLAC files are hidden, never removed by migration.
 
----
+## Audio and presentation
 
-## 5. Visual Pipeline & Shaders
+`Deck` owns record/side/needle behavior and drives Media3. `PlaybackService` exposes the MediaSession and rechecks external media additions against the FLAC policy. `SoundEngine` configures ReplayGain, EQ, warmth, headroom and limiter processing through `DspAudioSink`. Pure mode disables processing and turntable effects. Actual output format depends on Android and the connected route.
 
-- **Canvas-Drawn Turntable:** The plinth, rotating platter, vinyl disc, tonearm assembly, strobe dots, and pitch fader are rendered on a hardware-accelerated Compose `Canvas`.
-- **Kyant Backdrop:** Utilizes Android 13+ RenderEffect shaders to render frosted liquid glass with true optical refraction and light dispersion over dynamic album art.
-- **Silkscreen Pixel Font:** An open-license 8-bit dot-matrix font rendered pixel-to-dot to emulate hardware LED/VFD displays with horizontal marquee text scrolling.
+The canvas turntable and crate stay independent of network availability. Glass effects use supported Android rendering features with existing fallbacks.
+
+See [developer notes](DEVELOPMENT.md) for change boundaries and [Soulseek behavior](SOULSEEK.md) for account and network limitations.

@@ -32,3 +32,10 @@ Thumbs.db
 
 # Roborazzi test outputs (uncommitted scratch)
 app/build/outputs/roborazzi/
+
+# Native build artifacts; native sources and lockfiles are tracked.
+native/target/
+app/src/main/jniLibs/
+
+# New APKs are published as GitHub release assets.
+release/Runout-0.4.0-development.apk

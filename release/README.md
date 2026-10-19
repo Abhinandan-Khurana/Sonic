@@ -1,53 +1,23 @@
-# Runout Release Deliverables
+# Runout downloads
 
-This directory contains standalone release builds and source distributions for **Runout**.
+## 0.4.0 development
 
-## Current Release: v0.3.0
+[GitHub pre-release](https://github.com/Somchandra17/runout/releases/tag/v0.4.0-dev.1) · [Download APK](https://github.com/Somchandra17/runout/releases/download/v0.4.0-dev.1/Runout-0.4.0-development.apk) · [Release notes](RELEASE_NOTES.md) · [Verification report](Runout-0.4.0-VERIFICATION.md)
 
-| File | Description | Size | SHA-256 Checksum |
-| :--- | :--- | :---: | :--- |
-| [`Runout-0.3.0.apk`](Runout-0.3.0.apk) | Standalone debug-signed Android app | 26.9 MB | `4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2` |
-| [`Runout-0.3.0-source.zip`](Runout-0.3.0-source.zip) | Complete source bundle, tests, and assets | 1.7 MB | `3d74b07230216d9d8fb2b8cc28d9b13e605ca3a6d12b77860ffa78ccbebd8b70` |
-| [`SHA256SUMS.txt`](SHA256SUMS.txt) | Official cryptographic signatures | 158 B | *See file for signatures* |
+The universal APK supports Android 9 or newer and all four Android ABIs. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app, with separate private state. New APKs are hosted as release assets to keep source history smaller.
 
----
+Offline FLAC playback remains account-free. Soulseek provides FLAC search, downloads and private messages; Internet Archive Friday Drops remains available. Both download providers require Soulseek sign-in. Sharing and stay-online mode are opt-in.
 
-## Verifying Integrity
+Download the APK and its `.sha256` file into one directory, then verify:
 
-Before installing, you can verify the integrity of the downloaded files:
-
-### On macOS / Linux:
 ```bash
-shasum -a 256 -c SHA256SUMS.txt
+sha256sum -c Runout-0.4.0-development.apk.sha256
 ```
 
-### On Windows (PowerShell):
-```powershell
-Get-FileHash Runout-0.3.0.apk -Algorithm SHA256
-```
+On Windows, use `Get-FileHash Runout-0.4.0-development.apk -Algorithm SHA256` and compare with the checksum file. Open the APK on your Android device and allow installation from your browser/file manager if prompted.
 
----
+This is a debug-signed development integration using experimental Soulseek 177/1. See the verification report for tested behavior and remaining production work. Updates to an existing app require the same signing certificate; keep your original installation when trying this build.
 
-## Installation Guide (Sideloading)
+## Historical 0.3.0 assets
 
-1. **Transfer the APK to your Android device**:
-   - Send via Quick Share, USB cable, Google Drive, Telegram saved messages, or download directly from GitHub Releases.
-2. **Open the APK on your phone**:
-   - Tap the `.apk` file from your Downloads or file manager.
-3. **Allow Unknown Sources**:
-   - If prompted, tap **Settings** and toggle **Allow from this source** for your browser or file manager.
-4. **Complete Installation**:
-   - Tap **Install**. It installs cleanly over earlier builds while preserving your folder selection, claimed drops, pressings, and account keys.
-
----
-
-## Permissions & Privacy Model
-
-Runout is built under strict privacy and serverless principles:
-
-| Permission | Purpose | Why it's safe |
-| :--- | :--- | :--- |
-| **Storage Access Framework (SAF)** | Reading your chosen music folder | Runout **never** asks for broad device storage access (`MANAGE_EXTERNAL_STORAGE` or `READ_MEDIA_AUDIO`). You grant access to one specific folder only. |
-| **Foreground Service (MediaSession)** | Background audio playback | Keeps your music spinning when the screen is off or when switching apps. |
-| **Internet Access** | Nostr relays, Friday drops, cover art | Communicates directly with public Nostr relays, Cover Art Archive, and Internet Archive. No analytics, tracking, or proprietary telemetry. |
-| **USB Host Access (Optional)** | Bit-perfect USB DAC playback | Allows Android 14+ to bypass the system mixer when a supported USB DAC is connected in Pure Mode. |
+[APK](Runout-0.3.0.apk), [source bundle](Runout-0.3.0-source.zip), [checksums](SHA256SUMS.txt) and [original release notes](archive/v0.3.0.md) are retained as historical artifacts. They contain the prior Nostr and multi-format behavior and do not include the Soulseek integration.

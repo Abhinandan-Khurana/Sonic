@@ -66,12 +66,12 @@ class TurntableDeckTest {
 
     /** Four one-minute tracks: two sides of two. */
     private fun album(): Album {
-        val tone = Fixtures.file("tones/tone_16_44.wav")
+        val tone = Fixtures.file("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
         val tracks = (1..4).map { i ->
-            val f = File(context.cacheDir, "t$i.wav").also { tone.copyTo(it, overwrite = true) }
+            val f = File(context.cacheDir, "t$i.flac").also { tone.copyTo(it, overwrite = true) }
             Track("t$i", Uri.fromFile(f).toString(), "Track $i", i, 1, 60_000)
         }
-        return Album("deck", "Deck Test", "Runout", 2026, "", tracks, AudioQuality("WAV", 16, 44_100))
+        return Album("deck", "Deck Test", "Runout", 2026, "", tracks, AudioQuality("FLAC", 24, 96_000))
     }
 
     private val s: DeckState get() = deck.state.value

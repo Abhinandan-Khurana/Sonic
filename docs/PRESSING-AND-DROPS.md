@@ -1,3 +1,5 @@
+> Historical v0.3 documentation: Soulseek replaces the online Nostr features in v0.4, and music is FLAC-only. See [current Soulseek behavior](SOULSEEK.md) and [build instructions](BUILDING.md).
+
 # Pressing Plant & Friday Drops
 
 Two defining features of **Runout** are the **Pressing Plant** (which lets you master and design your own bespoke vinyl releases) and **Friday Drops** (a serverless weekly distribution of curated legal Creative Commons music).

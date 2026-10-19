@@ -1,5 +1,6 @@
 package app.runout.library
 
+import android.content.Context
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.DiscStyle
@@ -90,13 +91,32 @@ object AlbumJson {
         )
     }
 
+    /** Keep the original index once before removing unsupported legacy music from the shelf. */
+    fun readValidatedList(context: Context, file: File): List<Album> {
+        val original = readList(file)
+        val valid = original.mapNotNull { FlacPolicy.filterAlbum(context, it) }
+        if (valid != original && file.exists()) {
+            val backup = File(file.parentFile, file.name + ".before-flac")
+            // A full disk must not prevent offline playback or discard the old index.
+            runCatching {
+                if (!backup.exists()) {
+                    val pending = File(backup.parentFile, backup.name + ".tmp")
+                    file.copyTo(pending, overwrite = true)
+                    check(pending.renameTo(backup)) { "Could not preserve the previous library index" }
+                }
+                writeList(file, valid)
+            }
+        }
+        return valid
+    }
+
     fun writeList(file: File, albums: List<Album>) {
         val arr = JSONArray()
         albums.forEach { arr.put(toJson(it)) }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.writeText(arr.toString())
-        tmp.renameTo(file)
+        tmp.outputStream().use { output -> output.write(arr.toString().toByteArray(Charsets.UTF_8)); output.fd.sync() }
+        check(tmp.renameTo(file)) { "Could not save the music library index" }
     }
 
     fun readList(file: File): List<Album> = runCatching {

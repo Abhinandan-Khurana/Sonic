@@ -1,50 +1,25 @@
-Runout 0.3.0 is a major evolutionary release bringing a complete visual and mechanical overhaul of the turntable, picture discs with album artwork printed directly onto the vinyl, an 8-bit dot-matrix pixel screen, decentralized user profiles over public Nostr relays, and SHA-256 verified `.vinyl` package transfers.
+Runout 0.4.0 development adds Soulseek FLAC search, downloads and private messages while retaining Internet Archive Friday Drops and account-free offline playback.
 
-## Downloads
+## Included
 
-| Platform / Asset | File | Size | Checksum (SHA-256) |
-| :--- | :--- | :---: | :--- |
-| **Android 9.0 or newer** | `Runout-0.3.0.apk` | 26.9 MB | `4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2` |
-| **Source Code (.zip)** | `Runout-0.3.0-source.zip` | 1.7 MB | `3d74b07230216d9d8fb2b8cc28d9b13e605ca3a6d12b77860ffa78ccbebd8b70` |
-| **Integrity Signatures** | `SHA256SUMS.txt` | 158 B | *See checksums below* |
+- FLAC-only music scanning, playback, imports, pressing, sharing and downloads, with byte-level format validation. Legacy non-FLAC media are hidden without deletion.
+- Soulseek username/password sign-in, track and album-folder downloads, queue/progress display, pause/resume/retry and selected-folder FLAC sharing.
+- Private messages and contacts stored locally, with incoming messages committed before acknowledgement. Nostr online sessions and profile publication are replaced.
+- Soulseek sign-in required for downloads from both providers. Archive albums without FLAC or failed downloads consume no weekly claim.
+- Completed music saved to a user-chosen writable folder and retained after uninstall. Optional remembered credentials protected by Android Keystore.
+- Optional stay-online mode with a visible notification and Disconnect action.
+- Current architecture, developer/contributor guides, exported database schema and a shared download-storage boundary.
 
-New here? Follow the [install and sideloading guide](https://github.com/Abhiroop1122/runout/blob/main/docs/HANDBOOK.md#16-project-files-installing-and-building).
+## Install
 
----
+Download **Runout-0.4.0-development.apk** from this release. It supports Android 9+ and ARM64, ARMv7, x86-64 and x86. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app. Private state is separate; the original app is not replaced. Verify the APK with the attached SHA-256 file.
 
-## What's New in 0.3.0
+Play local FLAC without signing in. For downloads, open Account, sign in with your Soulseek ID, and choose a download folder. An unused username creates a Soulseek account; there is no password reset, and another client on the same account will be disconnected. The Account screen explains these details. The Soulseek protocol does not encrypt credentials or messages.
 
-### The Glass Turntable ("Glass Drive RG-1")
-- Rebuilt from the ground up inspired by classic direct-drive DJ decks.
-- Plinth crafted from frosted liquid glass with real optical refraction shaders (Kyant Backdrop) on Android 13+.
-- Platter rim featuring 4 rows of 180 rotating strobe dots.
-- S-shaped chrome tonearm with counterweight, anti-skate dial, and genuine tonearm arc geometry solved via the law of cosines.
-- Tactile pitch fader with ±8% adjustment, center zero-detent indicator light, and double-tap reset.
-- Real-time synthesised mechanical audio: needle drops, surface crackle loops, and runout groove thumps.
+## Verification and limits
 
-### Picture Discs
-- Every album with artwork is pressed as a picture disc: cover art rotates smoothly under the grooved vinyl texture with a stationary lighting sheen.
-- Dynamically rendered smooth groove bands reflecting actual track positions and durations.
+The attached verification report records passing JVM/UI, native and emulator integration tests, zero lint errors, and four-ABI native packaging with 16 KiB alignment. Integration tests use actual local peers and never sign in to public Soulseek.
 
-### Integrated Dot-Matrix Pixel Screen
-- Mint-green dots on dark smoked glass driven by the Silkscreen typography engine.
-- Real-time scrolling track metadata, playback timer, RPM speed indicator, and cue readouts.
-- TalkBack screen reader accessibility integration.
+This is a **development pre-release**, debug-signed and using experimental client version 177/1. Production signing, an appropriate production client identifier, and public-network interoperability checks remain. Search/transfer success depends on peer availability and network reachability. A valid FLAC container does not prove a lossless recording source or redistribution rights.
 
-### Decentralized Identity via Nostr Relays
-- Completely serverless account creation with local 256-bit private keys (`nsec1...`).
-- Public profiles and shelf catalogs published as signed kind-33760 events across public Nostr relays (`relay.damus.io`, `nos.lol`, `relay.primal.net`).
-- Prefix search powered by relay tag indexing with collision prevention via 4-character key suffixes (`@abhi·7F3A`).
-
-### Checksummed `.vinyl` Record Transfers
-- Every audio file within a `.vinyl` bundle is indexed with its SHA-256 fingerprint.
-- Hostile path traversals ("zip-slip") and corrupted audio files are detected and rejected on arrival.
-
----
-
-## Checksums (SHA-256)
-
-```text
-4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2  Runout-0.3.0.apk
-3d74b07230216d9d8fb2b8cc28d9b13e605ca3a6d12b77860ffa78ccbebd8b70  Runout-0.3.0-source.zip
-```
+GitHub source archives correspond to this release's tagged source commit. Original Runout and third-party license notices are preserved in the repository and APK.

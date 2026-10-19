@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="soulseek_credentials.xml" />
+        <exclude domain="sharedpref" path="account.xml" />
+        <exclude domain="database" path="soulseek.db" />
+        <exclude domain="database" path="soulseek.db-wal" />
+        <exclude domain="database" path="soulseek.db-shm" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="soulseek_credentials.xml" />
+        <exclude domain="sharedpref" path="account.xml" />
+        <exclude domain="database" path="soulseek.db" />
+        <exclude domain="database" path="soulseek.db-wal" />
+        <exclude domain="database" path="soulseek.db-shm" />
+    </device-transfer>
+</data-extraction-rules>

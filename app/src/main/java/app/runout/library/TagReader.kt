@@ -64,8 +64,12 @@ object TagReader {
         if (String(magic, 0, 3, Charsets.US_ASCII) == "ID3") {
             // Rare: an ID3 tag in front of the FLAC stream.
             val rest = s.bytes(6)
+            if (rest[2].toInt() and 0x80 != 0 || rest[3].toInt() and 0x80 != 0 ||
+                rest[4].toInt() and 0x80 != 0 || rest[5].toInt() and 0x80 != 0) return null
             val size = synchsafe(rest, 2)
+            if (size > MAX_BLOCK) return null
             s.skip(size.toLong())
+            if (rest[1].toInt() and 0x10 != 0) s.skip(10) // ID3v2.4 footer
             magic = s.bytes(4)
         }
         if (String(magic, Charsets.US_ASCII) != "fLaC") return null
@@ -74,19 +78,32 @@ object TagReader {
         val tags = mutableMapOf<String, String>()
         var picture: ByteArray? = null
         var pictureType = -1
+        var streamInfoSeen = false
+        var blocks = 0
+        var minFrameBytes = 0
         while (true) {
             val header = s.u8()
             val last = header and 0x80 != 0
             val type = header and 0x7F
             val length = s.u24be()
             if (length > MAX_BLOCK) return null
+            if (++blocks > 1024 || (blocks == 1 && type != 0) || type == 127) return null
             when (type) {
                 0 -> {
+                    if (streamInfoSeen || length != 34) return null
+                    streamInfoSeen = true
                     val si = s.bytes(length)
                     fun u(i: Int) = si[i].toInt() and 0xFF
+                    val minBlock = (u(0) shl 8) or u(1)
+                    val maxBlock = (u(2) shl 8) or u(3)
+                    val minFrame = (u(4) shl 16) or (u(5) shl 8) or u(6)
+                    val maxFrame = (u(7) shl 16) or (u(8) shl 8) or u(9)
+                    if (minBlock < 16 || maxBlock < minBlock || (maxFrame != 0 && minFrame > maxFrame)) return null
+                    minFrameBytes = minFrame
                     val rate = (u(10) shl 12) or (u(11) shl 4) or (u(12) shr 4)
                     val channels = ((u(12) shr 1) and 0x7) + 1
                     val bits = (((u(12) and 0x1) shl 4) or (u(13) shr 4)) + 1
+                    if (rate !in 1..655350 || bits !in 4..32) return null
                     val total = ((u(13) and 0x0F).toLong() shl 32) or
                         (u(14).toLong() shl 24) or (u(15).toLong() shl 16) or (u(16).toLong() shl 8) or u(17).toLong()
                     val ms = if (rate > 0) total * 1000 / rate else 0
@@ -112,6 +129,8 @@ object TagReader {
             }
             if (last) break
         }
+        // STREAMINFO without any encoded audio is a truncated download, not playable music.
+        if (!streamInfoSeen || !readFlacFrameHeader(s, minFrameBytes)) return null
         val kbps = if (info.durationMs > 0 && fileSize > 0) (fileSize * 8 / info.durationMs).toInt() else null
         return info.copy(
             title = tags["TITLE"],
@@ -127,6 +146,43 @@ object TagReader {
             bitrateKbps = kbps,
             picture = picture,
         )
+    }
+
+    /** Validate the first frame header and its CRC, rather than accepting only the FLAC magic. */
+    private fun readFlacFrameHeader(s: Stream, minFrameBytes: Int): Boolean {
+        val header = mutableListOf<Int>()
+        fun next(): Int = s.u8().also { header += it }
+        val b0 = next(); val b1 = next(); val b2 = next(); val b3 = next()
+        val blockCode = b2 ushr 4
+        val rateCode = b2 and 15
+        val widthCode = b3 ushr 1 and 7
+        if (b0 != 0xFF || b1 and 0xFE != 0xF8 || blockCode == 0 || rateCode == 15 ||
+            b3 and 1 != 0 || b3 ushr 4 > 10 || widthCode == 3) return false
+        val number = next()
+        val extra = when {
+            number and 0x80 == 0 -> 0
+            number and 0xE0 == 0xC0 -> 1
+            number and 0xF0 == 0xE0 -> 2
+            number and 0xF8 == 0xF0 -> 3
+            number and 0xFC == 0xF8 -> 4
+            number and 0xFE == 0xFC -> 5
+            number == 0xFE && b1 and 1 != 0 -> 6
+            else -> return false
+        }
+        repeat(extra) { if (next() and 0xC0 != 0x80) return false }
+        if (blockCode == 6) next()
+        if (blockCode == 7) { next(); next() }
+        if (rateCode == 12) next()
+        if (rateCode == 13 || rateCode == 14) { next(); next() }
+        var crc = 0
+        header.forEach { byte ->
+            crc = crc xor byte
+            repeat(8) { crc = if (crc and 0x80 != 0) (crc shl 1 xor 7) and 0xFF else crc shl 1 and 0xFF }
+        }
+        if (s.u8() != crc) return false
+        // Include at least a subframe and the frame CRC; use STREAMINFO's stronger bound when set.
+        s.skip((minFrameBytes - header.size - 1).coerceAtLeast(3).toLong())
+        return true
     }
 
     private fun parseVorbisComments(b: ByteArray, out: MutableMap<String, String>) {
@@ -482,7 +538,7 @@ object TagReader {
             while (left > 0) {
                 val skipped = input.skip(left)
                 if (skipped <= 0) {
-                    if (input.read() < 0) return
+                    if (input.read() < 0) throw EOFException()
                     left--
                 } else {
                     left -= skipped

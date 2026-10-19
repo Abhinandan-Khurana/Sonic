@@ -71,8 +71,11 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 enum class Panel(val title: String, val nav: String) {
+    SEARCH("Soulseek · FLAC search", "Search"),
+    TRANSFERS("Downloads", "Downloads"),
     DROPS("Friday Drops", "Drops"),
-    FRIENDS("Friends", "Friends"),
+    FRIENDS("Soulseek · Messages", "Messages"),
+    ACCOUNT("Soulseek account", "Account"),
     PRESSING("Pressing Plant", "Pressing Plant"),
     SOUND("Sound", "Sound"),
 }
@@ -171,10 +174,16 @@ fun DropsPanel(
     claimed: Set<String>,
     claiming: Map<String, Float>,
     actions: RoomActions,
+    signedIn: Boolean = false,
+    onAccount: () -> Unit = {},
 ) {
     LaunchedEffect(drops is DropState.Idle) { if (drops is DropState.Idle) actions.refreshDrops() }
     val left = (DropsRepository.CLAIMS_PER_WEEK - claimed.size).coerceAtLeast(0)
     Column(Modifier.fillMaxWidth().testTag("panel:drops")) {
+        if (!signedIn) {
+            BasicText("Sign in with Soulseek to download from Internet Archive. Local FLAC playback is always available without an account.", style = Room.LabelQuiet)
+            Pill("Sign in with Soulseek", onAccount, modifier = Modifier.padding(vertical = 8.dp))
+        }
         when (drops) {
             DropState.Idle, DropState.Loading -> BasicText("Digging through the archive…", style = Room.Label)
             is DropState.Failed -> {
@@ -191,12 +200,12 @@ fun DropsPanel(
                 )
                 Spacer(Modifier.height(8.dp))
                 w.items.forEach { item ->
-                    DropRow(item, isClaimed = item.identifier in claimed, progress = claiming[item.identifier], canClaim = left > 0, actions = actions)
+                    DropRow(item, isClaimed = item.identifier in claimed, progress = claiming[item.identifier], canClaim = left > 0 && signedIn, actions = actions)
                 }
             }
         }
         BasicText(
-            "Every Friday, ten Creative Commons albums from Internet Archive's netlabel collection, the same ten for everyone. Claim three; they download to your phone and stay in your crate, and you're free to send them on.",
+            "Every Friday, ten Creative Commons albums from Internet Archive's netlabel collection, the same ten for everyone. Claim up to three FLAC albums into your chosen music folder. Albums without FLAC cannot be claimed and use no allowance.",
             style = Room.LabelQuiet,
             modifier = Modifier.padding(top = 12.dp, bottom = 10.dp),
         )
@@ -404,6 +413,7 @@ fun formatLength(ms: Long): String {
 fun provenance(album: Album): String? = when (album.source) {
     Source.RECEIVED -> "Sent by ${album.from ?: "a friend"}"
     Source.DROP -> listOfNotNull("Friday Drop", Licences.label(album.license)).joinToString(" · ")
+    Source.SOULSEEK -> "Soulseek · ${album.from ?: "FLAC download"}"
     Source.PRESSING -> "Your pressing" + (album.disc?.let { " · ${it.label.lowercase()} vinyl" } ?: "")
     Source.FOLDER -> Licences.label(album.license)
 }

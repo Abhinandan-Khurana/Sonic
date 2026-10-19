@@ -1,9 +1,7 @@
 package app.runout.library
 
 import android.content.Context
-import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.os.Build
 import android.provider.DocumentsContract
 import app.runout.model.Album
 import app.runout.model.AudioQuality
@@ -135,67 +133,9 @@ class LibraryScanner(private val context: Context) {
             ?: images.firstOrNull()
     }
 
-    /** Reads one file: our own parser first, Android's retriever to fill gaps, then a size estimate. */
-    private fun readFile(uri: Uri, entry: Entry, wantPicture: Boolean): AudioInfo? {
-        val parsed = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { TagReader.read(it, entry.ext, entry.size, wantPicture) }
-        }.getOrNull()
-        val needsRetriever = parsed == null || parsed.durationMs <= 0 || parsed.title == null
-        val retrieved = if (needsRetriever) readWithRetriever(uri, entry.ext, wantPicture && parsed?.picture == null) else null
-        if (parsed == null && retrieved == null) return null
-        val merged = merge(parsed, retrieved, entry.ext)
-        return merged
-    }
-
-    private fun merge(a: AudioInfo?, b: AudioInfo?, ext: String): AudioInfo {
-        if (a == null) return b!!
-        if (b == null) return a
-        return a.copy(
-            title = a.title ?: b.title,
-            artist = a.artist ?: b.artist,
-            albumArtist = a.albumArtist ?: b.albumArtist,
-            album = a.album ?: b.album,
-            track = a.track ?: b.track,
-            disc = a.disc ?: b.disc,
-            year = a.year ?: b.year,
-            durationMs = if (a.durationMs > 0) a.durationMs else b.durationMs,
-            sampleRate = a.sampleRate ?: b.sampleRate,
-            bits = a.bits ?: b.bits,
-            bitrateKbps = a.bitrateKbps ?: b.bitrateKbps,
-            picture = a.picture ?: b.picture,
-            codec = a.codec.ifBlank { codecFor(ext, b.bitrateKbps) },
-        )
-    }
-
-    private fun readWithRetriever(uri: Uri, ext: String, wantPicture: Boolean): AudioInfo? {
-        val mmr = MediaMetadataRetriever()
-        return try {
-            mmr.setDataSource(context, uri)
-            fun key(k: Int) = mmr.extractMetadata(k)?.trim()?.takeIf { it.isNotEmpty() }
-            val bitrate = key(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.let { (it / 1000).toInt() }
-            val info = AudioInfo(
-                codec = codecFor(ext, bitrate),
-                title = key(MediaMetadataRetriever.METADATA_KEY_TITLE),
-                artist = key(MediaMetadataRetriever.METADATA_KEY_ARTIST),
-                albumArtist = key(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
-                album = key(MediaMetadataRetriever.METADATA_KEY_ALBUM),
-                track = TagReader.leadingInt(key(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)),
-                disc = TagReader.leadingInt(key(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)),
-                year = TagReader.year(key(MediaMetadataRetriever.METADATA_KEY_YEAR) ?: key(MediaMetadataRetriever.METADATA_KEY_DATE)),
-                durationMs = key(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L,
-                sampleRate = if (Build.VERSION.SDK_INT >= 31) key(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)?.toIntOrNull() else null,
-                bits = if (Build.VERSION.SDK_INT >= 31) key(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)?.toIntOrNull() else null,
-                bitrateKbps = bitrate,
-                picture = if (wantPicture) mmr.embeddedPicture else null,
-            )
-            // Nothing at all came back: treat as a failed read rather than an empty track.
-            if (info.title == null && info.durationMs == 0L && info.album == null) null else info
-        } catch (_: Throwable) {
-            null
-        } finally {
-            runCatching { mmr.release() }
-        }
-    }
+    /** A provider MIME type or Android decoder fallback cannot bypass the music policy. */
+    private fun readFile(uri: Uri, entry: Entry, wantPicture: Boolean): AudioInfo? =
+        FlacPolicy.read(context, uri, entry.name, wantPicture)
 
     private suspend fun readFolder(
         treeUri: Uri,
@@ -208,14 +148,14 @@ class LibraryScanner(private val context: Context) {
 
         var failed = 0
         var pictureFound = false
-        val reads = audio.sortedBy { it.name.lowercase() }.map { entry ->
+        val reads = audio.sortedBy { it.name.lowercase() }.mapNotNull { entry ->
             coroutineContext.ensureActive()
             val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, entry.docId)
             val info = readFile(uri, entry, wantPicture = !pictureFound)
             if (info?.picture != null) pictureFound = true
-            if (info == null) failed++
-            // A file we can't measure still goes on the shelf; its length is estimated from its size.
-            val base = info ?: AudioInfo(codec = codecFor(entry.ext, null))
+            if (info == null) { failed++; return@mapNotNull null }
+            // A verified FLAC stream may omit its total sample count.
+            val base = info
             val estimated = base.durationMs <= 0
             val withDuration = if (estimated) base.copy(durationMs = estimateDurationMs(entry.size, base.codec)) else base
             Read(entry, uri, withDuration, estimated)
@@ -268,7 +208,7 @@ class LibraryScanner(private val context: Context) {
 
     companion object {
         const val MAX_DEPTH = 8
-        val AUDIO_EXTENSIONS = setOf("flac", "mp3", "m4a", "mp4", "aac", "wav", "ogg", "oga", "opus")
+        val AUDIO_EXTENSIONS = setOf("flac")
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
         val PREFERRED_IMAGE_NAMES = setOf("cover", "folder", "front", "album", "albumart", "artwork")
 

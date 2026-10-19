@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="soulseek_credentials.xml" />
+    <exclude domain="sharedpref" path="account.xml" />
+    <exclude domain="database" path="soulseek.db" />
+    <exclude domain="database" path="soulseek.db-wal" />
+    <exclude domain="database" path="soulseek.db-shm" />
+</full-backup-content>

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -82,6 +83,7 @@ import app.runout.social.Friend
 import app.runout.social.Profile
 import app.runout.sound.OutputStatus
 import app.runout.sound.SoundSettings
+import app.runout.soulseek.*
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -112,6 +114,20 @@ data class RoomState(
     val account: app.runout.account.Account? = null,
     val accountStatus: app.runout.account.AccountStatus? = null,
     val people: PeopleState = PeopleState(),
+    val soulseekSession: SoulseekSession = SoulseekSession(),
+    val soulseekResults: List<SoulseekSearchResult> = emptyList(),
+    val soulseekSearching: Boolean = false,
+    val soulseekTransfers: List<SoulseekTransfer> = emptyList(),
+    val soulseekUploads: List<SoulseekUpload> = emptyList(),
+    val soulseekContacts: List<SoulseekContact> = emptyList(),
+    val soulseekConversations: List<SoulseekConversation> = emptyList(),
+    val soulseekConversation: String? = null,
+    val downloadFolder: String? = null,
+    val sharedFolder: String? = null,
+    val soulseekSharing: Boolean = false,
+    val soulseekStayOnline: Boolean = false,
+    val soulseekSavedUsername: String? = null,
+    val soulseekError: String? = null,
 )
 
 interface RoomActions : DeckActions {
@@ -150,6 +166,27 @@ interface RoomActions : DeckActions {
     fun addFriend(profile: app.runout.account.RemoteProfile) {}
     fun refreshFriends() {}
     suspend fun coverFor(item: app.runout.social.ShelfItem): String? = null
+    fun signInSoulseek(username: String, password: String, remember: Boolean) {}
+    fun signInSavedSoulseek() {}
+    fun signOutSoulseek() {}
+    fun searchSoulseek(query: String) {}
+    fun stopSoulseekSearch() {}
+    fun downloadSoulseek(result: SoulseekSearchResult) {}
+    fun downloadSoulseekFolder(result: SoulseekSearchResult) {}
+    fun pauseSoulseekTransfer(id: String) {}
+    fun resumeSoulseekTransfer(id: String) {}
+    fun cancelSoulseekTransfer(id: String) {}
+    fun retrySoulseekTransfer(id: String) {}
+    fun pickDownloadFolder() {}
+    fun pickSharedFolder() {}
+    fun setSoulseekSharing(enabled: Boolean) {}
+    fun setSoulseekStayOnline(enabled: Boolean) {}
+    fun addSoulseekContact(username: String) {}
+    fun openSoulseekConversation(username: String) {}
+    fun closeSoulseekConversation() {}
+    fun sendSoulseekMessage(username: String, text: String) {}
+    fun markSoulseekRead(username: String) {}
+    fun clearSoulseekError() {}
 }
 
 /**
@@ -400,8 +437,11 @@ fun RoomScreen(
                 ) {
                     when (shown) {
                         Panel.SOUND -> SoundPanel(state.sound, state.output, actions)
-                        Panel.FRIENDS -> FriendsPanel(state.profile, state.account, state.accountStatus, state.people, state.friends, state.albums, actions)
-                        Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions)
+                        Panel.SEARCH -> SoulseekSearchPanel(state, actions, onAccount = { panel = Panel.ACCOUNT }, onTransfers = { panel = Panel.TRANSFERS }, onMessage = { peer -> actions.openSoulseekConversation(peer); panel = Panel.FRIENDS })
+                        Panel.TRANSFERS -> SoulseekTransfersPanel(state, actions)
+                        Panel.ACCOUNT -> SoulseekAccountPanel(state, actions, onOffline = { panel = null })
+                        Panel.FRIENDS -> SoulseekMessagesPanel(state, actions, onAccount = { panel = Panel.ACCOUNT })
+                        Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = { panel = Panel.ACCOUNT })
                         Panel.PRESSING -> PressingPanel(state.albums, state.profile, actions)
                     }
                 }
@@ -540,10 +580,14 @@ private fun CornerLabels(
     val newDrop = state.drops is DropState.Ready && state.claimed.size < DropsRepository.CLAIMS_PER_WEEK
 
     val nav = @Composable {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Panel.entries.forEach { p ->
                 GlassPill(
-                    text = p.nav + if (p == Panel.DROPS && newDrop) " •" else "",
+                    text = p.nav + when {
+                        p == Panel.DROPS && newDrop -> " •"
+                        p == Panel.FRIENDS && state.soulseekConversations.any { it.unread > 0 } -> " •"
+                        else -> ""
+                    },
                     backdrop = backdrop,
                     onClick = { onOpen(p) },
                     modifier = Modifier.testTag("nav:${p.name}"),

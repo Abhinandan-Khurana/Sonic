@@ -114,10 +114,12 @@ class FolderProvider : DocumentsProvider() {
     companion object {
         const val AUTHORITY = "app.runout.test.documents"
         lateinit var root: File
+        private var writable = false
         const val ROOT_ID = "primary:Music"
 
-        fun install(folder: File): Uri {
+        fun install(folder: File, allowWrite: Boolean = false): Uri {
             root = folder
+            writable = allowWrite
             val info = ProviderInfo().apply {
                 authority = AUTHORITY
                 exported = true
@@ -156,7 +158,7 @@ class FolderProvider : DocumentsProvider() {
                 Document.COLUMN_MIME_TYPE -> b.add(col, mime(f))
                 Document.COLUMN_SIZE -> b.add(col, if (f.isDirectory) null else f.length())
                 Document.COLUMN_LAST_MODIFIED -> b.add(col, f.lastModified())
-                Document.COLUMN_FLAGS -> b.add(col, 0)
+                Document.COLUMN_FLAGS -> b.add(col, if (!writable) 0 else if (f.isDirectory) Document.FLAG_DIR_SUPPORTS_CREATE or Document.FLAG_SUPPORTS_RENAME else Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE or Document.FLAG_SUPPORTS_RENAME)
             }
         }
     }
@@ -173,7 +175,25 @@ class FolderProvider : DocumentsProvider() {
     }
 
     override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor =
-        ParcelFileDescriptor.open(fileOf(documentId), ParcelFileDescriptor.MODE_READ_ONLY)
+        ParcelFileDescriptor.open(fileOf(documentId), if (writable) ParcelFileDescriptor.parseMode(mode) else ParcelFileDescriptor.MODE_READ_ONLY)
+
+    override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
+        check(writable)
+        require(displayName.isNotEmpty() && '/' !in displayName && '\\' !in displayName && displayName != "..")
+        val target = File(fileOf(parentDocumentId), displayName)
+        if (mimeType == Document.MIME_TYPE_DIR) check(target.mkdir()) else check(target.createNewFile())
+        return idOf(target)
+    }
+
+    override fun deleteDocument(documentId: String) { check(writable); fileOf(documentId).deleteRecursively() }
+    override fun renameDocument(documentId: String, displayName: String): String {
+        check(writable)
+        require('/' !in displayName && '\\' !in displayName && displayName != "..")
+        val original = fileOf(documentId)
+        val renamed = File(original.parentFile, displayName)
+        check(original.renameTo(renamed))
+        return idOf(renamed)
+    }
 
     override fun isChildDocument(parentDocumentId: String, documentId: String) =
         documentId == parentDocumentId || documentId.startsWith("$parentDocumentId/")
@@ -211,6 +231,12 @@ open class RecordingActions : RoomActions {
     override fun closeProfile() { log += "closeProfile" }
     override fun addFriend(profile: app.runout.account.RemoteProfile) { log += "addFriend:${profile.username}" }
     override fun copyAccountKey() { log += "copyKey" }
+    override fun signInSoulseek(username: String, password: String, remember: Boolean) { log += "soulseekSignIn:$username:$remember" }
+    override fun searchSoulseek(query: String) { log += "soulseekSearch:$query" }
+    override fun downloadSoulseek(result: app.runout.soulseek.SoulseekSearchResult) { log += "soulseekDownload:${result.id}" }
+    override fun downloadSoulseekFolder(result: app.runout.soulseek.SoulseekSearchResult) { log += "soulseekFolder:${result.id}" }
+    override fun openSoulseekConversation(username: String) { log += "soulseekConversation:$username" }
+    override fun sendSoulseekMessage(username: String, text: String) { log += "soulseekMessage:$username:$text" }
 }
 
 /**

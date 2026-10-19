@@ -47,7 +47,7 @@ class LibraryRepository(
 
     init {
         scope.launch {
-            val cached = withContext(Dispatchers.IO) { AlbumJson.readList(cacheFile) }
+            val cached = withContext(Dispatchers.IO) { AlbumJson.readValidatedList(context, cacheFile) }
             if (_albums.value.isEmpty()) _albums.value = cached
             // Cached shelf but a folder that may have changed: refresh quietly.
             if (_folder.value != null && cached.isEmpty()) rescan()

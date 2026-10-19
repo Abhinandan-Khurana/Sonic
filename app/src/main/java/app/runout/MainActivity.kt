@@ -3,6 +3,9 @@ package app.runout
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,11 +23,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.runout.account.Account
-import app.runout.account.RemoteProfile
 import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
-import app.runout.ui.PeopleState
 import app.runout.model.Album
 import app.runout.model.Source
 import app.runout.pressing.PressingDraft
@@ -34,6 +34,7 @@ import app.runout.sound.SoundSettings
 import app.runout.ui.RoomActions
 import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
+import app.runout.soulseek.SoulseekSearchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,7 +51,11 @@ class MainActivity : ComponentActivity() {
     private val graph get() = (application as RunoutApp).graph
     private val message = MutableStateFlow<String?>(null)
     private val claiming = MutableStateFlow<Map<String, Float>>(emptyMap())
-    private val people = MutableStateFlow(PeopleState())
+    private val activeConversation = MutableStateFlow<String?>(null)
+    private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) graph.soulseek.setStayOnline(true)
+        else message.value = "Stay-online mode needs notifications so you can see and disconnect the session. Local playback remains available."
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,9 +82,20 @@ class MainActivity : ComponentActivity() {
             val claimed by graph.drops.claimed.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
             val note by message.collectAsStateWithLifecycle()
-            val account by graph.accounts.account.collectAsStateWithLifecycle()
-            val accountStatus by graph.accounts.status.collectAsStateWithLifecycle()
-            val peopleNow by people.collectAsStateWithLifecycle()
+            val session by graph.soulseek.session.collectAsStateWithLifecycle()
+            val results by graph.soulseek.searchResults.collectAsStateWithLifecycle()
+            val searching by graph.soulseek.searching.collectAsStateWithLifecycle()
+            val transfers by graph.soulseek.transfers.collectAsStateWithLifecycle()
+            val uploads by graph.soulseek.uploads.collectAsStateWithLifecycle()
+            val contacts by graph.soulseek.contacts.collectAsStateWithLifecycle()
+            val conversations by graph.soulseek.conversations.collectAsStateWithLifecycle()
+            val destination by graph.soulseek.destination.collectAsStateWithLifecycle()
+            val sharedFolder by graph.soulseek.sharedFolder.collectAsStateWithLifecycle()
+            val sharing by graph.soulseek.sharing.collectAsStateWithLifecycle()
+            val stayOnline by graph.soulseek.stayOnline.collectAsStateWithLifecycle()
+            val savedUsername by graph.soulseek.savedUsername.collectAsStateWithLifecycle()
+            val networkError by graph.soulseek.error.collectAsStateWithLifecycle()
+            val selectedConversation by activeConversation.collectAsStateWithLifecycle()
 
             var clock by remember { mutableStateOf(now()) }
             LaunchedEffect(Unit) {
@@ -91,6 +107,12 @@ class MainActivity : ComponentActivity() {
 
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 if (uri != null) graph.library.setFolder(uri)
+            }
+            val downloadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                if (uri != null) graph.soulseek.setDestination(uri)
+            }
+            val sharePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                if (uri != null) graph.soulseek.setSharedFolder(uri)
             }
             val autoEqPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) importAutoEq(uri)
@@ -125,8 +147,8 @@ class MainActivity : ComponentActivity() {
                     override fun share(album: Album) = shareAlbum(album)
                     override fun removeRecord(album: Album) = remove(album)
                     override fun shareMyCard() = shareCard()
-                    override fun rename(name: String) = if (graph.accounts.account.value != null) graph.accounts.rename(name) else graph.social.rename(name)
-                    override fun setAccent(accent: Int) = if (graph.accounts.account.value != null) graph.accounts.setAccent(accent) else graph.social.setAccent(accent)
+                    override fun rename(name: String) = graph.social.rename(name)
+                    override fun setAccent(accent: Int) = graph.social.setAccent(accent)
                     override fun removeFriend(id: String) = graph.social.removeFriend(id)
 
                     override fun refreshDrops() { graph.scope.launch { graph.drops.refresh() } }
@@ -140,25 +162,30 @@ class MainActivity : ComponentActivity() {
                     override fun press(draft: PressingDraft) = pressRecord(draft)
                     override fun dismissMessage() { message.value = null }
 
-                    override fun createAccount(username: String, name: String, accent: Int) = accountAction("Creating your account…") {
-                        graph.accounts.create(username, name, accent, graph.shelf.value)
+                    override fun signInSoulseek(username: String, password: String, remember: Boolean) { graph.soulseek.signIn(username, password, remember) }
+                    override fun signInSavedSoulseek() { graph.soulseek.signInSaved() }
+                    override fun signOutSoulseek() { activeConversation.value = null; graph.soulseek.logout() }
+                    override fun searchSoulseek(query: String) { graph.soulseek.search(query) }
+                    override fun stopSoulseekSearch() { graph.soulseek.stopSearch() }
+                    override fun downloadSoulseek(result: SoulseekSearchResult) { graph.soulseek.download(result) }
+                    override fun downloadSoulseekFolder(result: SoulseekSearchResult) { graph.soulseek.downloadFolder(result) }
+                    override fun pauseSoulseekTransfer(id: String) { graph.soulseek.pause(id) }
+                    override fun resumeSoulseekTransfer(id: String) { resumeDownload(id) }
+                    override fun cancelSoulseekTransfer(id: String) { graph.soulseek.cancel(id) }
+                    override fun retrySoulseekTransfer(id: String) { resumeDownload(id) }
+                    override fun pickDownloadFolder() = downloadPicker.launch(null)
+                    override fun pickSharedFolder() = sharePicker.launch(null)
+                    override fun setSoulseekSharing(enabled: Boolean) { graph.soulseek.setSharing(enabled) }
+                    override fun setSoulseekStayOnline(enabled: Boolean) {
+                        if (enabled && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        else graph.soulseek.setStayOnline(enabled)
                     }
-                    override fun restoreAccount(key: String, username: String?) = accountAction("Restoring your account…") {
-                        graph.accounts.restore(key, graph.shelf.value, username)
-                    }
-                    override fun copyAccountKey() = copyKey()
-                    override fun setShareShelf(on: Boolean) {
-                        graph.accounts.setShareShelf(on)
-                        graph.scope.launch { graph.accounts.publish(graph.shelf.value) }
-                    }
-                    override fun searchPeople(query: String) = search(query)
-                    override fun openProfile(pubkey: String) = openPerson(pubkey)
-                    override fun closeProfile() = people.update { it.copy(viewing = null) }
-                    override fun addFriend(profile: RemoteProfile) {
-                        graph.accounts.addFriend(profile)
-                        message.value = "${profile.name} is now your friend"
-                    }
-                    override fun refreshFriends() { graph.scope.launch { runCatching { graph.accounts.refreshFriends() } } }
+                    override fun addSoulseekContact(username: String) { graph.soulseek.addContact(username) }
+                    override fun openSoulseekConversation(username: String) { activeConversation.value = username; graph.soulseek.openConversation(username) }
+                    override fun closeSoulseekConversation() { activeConversation.value = null }
+                    override fun sendSoulseekMessage(username: String, text: String) { graph.soulseek.sendMessage(username, text) }
+                    override fun markSoulseekRead(username: String) { graph.soulseek.markRead(username) }
+                    override fun clearSoulseekError() { graph.soulseek.clearError() }
                     override suspend fun coverFor(item: ShelfItem): String? {
                         val id = "shelf-" + app.runout.library.LibraryScanner.stableId(item.artist.lowercase() + "|" + item.title.lowercase())
                         return (graph.artwork.cachedFile(id) ?: graph.artwork.lookupOnline(id, item.artist, item.title))?.absolutePath
@@ -183,9 +210,20 @@ class MainActivity : ComponentActivity() {
                     claimed = claimed,
                     claiming = claimingNow,
                     message = note,
-                    account = account,
-                    accountStatus = accountStatus,
-                    people = peopleNow,
+                    soulseekSession = session,
+                    soulseekResults = results,
+                    soulseekSearching = searching,
+                    soulseekTransfers = transfers,
+                    soulseekUploads = uploads,
+                    soulseekContacts = contacts,
+                    soulseekConversations = conversations,
+                    soulseekConversation = selectedConversation,
+                    downloadFolder = destination?.let(::folderLabel),
+                    sharedFolder = sharedFolder?.let(::folderLabel),
+                    soulseekSharing = sharing,
+                    soulseekStayOnline = stayOnline,
+                    soulseekSavedUsername = savedUsername,
+                    soulseekError = networkError,
                 ),
                 actions = actions,
             )
@@ -196,6 +234,13 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         handleIncoming(intent)
     }
+
+    override fun onStart() { super.onStart(); graph.soulseek.onForegroundChanged(true) }
+    override fun onStop() { graph.soulseek.onForegroundChanged(false); super.onStop() }
+
+    private fun folderLabel(uri: Uri): String = runCatching {
+        androidx.documentfile.provider.DocumentFile.fromTreeUri(this, uri)?.name
+    }.getOrNull() ?: "Selected music folder"
 
     /** A .vinyl file opened from a chat app, Files or Quick Share. */
     private fun handleIncoming(intent: Intent?) {
@@ -255,6 +300,7 @@ class MainActivity : ComponentActivity() {
             Source.RECEIVED -> graph.share.delete(album.id)
             Source.DROP -> graph.drops.remove(album.id)
             Source.PRESSING -> graph.pressing.delete(album.id)
+            Source.SOULSEEK -> graph.soulseek.removeAlbum(album.id)
             Source.FOLDER -> return
         }
         message.value = "Took “${album.title}” off the shelf"
@@ -264,9 +310,27 @@ class MainActivity : ComponentActivity() {
         if (item.identifier in claiming.value) return
         claiming.update { it + (item.identifier to 0f) }
         graph.scope.launch {
-            val result = graph.drops.claim(item) { p -> claiming.update { m -> if (item.identifier in m) m + (item.identifier to p) else m } }
-            claiming.update { it - item.identifier }
-            message.value = result.fold({ "“${it.title}” is in your crate" }, { "Couldn't claim it: ${it.message}" })
+            try {
+                val result = graph.soulseek.withArchiveDownload(item.identifier, item.title) { report ->
+                    graph.drops.claim(item) { p ->
+                        report((p * 1_000_000).toLong(), 1_000_000L)
+                        claiming.update { m -> if (item.identifier in m) m + (item.identifier to p) else m }
+                    }
+                }
+                message.value = result.fold({ "“${it.title}” is in your crate" }, { "Couldn't claim it: ${it.message}" })
+            } finally { claiming.update { it - item.identifier } }
+        }
+    }
+
+    private fun resumeDownload(id: String) {
+        val transfer = graph.soulseek.transfers.value.firstOrNull { it.id == id } ?: return
+        if (transfer.provider != "Internet Archive") { graph.soulseek.resume(id); return }
+        graph.scope.launch {
+            val week = (graph.drops.refresh() as? app.runout.drops.DropState.Ready)?.week
+            val owner = graph.soulseek.session.value.username
+            val item = week?.items?.firstOrNull { app.runout.soulseek.SoulseekPolicy.accountKey(owner.orEmpty(), "archive:${it.identifier}") == id }
+            if (item != null) claimDrop(item)
+            else message.value = "This album is outside the current Friday Drop. Completed FLAC files are still in your music folder."
         }
     }
 
@@ -286,51 +350,6 @@ class MainActivity : ComponentActivity() {
                 runCatching { contentResolver.openInputStream(uri)?.use { it.readBytes().take(256_000).toByteArray().toString(Charsets.UTF_8) } }.getOrNull()
             }
             message.value = if (text != null && graph.sound.importAutoEq(text)) "AutoEq profile loaded" else "That file isn't an AutoEq ParametricEQ.txt"
-        }
-    }
-
-    private fun accountAction(working: String, block: suspend () -> Result<Account>) {
-        message.value = working
-        graph.scope.launch {
-            message.value = block().fold(
-                { "Welcome, ${it.handle}. People can now find you by your username." },
-                { it.message ?: "Something went wrong" },
-            )
-        }
-    }
-
-    private fun copyKey() {
-        val key = graph.accounts.backupKey() ?: return
-        val cm = getSystemService(android.content.ClipboardManager::class.java) ?: return
-        val clip = android.content.ClipData.newPlainText("Runout account key", key)
-        // Keeps the key out of the clipboard preview on Android 13+.
-        clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
-        cm.setPrimaryClip(clip)
-        message.value = "Account key copied. Keep it somewhere private: anyone with it can be you."
-    }
-
-    private fun search(query: String) {
-        people.update { it.copy(searching = true, error = null) }
-        graph.scope.launch {
-            val r = runCatching { graph.accounts.search(query) }
-            people.update {
-                it.copy(searching = false, searched = query.trim(), results = r.getOrDefault(emptyList()), error = r.exceptionOrNull()?.message)
-            }
-        }
-    }
-
-    private fun openPerson(pubkey: String) {
-        val known = people.value.results.firstOrNull { it.pubkey == pubkey }
-        people.update { it.copy(viewing = known ?: it.viewing, loadingProfile = true, error = null) }
-        graph.scope.launch {
-            val p = runCatching { graph.accounts.profile(pubkey) }.getOrNull()
-            people.update {
-                when {
-                    p != null -> it.copy(viewing = p, loadingProfile = false)
-                    it.viewing != null -> it.copy(loadingProfile = false)
-                    else -> it.copy(loadingProfile = false, error = "Couldn't load that profile right now")
-                }
-            }
         }
     }
 

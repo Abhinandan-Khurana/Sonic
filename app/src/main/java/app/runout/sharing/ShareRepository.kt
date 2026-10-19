@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import app.runout.library.AlbumJson
 import app.runout.library.ArtworkRepository
+import app.runout.library.FlacPolicy
 import app.runout.library.LibraryScanner
 import app.runout.model.Album
 import app.runout.model.Source
@@ -37,7 +38,7 @@ class ShareRepository(
     private val listFile = File(context.filesDir, "received.json")
     private val shareDir = File(context.cacheDir, "share")
 
-    private val _received = MutableStateFlow(AlbumJson.readList(listFile))
+    private val _received = MutableStateFlow(AlbumJson.readValidatedList(context, listFile))
     val received: StateFlow<List<Album>> = _received.asStateFlow()
 
     /**
@@ -45,6 +46,8 @@ class ShareRepository(
      * a Creative Commons licence, or a record that arrived that way. Otherwise it's a card.
      */
     suspend fun exportAlbum(album: Album): File = withContext(Dispatchers.IO) {
+        require(album.tracks.isNotEmpty()) { "A record needs at least one FLAC track" }
+        require(album.tracks.all { FlacPolicy.read(context, it) != null }) { "Only verified FLAC music can be exported" }
         val withAudio = album.audioShareable
         shareDir.mkdirs()
         val file = File(shareDir, safeName("${album.artist} - ${album.title}") + ".${VinylPackage.EXTENSION}")

@@ -3,10 +3,15 @@ package app.runout.playback
 import android.content.Intent
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.annotation.OptIn
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import app.runout.RunoutApp
+import app.runout.library.FlacPolicy
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import app.runout.sound.PlayerFactory
 import app.runout.sound.SoundEngine
 import kotlinx.coroutines.CoroutineScope
@@ -35,18 +40,43 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         engine = (application as RunoutApp).graph.sound
         player = PlayerFactory.create(this, engine)
         player.addListener(gainListener)
-        session = MediaSession.Builder(this, player).build()
+        session = MediaSession.Builder(this, player).setCallback(object : MediaSession.Callback {
+            override fun onAddMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>,
+            ): ListenableFuture<List<MediaItem>> = validatedItems(mediaItems)
+
+            override fun onSetMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>,
+                startIndex: Int,
+                startPositionMs: Long,
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
+                if (isAllowed(mediaItems)) Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs))
+                else Futures.immediateFailedFuture(IllegalArgumentException("Only local verified FLAC music can be played"))
+        }).build()
 
         // Switching hi-res output on or off needs a new audio output; carry the record across.
         scope.launch {
             engine.settings.map { it.hiResOutput }.distinctUntilChanged().drop(1).collect { rebuildPlayer() }
         }
     }
+
+    private fun isAllowed(items: List<MediaItem>): Boolean = items.all { item ->
+        item.localConfiguration?.uri?.let { FlacPolicy.read(this, it) != null } == true
+    }
+
+    private fun validatedItems(items: List<MediaItem>): ListenableFuture<List<MediaItem>> =
+        if (isAllowed(items)) Futures.immediateFuture(items)
+        else Futures.immediateFailedFuture(IllegalArgumentException("Only local verified FLAC music can be played"))
 
     private fun rebuildPlayer() {
         val old = player

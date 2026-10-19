@@ -18,7 +18,7 @@ data class Track(
 )
 
 /** Where a record on the shelf came from. Decides what can be shared. */
-enum class Source { FOLDER, RECEIVED, DROP, PRESSING }
+enum class Source { FOLDER, RECEIVED, DROP, PRESSING, SOULSEEK }
 
 /** Vinyl styles for the Pressing Plant. Albums without one get theirs from their audio quality. */
 enum class DiscStyle(val label: String) {

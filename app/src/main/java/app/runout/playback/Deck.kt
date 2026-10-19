@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import app.runout.model.Album
+import app.runout.library.FlacPolicy
 import app.runout.model.Side
 import app.runout.model.SideSplitter
 import kotlinx.coroutines.CoroutineScope
@@ -165,10 +166,11 @@ class Deck(
 
     /** A record has been dropped on the platter. Nothing plays until the needle goes down. */
     fun load(album: Album) {
-        val sides = SideSplitter.split(album.tracks)
+        val verified = FlacPolicy.filterAlbum(context, album, refreshMetadata = false) ?: return
+        val sides = SideSplitter.split(verified.tracks)
         sfx.stopCrackle()
-        _state.value = DeckState(album = album, sides = sides, speed = _state.value.speed)
-        cueSide(album, sides.firstOrNull())
+        _state.value = DeckState(album = verified, sides = sides, speed = _state.value.speed)
+        cueSide(verified, sides.firstOrNull())
     }
 
     private fun cueSide(album: Album, side: Side?) {
@@ -395,6 +397,7 @@ class Deck(
         const val RESTART_WINDOW_MS = 3_000L
 
         fun mediaItemsFor(album: Album, side: Side): List<MediaItem> = side.tracks.map { t ->
+            require(FlacPolicy.isFlacName(t.fileName.ifBlank { Uri.parse(t.uri).lastPathSegment.orEmpty() })) { "Only FLAC tracks can be played" }
             val extras = android.os.Bundle().apply {
                 album.albumGainDb?.let { putFloat(PlaybackService.EXTRA_ALBUM_GAIN, it) }
                 t.trackGainDb?.let { putFloat(PlaybackService.EXTRA_TRACK_GAIN, it) }
@@ -402,6 +405,7 @@ class Deck(
             MediaItem.Builder()
                 .setMediaId(t.id)
                 .setUri(Uri.parse(t.uri))
+                .setMimeType("audio/flac")
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(t.title)

@@ -30,8 +30,8 @@ class PressingPlantTest {
 
     private fun draft(title: String = "Summer Tape", tracks: Int = 3, owned: Boolean = false) = PressingDraft(
         title = title, artist = "Abhi",
-        tracks = Fixtures.paperMoons().tracks.take(tracks).mapIndexed { i, t -> t.copy(trackNumber = 9 - i, discNumber = 2) },
-        quality = AudioQuality("MP3", bitrateKbps = 128), disc = DiscStyle.SPLATTER, labelColor = 0xFFE0569B.toInt(), pattern = 2, owned = owned,
+        tracks = (Fixtures.nightDrive().tracks + Fixtures.nightDrive().tracks.first()).take(tracks).mapIndexed { i, t -> t.copy(trackNumber = 9 - i, discNumber = 2) },
+        quality = AudioQuality("FLAC", 24, 96_000), disc = DiscStyle.SPLATTER, labelColor = 0xFFE0569B.toInt(), pattern = 2, owned = owned,
         notes = "for the drive",
     )
 
@@ -100,6 +100,14 @@ class PressingPlantTest {
         assertEquals("LOSSLESS MIX", PressingRepository.qualityFor(listOf(flac24, wav)).codec)
         assertEquals("MIXED", PressingRepository.qualityFor(listOf(flac24, mp3)).codec)
         assertFalse(PressingRepository.qualityFor(listOf(flac24, mp3)).isLossless)
+    }
+
+    @Test
+    fun `pressing refuses renamed or unsupported audio`() = runBlocking {
+        val draft = draft().copy(tracks = Fixtures.paperMoons().tracks)
+        val result = runCatching { PressingRepository(context).press(draft) }
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("FLAC"))
     }
 
     @Test

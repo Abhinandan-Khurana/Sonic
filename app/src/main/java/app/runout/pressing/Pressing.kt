@@ -13,6 +13,7 @@ import android.graphics.Typeface
 import android.net.Uri
 import app.runout.library.AlbumJson
 import app.runout.library.ArtworkRepository
+import app.runout.library.FlacPolicy
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.DiscStyle
@@ -48,12 +49,13 @@ class PressingRepository(private val context: Context) {
     private val file = File(context.filesDir, "pressings.json")
     private val coverDir = File(context.filesDir, "covers").apply { mkdirs() }
 
-    private val _records = MutableStateFlow(AlbumJson.readList(file))
+    private val _records = MutableStateFlow(AlbumJson.readValidatedList(context, file))
     val records: StateFlow<List<Album>> = _records.asStateFlow()
 
     suspend fun press(draft: PressingDraft): Album = withContext(Dispatchers.IO) {
         require(draft.title.isNotBlank()) { "A record needs a title" }
         require(draft.tracks.isNotEmpty()) { "A record needs at least one track" }
+        val infos = draft.tracks.map { FlacPolicy.read(context, it) ?: error("Only verified FLAC tracks can be pressed") }
         val id = "press-" + UUID.randomUUID().toString().take(12)
         val coverFile = File(coverDir, "$id.jpg")
         val picked = draft.coverImage?.let { uri ->
@@ -68,7 +70,7 @@ class PressingRepository(private val context: Context) {
             year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
             folderUri = "",
             tracks = draft.tracks.mapIndexed { i, t -> t.copy(trackNumber = i + 1, discNumber = 1) },
-            quality = draft.quality,
+            quality = FlacPolicy.quality(infos),
             coverPath = coverFile.absolutePath,
             tint = ArtworkRepository.averageColor(coverFile),
             source = Source.PRESSING,
