@@ -1,29 +1,24 @@
-# Runout APK Releases
+# Runout Release Deliverables
 
-This directory contains standalone APK builds for **Runout**.
+This directory contains standalone release builds and source distributions for **Runout**.
 
 ## Current Release: v0.3.0
 
-- **Filename:** [`Runout-0.3.0.apk`](Runout-0.3.0.apk)
-- **Size:** 26.9 MB (26,938,770 bytes)
-- **Target OS:** Android 9.0+ (API level 28 to 36)
-- **Signing:** Debug-signed (direct sideloadable prototype build)
-- **SHA-256 Checksum:**
-  ```text
-  4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2
-  ```
+| File | Description | Size | SHA-256 Checksum |
+| :--- | :--- | :---: | :--- |
+| [`Runout-0.3.0.apk`](Runout-0.3.0.apk) | Standalone debug-signed Android app | 26.9 MB | `4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2` |
+| [`Runout-0.3.0-source.zip`](Runout-0.3.0-source.zip) | Complete source bundle, tests, and assets | 1.7 MB | `3d74b07230216d9d8fb2b8cc28d9b13e605ca3a6d12b77860ffa78ccbebd8b70` |
+| [`SHA256SUMS.txt`](SHA256SUMS.txt) | Official cryptographic signatures | 158 B | *See file for signatures* |
 
 ---
 
 ## Verifying Integrity
 
-Before installing, you can verify the integrity of the downloaded APK:
+Before installing, you can verify the integrity of the downloaded files:
 
 ### On macOS / Linux:
 ```bash
-shasum -a 256 Runout-0.3.0.apk
-# Expected output:
-# 4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2  Runout-0.3.0.apk
+shasum -a 256 -c SHA256SUMS.txt
 ```
 
 ### On Windows (PowerShell):

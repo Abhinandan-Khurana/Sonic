@@ -16,7 +16,7 @@
 
 <br/>
 
-[**Download APK v0.3.0 (26.9 MB)**](release/Runout-0.3.0.apk) • [**Read the Handbook**](docs/HANDBOOK.md) • [**Architecture**](docs/ARCHITECTURE.md) • [**Turntable Mechanics**](docs/TURNTABLE.md)
+[**Download APK v0.3.0 (26.9 MB)**](release/Runout-0.3.0.apk) • [**Release Notes**](RELEASE.md) • [**Source (.zip)**](release/Runout-0.3.0-source.zip) • [**Handbook**](docs/HANDBOOK.md) • [**Architecture**](docs/ARCHITECTURE.md)
 
 <br/>
 
