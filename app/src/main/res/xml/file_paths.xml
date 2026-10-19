@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Records and friend cards being sent -->
+    <cache-path name="share" path="share/" />
+</paths>

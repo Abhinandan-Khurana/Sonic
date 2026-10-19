@@ -1,0 +1,184 @@
+package app.runout
+
+import android.net.Uri
+import app.runout.drops.DropItem
+import app.runout.drops.DropState
+import app.runout.drops.DropsRepository
+import app.runout.model.Source
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
+
+/**
+ * Suite 9 — Friday Drops from Internet Archive. Uses responses recorded from archive.org
+ * (search and an album's file list) and serves real audio files in place of the downloads.
+ */
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], application = android.app.Application::class)
+class FridayDropsTest {
+
+    private val context get() = Fixtures.context
+    private val utc: ZoneId = ZoneOffset.UTC
+    private fun at(date: String) = LocalDate.parse(date).atStartOfDay(utc).plusHours(12).toInstant().toEpochMilli()
+
+    /** A two-track FLAC album as Internet Archive would describe it. */
+    private fun metadataFor(id: String) = JSONObject().apply {
+        put("metadata", JSONObject().put("identifier", id).put("licenseurl", "https://creativecommons.org/licenses/by/4.0/"))
+        put("files", JSONArray().apply {
+            put(JSONObject().put("name", "01 Opening.flac").put("format", "Flac").put("source", "original").put("track", "1").put("title", "Opening").put("length", "2.0").put("size", "66089"))
+            put(JSONObject().put("name", "02 Lowlight.flac").put("format", "Flac").put("source", "original").put("track", "2/2").put("title", "Lowlight").put("length", "0:02").put("size", "66915"))
+            put(JSONObject().put("name", "01 Opening.mp3").put("format", "VBR MP3").put("source", "derivative"))
+            put(JSONObject().put("name", "cover.jpg").put("format", "JPEG").put("source", "original"))
+        })
+    }.toString().toByteArray()
+
+    private fun http(searchOk: Boolean = true) = FakeHttp(
+        mapOf(
+            "advancedsearch.php" to { if (searchOk) Fixtures.bytes("ia/search_page1.json") else null },
+            "/metadata/" to { metadataFor("x") },
+            "01%20Opening.flac" to { Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac") },
+            "02%20Lowlight.flac" to { Fixtures.bytes("Music/Vela Park - Night Drive (2023)/02 Lowlight.flac") },
+            "cover.jpg" to { Fixtures.bytes("Music/Untagged/cover.jpg") },
+            "services/img" to { Fixtures.bytes("Music/Untagged/cover.jpg") },
+        ),
+    )
+
+    private fun repo(h: FakeHttp, date: String = "2026-10-16") = DropsRepository(context, h, clock = { at(date) }, zone = utc)
+
+    @Test
+    fun `a new drop opens every Friday`() {
+        val fri = DropsRepository.weekIndex(LocalDate.parse("2026-10-16"))
+        assertEquals(fri, DropsRepository.weekIndex(LocalDate.parse("2026-10-22"))) // next Thursday, same drop
+        assertEquals(fri - 1, DropsRepository.weekIndex(LocalDate.parse("2026-10-15"))) // the Thursday before
+        assertEquals(fri + 1, DropsRepository.weekIndex(LocalDate.parse("2026-10-23")))
+        assertEquals(LocalDate.parse("2026-10-16"), DropsRepository.opens(fri))
+        assertEquals(0L, DropsRepository.weekIndex(LocalDate.parse("1970-01-02")))
+    }
+
+    @Test
+    fun `everyone gets the same ten albums for a week`() {
+        val pool = (1..60).map { DropItem("id$it", "Album $it", "Artist", 2020, null) }
+        val a = DropsRepository.pick(pool, DropsRepository.seed(2911))
+        assertEquals(10, a.size)
+        assertEquals(10, a.map { it.identifier }.toSet().size)
+        assertEquals(a, DropsRepository.pick(pool, DropsRepository.seed(2911)))
+        assertEquals(a, DropsRepository.pick(pool + pool.take(5), DropsRepository.seed(2911))) // duplicates in a page are ignored
+        assertNotEquals(a, DropsRepository.pick(pool, DropsRepository.seed(2912)))
+        assertTrue(DropsRepository.searchUrl(3).contains("page=3"))
+        assertTrue(DropsRepository.searchUrl(3).contains("creativecommons"))
+    }
+
+    @Test
+    fun `search results from archive_org are read correctly`() {
+        val items = DropsRepository.parseSearch(Fixtures.text("ia/search_page1.json"))
+        assertEquals(5, items.size)
+        assertEquals(DropItem("NS050", "Another Day, Another Way", "No-Source Netlabel", 2012, "http://creativecommons.org/licenses/by-nc-sa/4.0/"), items[0])
+        assertNull(items[1].year)
+        assertEquals("Unknown artist", items[4].creator)
+        assertEquals("https://archive.org/services/img/NS050", items[0].coverUrl)
+    }
+
+    @Test
+    fun `the download plan picks the best audio and the cover`() {
+        val plan = DropsRepository.planDownload(JSONObject(Fixtures.text("ia/metadata_NS050.json")))
+        assertEquals("MP3", plan.codec) // this album has no FLAC, so its original MP3s
+        assertEquals(15, plan.tracks.size)
+        assertEquals((1..15).toList(), plan.tracks.map { it.track })
+        assertEquals("Christmas with Mr. Rice", plan.tracks[0].title)
+        assertEquals(240_900L, plan.tracks[0].lengthMs)
+        assertEquals("NS050_Cover.jpg", plan.coverName)
+        assertEquals("http://creativecommons.org/licenses/by-nc-sa/4.0/", plan.license)
+        val flac = DropsRepository.planDownload(JSONObject(String(metadataFor("x"))))
+        assertEquals("FLAC", flac.codec)
+        assertEquals(listOf("01 Opening.flac", "02 Lowlight.flac"), flac.tracks.map { it.name })
+        assertEquals(2_000L, flac.tracks[1].lengthMs)
+        assertEquals("https://archive.org/download/x/01%20Opening.flac", DropsRepository.fileUrl("x", "01 Opening.flac"))
+    }
+
+    @Test
+    fun `the week's drop loads once and is cached`() = runBlocking {
+        val h = http()
+        val r = repo(h)
+        val week = (r.refresh() as DropState.Ready).week
+        assertEquals(5, week.items.size)
+        assertEquals(LocalDate.parse("2026-10-16"), week.opens)
+        assertEquals(LocalDate.parse("2026-10-23"), week.closes)
+        val calls = h.calls.size
+        assertTrue(repo(h).refresh() is DropState.Ready)
+        assertEquals("cached, no new request", calls, h.calls.size)
+    }
+
+    @Test
+    fun `no connection gives a clear message`() = runBlocking {
+        val s = repo(http(searchOk = false)).refresh()
+        assertTrue(s is DropState.Failed)
+        assertTrue((s as DropState.Failed).reason.contains("Internet Archive"))
+    }
+
+    @Test
+    fun `claiming downloads the album onto your shelf`() = runBlocking {
+        val r = repo(http())
+        val week = (r.refresh() as DropState.Ready).week
+        val item = week.items.first()
+        val progress = mutableListOf<Float>()
+        val album = r.claim(item) { progress += it }.getOrThrow()
+        assertEquals(Source.DROP, album.source)
+        assertEquals(item.title, album.title)
+        assertEquals(item.license, album.license)
+        assertEquals("FLAC · 24-bit · 96 kHz", album.quality.label)
+        assertEquals(listOf("Opening", "Lowlight"), album.tracks.map { it.title })
+        assertTrue(album.tracks.all { File(Uri.parse(it.uri).path!!).length() > 60_000 })
+        assertEquals(2_000L, album.tracks[0].durationMs)
+        assertTrue(File(album.coverPath!!).exists())
+        assertEquals(1f, progress.last())
+        assertTrue(album.audioShareable) // Creative Commons, so friends can be sent it
+        assertEquals(setOf(item.identifier), r.claimed.value)
+        assertEquals(2, r.claimsLeft)
+        // It's still there after a restart.
+        val again = repo(http())
+        assertEquals(listOf(album.id), again.albums.value.map { it.id })
+        assertEquals(setOf(item.identifier), again.claimed.value)
+    }
+
+    @Test
+    fun `three claims a week, then wait for Friday`() = runBlocking {
+        val r = repo(http())
+        val items = (r.refresh() as DropState.Ready).week.items
+        items.take(3).forEach { assertTrue(r.claim(it).isSuccess) }
+        assertEquals(0, r.claimsLeft)
+        val fourth = r.claim(items[3])
+        assertTrue(fourth.isFailure)
+        assertTrue(fourth.exceptionOrNull()!!.message!!.contains("claimed all 3"))
+        // Re-claiming one you already have doesn't count again.
+        assertTrue(r.claim(items[0]).isSuccess)
+        // Next Friday the allowance resets.
+        val next = repo(http(), date = "2026-10-23")
+        next.refresh()
+        assertEquals(3, next.claimsLeft)
+    }
+
+    @Test
+    fun `claimed drops can be taken off the shelf`() = runBlocking {
+        val r = repo(http())
+        val item = (r.refresh() as DropState.Ready).week.items.first()
+        val album = r.claim(item).getOrThrow()
+        r.remove(album.id)
+        assertTrue(r.albums.value.isEmpty())
+        assertTrue(repo(http()).albums.value.isEmpty())
+        assertEquals("the claim still counts", 2, r.claimsLeft)
+    }
+}
