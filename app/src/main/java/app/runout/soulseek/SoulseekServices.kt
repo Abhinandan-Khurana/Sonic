@@ -40,6 +40,9 @@ abstract class SoulseekForegroundService : Service() {
         ServiceCompat.startForeground(this, notificationId, notification(if (online) "Soulseek online" else "Downloading FLAC music"), type)
         val repo = SoulseekRuntime.repository
         if (repo == null) { stopSelf(); return }
+        if (online) scope.launch {
+            repo.session.collect { session -> manager.notify(notificationId,notification(if(session.connected) "Soulseek online · messages and FLAC sharing" else "Soulseek reconnecting · your account is kept")) }
+        }
         if (!online) scope.launch {
             combine(repo.transfers, repo.uploads) { downloads, uploads -> downloads to uploads }.collect { (transfers, uploads) ->
                 val active = transfers.filter { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) }

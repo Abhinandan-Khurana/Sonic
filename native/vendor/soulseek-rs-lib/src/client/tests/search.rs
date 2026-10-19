@@ -165,3 +165,14 @@ fn a_file_the_server_excludes_is_left_out_of_a_reply() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn consuming_search_deltas_keeps_the_token_and_never_replays_old_files() {
+    let client = Client::new("u","p");
+    client.context.write().unwrap().searches.insert("album".into(),Search { token: 77, results: vec![peer_files(3)] });
+    assert_eq!(client.take_search_results("album").iter().map(|r| r.files.len()).sum::<usize>(),3);
+    assert!(client.take_search_results("album").is_empty());
+    assert_eq!(client.context.read().unwrap().searches.get("album").unwrap().token,77);
+    client.context.write().unwrap().searches.get_mut("album").unwrap().accept(peer_files(2));
+    assert_eq!(client.take_search_results("album").iter().map(|r| r.files.len()).sum::<usize>(),2);
+}

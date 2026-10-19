@@ -46,3 +46,28 @@ The legacy `LiveRelayCheck` remains opt-in for historical Nostr code and is skip
 ## Continuous integration
 
 [The CI template](../.github/workflows-templates/README.md) runs native tests, builds all ABIs, runs JVM tests/lint and uploads reports and APKs on Ubuntu. It is not active in this fork yet: the publishing login lacks GitHub's separate workflow-write permission. Copy the template into `.github/workflows/android.yml` using an authorized login to enable it. Device instrumentation remains an explicit check in the release process.
+
+## Android UI flows and explicit live checks
+
+Install pinned Argent 0.29.0 outside the app and use the [checked-in flows](../.argent/README.md). These cover offline navigation, guided sign-in, streaming discovery and folder-picker recovery. Inspect each flow's starting state before running it. For two emulators, assign distinct ADB and gRPC ports; an explicitly configured gRPC port needs `-grpc-use-token` for Argent's authenticated transport discovery.
+
+```bash
+argent flow run .argent/flows/offline-navigation.yaml --device emulator-5554
+# Requires an explicitly supplied test account, not ordinary CI:
+argent flow run .argent/flows/soulseek-setup.yaml --device emulator-5554
+argent flow run .argent/flows/live-discovery.yaml --device emulator-5554
+argent flow run .argent/flows/picker-recovery.yaml --device emulator-5554
+```
+
+`DiscoveryPerformanceTest` runs on Android with 10,000 local tracks and 5,000 remote files, reporting conservative warm p95 timings to `RunoutBenchmark`. Test both API 35 and API 37 when available. Device timing excludes fixture/index construction and network time; the release report identifies the measured environment.
+
+`SoulseekLiveNetworkTest` skips unless explicitly enabled. Never put a real username/password in runner arguments or source. Create ignored `.argent/secrets.env` with `ARGENT_SECRET_SLSK_USERNAME` and `ARGENT_SECRET_SLSK_PASSWORD`, set mode 0600, and use the helper after installing the debug and Android test APKs:
+
+```bash
+python3 scripts/check-live-soulseek.py --device emulator-5554 --seconds 900
+adb -s emulator-5554 logcat -d -s RunoutLive:I '*:S'
+```
+
+The helper copies only those two values into private app storage through stdin, runs the opt-in probe and removes the device file in `finally`. An explicitly requested probe with a missing device account file fails rather than reporting a skipped success. Metrics contain connection state, counts and time to first batch; the test downloads nothing and sends no messages. Ordinary CI still uses local peers only.
+
+Keep one client per real Soulseek ID: another emulator, Seeker or a second probe can displace the session under test. Do not run instrumentation while interacting with the same app through Argent, because instrumentation restarts its process. Remove local secrets and sign out of test devices when finished. Live account checks and published APKs must never contain test credentials.

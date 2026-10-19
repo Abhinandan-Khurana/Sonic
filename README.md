@@ -2,7 +2,11 @@
 
 A vinyl listening room for Android, with offline FLAC playback, Soulseek music discovery and private messages, and Internet Archive Friday Drops.
 
-## Version 0.4.0 — development build
+## Version 0.4.1 — development build
+
+Runout keeps the retro vinyl player home and adds **Home, Library, Discover and Messages**, with downloads and account status always within reach. Guided setup offers offline listening first, then explains download storage, optional FLAC sharing and background connection choices.
+
+Search your local songs, albums and artists as you type. Submit an online search to stream Soulseek FLAC matches as peers respond. Switch between songs and albums, rank by match, availability or quality, and preview a peer's complete folder before downloading it. The search and connection work takes reference from Seeker's approach; Runout retains its own Kotlin UI and MIT native implementation.
 
 - **Play offline without signing in.** Choose your FLAC music folder, browse your crate, and use the turntable, DSP, EQ, and Pure mode.
 - **Use your Soulseek account online.** Search FLAC tracks, download individual files or an album folder, and send private messages by username.
@@ -13,15 +17,19 @@ A vinyl listening room for Android, with offline FLAC playback, Soulseek music d
 
 FLAC-only applies to music throughout scanning, imports, downloads, sharing, pressing and playback. Artwork, record containers and the turntable's synthesized effects remain supported. Renaming an MP3 to `.flac` does not make it acceptable.
 
-[Download the development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.0-dev.1/Runout-0.4.0-development.apk) · [Soulseek behavior and architecture](docs/SOULSEEK.md) · [Build instructions](docs/BUILDING.md) · [Documentation index](docs/README.md)
+[Download the development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.1-dev.1/Runout-0.4.1-development.apk) · [Soulseek behavior and architecture](docs/SOULSEEK.md) · [Build instructions](docs/BUILDING.md) · [Documentation index](docs/README.md)
+
+<img src="docs/images/home-0.4.1.png" width="270" alt="Runout vinyl home with an offline FLAC fixture album" />
 
 ## First use
 
-1. Choose your local FLAC folder and play without creating an account.
-2. Open **Account** when you want online features. Enter your Soulseek username and password, or use an unused username to create an account through Soulseek's normal login operation.
-3. Select a download folder before downloading from **Search** or **Drops**.
-4. Use **Messages** for private conversations and **Downloads** for download progress, pause/resume, retry, and uploads.
-5. Enable sharing and stay-online mode only if you want them.
+1. On first launch, choose **Listen offline** or **Set up Soulseek**. Offline listening needs only a local FLAC folder.
+2. For online features, sign in with your Soulseek ID or choose **Create an ID**. Optional remembered sign-in uses Android Keystore.
+3. Setup walks through a download folder, optional sharing folder and app-only/background connection mode. Sharing choices and the selected share folder are remembered separately for each account.
+4. Use **Discover** for local/online search and **Friday Drops** for Internet Archive. Downloads from both providers require a connected Soulseek account.
+5. Preview an album folder to see its complete FLAC listing before confirming the download. Use the header's download button for progress, pause/resume and retry.
+
+Temporary connection loss keeps your account and automatically reconnects. App-only mode pauses an idle connection after Runout goes into the background and resumes it when you return. Opening a folder picker preserves your account; if Android interrupts the network, Runout reconnects when you return. Connecting the same ID in another client pauses automatic retries to avoid repeatedly disconnecting that client; use **Reconnect** when ready.
 
 Soulseek has no password reset. An unused username creates an account, including a mistyped existing name. Signing in disconnects another client using the same account. Its protocol does not encrypt credentials or private messages. Runout has no separate account server and never sends Soulseek credentials to Internet Archive.
 
@@ -54,7 +62,7 @@ See the [contributor guide](CONTRIBUTING.md), [architecture map](docs/ARCHITECTU
 
 ## Distribution status
 
-This is a development integration. Test builds identify themselves with Soulseek's documented experimental client version. A public production release needs an appropriate client minor identifier, production signing and real-account interoperability checks. No public-network sign-in or publication was performed as part of the automated tests.
+This is a development integration. Test builds identify themselves with Soulseek's documented experimental client version. A public production release needs an appropriate client minor identifier and production signing. Ordinary automated tests use local fixtures; explicit public-network session/search checks are recorded separately in the release verification report. Peer availability and network conditions affect search and transfer success.
 
 ## License and credits
 

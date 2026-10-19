@@ -19,9 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
@@ -32,7 +29,7 @@ import app.runout.sharing.ImportResult
 import app.runout.sharing.VinylPackage
 import app.runout.sound.SoundSettings
 import app.runout.ui.RoomActions
-import app.runout.ui.RoomScreen
+import app.runout.ui.RunoutScreen
 import app.runout.ui.RoomState
 import app.runout.soulseek.SoulseekSearchResult
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +50,7 @@ class MainActivity : ComponentActivity() {
     private val claiming = MutableStateFlow<Map<String, Float>>(emptyMap())
     private val activeConversation = MutableStateFlow<String?>(null)
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        graph.soulseek.onExternalFlow(false)
         if (granted) graph.soulseek.setStayOnline(true)
         else message.value = "Stay-online mode needs notifications so you can see and disconnect the session. Local playback remains available."
     }
@@ -60,10 +58,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
         if (savedInstanceState == null) handleIncoming(intent)
 
         val graph = graph
@@ -96,6 +90,17 @@ class MainActivity : ComponentActivity() {
             val savedUsername by graph.soulseek.savedUsername.collectAsStateWithLifecycle()
             val networkError by graph.soulseek.error.collectAsStateWithLifecycle()
             val selectedConversation by activeConversation.collectAsStateWithLifecycle()
+            val searchStatus by graph.soulseek.searchStatus.collectAsStateWithLifecycle()
+            val folderPreview by graph.soulseek.folderPreview.collectAsStateWithLifecycle()
+            val onboardingComplete by graph.soulseek.preferences.onboarded.collectAsStateWithLifecycle()
+            val onboardingStep by graph.soulseek.preferences.step.collectAsStateWithLifecycle()
+            val settingsRevision by graph.soulseek.preferences.revision.collectAsStateWithLifecycle()
+            val shareConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::sharing) ?: false }
+            val backgroundConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::background) ?: false }
+            val discovery by graph.discovery.state.collectAsStateWithLifecycle()
+            val discoveryQuery by graph.discovery.query.collectAsStateWithLifecycle()
+            var pendingDownload by remember { mutableStateOf<SoulseekSearchResult?>(null) }
+
 
             var clock by remember { mutableStateOf(now()) }
             LaunchedEffect(Unit) {
@@ -106,12 +111,19 @@ class MainActivity : ComponentActivity() {
             }
 
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                graph.soulseek.onExternalFlow(false)
                 if (uri != null) graph.library.setFolder(uri)
             }
             val downloadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-                if (uri != null) graph.soulseek.setDestination(uri)
+                graph.soulseek.onExternalFlow(false)
+                val pending = pendingDownload; pendingDownload = null
+                if (uri != null) graph.scope.launch {
+                    graph.soulseek.setDestination(uri).join()
+                    if (pending != null && graph.soulseek.destination.value == uri) graph.soulseek.download(pending)
+                }
             }
             val sharePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                graph.soulseek.onExternalFlow(false)
                 if (uri != null) graph.soulseek.setSharedFolder(uri)
             }
             val autoEqPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -125,9 +137,10 @@ class MainActivity : ComponentActivity() {
 
             val actions = remember {
                 object : RoomActions {
-                    override fun pickFolder() = folderPicker.launch(null)
+                    override fun pickFolder() { graph.soulseek.onExternalFlow(true); folderPicker.launch(null) }
                     override fun rescan() { graph.library.rescan() }
                     override fun load(album: Album) = graph.deck.load(album)
+                    override fun playLocalTrack(album: Album, index: Int) = graph.deck.playTrack(album,album.tracks.getOrNull(index)?.id)
                     override fun toggleCrackle() = graph.deck.toggleCrackle()
                     override fun needleDrop(fraction: Float) = graph.deck.needleDrop(fraction)
                     override fun liftNeedle() = graph.deck.liftNeedle()
@@ -167,17 +180,24 @@ class MainActivity : ComponentActivity() {
                     override fun signOutSoulseek() { activeConversation.value = null; graph.soulseek.logout() }
                     override fun searchSoulseek(query: String) { graph.soulseek.search(query) }
                     override fun stopSoulseekSearch() { graph.soulseek.stopSearch() }
-                    override fun downloadSoulseek(result: SoulseekSearchResult) { graph.soulseek.download(result) }
+                    override fun downloadSoulseek(result: SoulseekSearchResult) {
+                        if(graph.soulseek.destination.value == null) {
+                            pendingDownload = result; graph.soulseek.onExternalFlow(true); downloadPicker.launch(null)
+                        } else graph.soulseek.download(result)
+                    }
                     override fun downloadSoulseekFolder(result: SoulseekSearchResult) { graph.soulseek.downloadFolder(result) }
                     override fun pauseSoulseekTransfer(id: String) { graph.soulseek.pause(id) }
                     override fun resumeSoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun cancelSoulseekTransfer(id: String) { graph.soulseek.cancel(id) }
                     override fun retrySoulseekTransfer(id: String) { resumeDownload(id) }
-                    override fun pickDownloadFolder() = downloadPicker.launch(null)
-                    override fun pickSharedFolder() = sharePicker.launch(null)
+                    override fun pickDownloadFolder() { graph.soulseek.onExternalFlow(true); downloadPicker.launch(null) }
+                    override fun pickSharedFolder() { graph.soulseek.onExternalFlow(true); sharePicker.launch(null) }
                     override fun setSoulseekSharing(enabled: Boolean) { graph.soulseek.setSharing(enabled) }
                     override fun setSoulseekStayOnline(enabled: Boolean) {
-                        if (enabled && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        if (enabled && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            graph.soulseek.onExternalFlow(true)
+                            notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                         else graph.soulseek.setStayOnline(enabled)
                     }
                     override fun addSoulseekContact(username: String) { graph.soulseek.addContact(username) }
@@ -186,6 +206,16 @@ class MainActivity : ComponentActivity() {
                     override fun sendSoulseekMessage(username: String, text: String) { graph.soulseek.sendMessage(username, text) }
                     override fun markSoulseekRead(username: String) { graph.soulseek.markRead(username) }
                     override fun clearSoulseekError() { graph.soulseek.clearError() }
+                    override fun reconnectSoulseek() { graph.soulseek.reconnect() }
+                    override fun disconnectSoulseek() { graph.soulseek.disconnectFromNotification() }
+                    override fun previewSoulseekFolder(result: SoulseekSearchResult) { graph.soulseek.previewFolder(result) }
+                    override fun confirmSoulseekFolder() { graph.soulseek.confirmFolderDownload() }
+                    override fun closeSoulseekFolder() { graph.soulseek.closeFolderPreview() }
+                    override fun setSearchQuery(value: String) { graph.discovery.setQuery(value) }
+                    override fun setSearchOptions(value: app.runout.discovery.DiscoveryOptions) { graph.discovery.setOptions(value) }
+                    override fun broadenSearch() { graph.discovery.broaden() }
+                    override fun finishOnboarding() { graph.soulseek.preferences.finishOnboarding() }
+                    override fun setOnboardingStep(value: Int) { graph.soulseek.preferences.setStep(value) }
                     override suspend fun coverFor(item: ShelfItem): String? {
                         val id = "shelf-" + app.runout.library.LibraryScanner.stableId(item.artist.lowercase() + "|" + item.title.lowercase())
                         return (graph.artwork.cachedFile(id) ?: graph.artwork.lookupOnline(id, item.artist, item.title))?.absolutePath
@@ -193,7 +223,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            RoomScreen(
+            RunoutScreen(
                 state = RoomState(
                     albums = albums,
                     hasFolder = folder != null,
@@ -222,8 +252,15 @@ class MainActivity : ComponentActivity() {
                     sharedFolder = sharedFolder?.let(::folderLabel),
                     soulseekSharing = sharing,
                     soulseekStayOnline = stayOnline,
+                    soulseekShareConsent = shareConsent,
+                    soulseekBackgroundConsent = backgroundConsent,
                     soulseekSavedUsername = savedUsername,
                     soulseekError = networkError,
+                    discovery = discovery.copy(query = discoveryQuery),
+                    soulseekSearchStatus = searchStatus,
+                    folderPreview = folderPreview,
+                    onboardingComplete = onboardingComplete,
+                    onboardingStep = onboardingStep,
                 ),
                 actions = actions,
             )
@@ -235,8 +272,6 @@ class MainActivity : ComponentActivity() {
         handleIncoming(intent)
     }
 
-    override fun onStart() { super.onStart(); graph.soulseek.onForegroundChanged(true) }
-    override fun onStop() { graph.soulseek.onForegroundChanged(false); super.onStop() }
 
     private fun folderLabel(uri: Uri): String = runCatching {
         androidx.documentfile.provider.DocumentFile.fromTreeUri(this, uri)?.name

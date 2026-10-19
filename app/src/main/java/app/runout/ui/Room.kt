@@ -10,11 +10,11 @@ import app.runout.R
 
 /** The room's palette and type: Y2K white, tiny grotesk labels, one blue accent. */
 object Room {
-    val Background = Color(0xFFF4F4F2)
-    val Ink = Color(0xFF111111)
-    val Quiet = Color(0xFF8B8B87)
-    val Faint = Color(0xFFC9C9C4)
-    val Accent = Color(0xFF2B6BFF)
+    val Background = Color(0xFFF3EFE5)
+    val Ink = Color(0xFF20271F)
+    val Quiet = Color(0xFF62665C)
+    val Faint = Color(0xFF646B60)
+    val Accent = Color(0xFF276347)
     val Chrome = Color(0xFFD7D8DC)
 
     val Inter = FontFamily(

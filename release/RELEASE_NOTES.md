@@ -1,25 +1,24 @@
-Runout 0.4.0 development adds Soulseek FLAC search, downloads and private messages while retaining Internet Archive Friday Drops and account-free offline playback.
+Runout 0.4.1 development fixes public Soulseek search and connection handling, with Seeker-informed discovery and a guided retro interface.
 
-## Included
+## What changed
 
-- FLAC-only music scanning, playback, imports, pressing, sharing and downloads, with byte-level format validation. Legacy non-FLAC media are hidden without deletion.
-- Soulseek username/password sign-in, track and album-folder downloads, queue/progress display, pause/resume/retry and selected-folder FLAC sharing.
-- Private messages and contacts stored locally, with incoming messages committed before acknowledgement. Nostr online sessions and profile publication are replaced.
-- Soulseek sign-in required for downloads from both providers. Archive albums without FLAC or failed downloads consume no weekly claim.
-- Completed music saved to a user-chosen writable folder and retained after uninstall. Optional remembered credentials protected by Android Keystore.
-- Optional stay-online mode with a visible notification and Disconnect action.
-- Current architecture, developer/contributor guides, exported database schema and a shared download-storage boundary.
+- Stream FLAC search results as peers respond. Protect new peer connections from search-burst eviction, consume native result deltas, cache identities/path components and reduce repeated ranking work.
+- Keep your account through temporary network loss. Reconnect automatically when policy permits; distinguish app background pause, rejected credentials and another client using the same ID.
+- Search local songs/albums/artists without an account. Combine them with Soulseek results, filter quality/availability and sort by match, availability or quality. Preview a peer's full FLAC folder before confirming an album download.
+- Guided offline/Soulseek setup explains download storage, optional sharing and app-only/background connection tradeoffs. Consent and sharing folders are remembered per account. Folder pickers preserve the connection.
+- Cancel pending needle playback when changing records; start a searched local song on its correct record side.
+- Keep the vinyl player home, with Home/Library/Discover/Messages navigation, a mini player and global account/download access.
+- Retain Internet Archive Friday Drops and FLAC validation throughout. Both download providers still require a connected Soulseek account; offline playback remains free of login.
+- Update architecture, developer/contributor notes, Android flow tooling and performance/live-check instructions.
 
 ## Install
 
-Download **Runout-0.4.0-development.apk** from this release. It supports Android 9+ and ARM64, ARMv7, x86-64 and x86. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app. Private state is separate; the original app is not replaced. Verify the APK with the attached SHA-256 file.
+Download **Runout-0.4.1-development.apk** and verify it with the attached SHA-256 file. It supports Android 9+ and ARM64, ARMv7, x86-64 and x86. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app, or updates the preceding development build when signed with the same certificate.
 
-Play local FLAC without signing in. For downloads, open Account, sign in with your Soulseek ID, and choose a download folder. An unused username creates a Soulseek account; there is no password reset, and another client on the same account will be disconnected. The Account screen explains these details. The Soulseek protocol does not encrypt credentials or messages.
+Start with **Listen offline** or **Set up Soulseek**. Another client using the same Soulseek ID will be disconnected when you connect. An unused username creates an account, including a typo; Soulseek has no password reset and does not encrypt credentials or messages in transit.
 
 ## Verification and limits
 
-The attached verification report records passing JVM/UI, native and emulator integration tests, zero lint errors, and four-ABI native packaging with 16 KiB alignment. Integration tests use actual local peers and never sign in to public Soulseek.
+The attached verification report records JVM/Compose tests, native tests, Android integration/performance checks and explicit public-network observations. Device benchmarks measure warm metadata processing; they do not measure network latency or establish a speed comparison with Seeker. Public search and transfer success still depend on peers and reachability.
 
-This is a **development pre-release**, debug-signed and using experimental client version 177/1. Production signing, an appropriate production client identifier, and public-network interoperability checks remain. Search/transfer success depends on peer availability and network reachability. A valid FLAC container does not prove a lossless recording source or redistribution rights.
-
-GitHub source archives correspond to this release's tagged source commit. Original Runout and third-party license notices are preserved in the repository and APK.
+This is a **development pre-release**, debug-signed and using experimental client version 177/1. Production signing and a suitable production client identifier remain. GitHub source archives correspond to the tagged source commit. Original Runout and third-party notices remain in the repository and APK. No pull request is opened for this release.

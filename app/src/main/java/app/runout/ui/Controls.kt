@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +32,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -52,7 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
-/** A flat pill button for panels. Solid blue when it's the main action or selected. */
+/** Tactile panel button; a green face marks the primary action or selected choice. */
 @Composable
 fun Pill(
     text: String,
@@ -61,13 +64,14 @@ fun Pill(
     active: Boolean = false,
     enabled: Boolean = true,
 ) {
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(8.dp)
     Box(
         modifier
-            .height(30.dp)
-            .widthIn(min = 44.dp)
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
             .alpha(if (enabled) 1f else 0.4f)
-            .background(if (active) Room.Accent else Color.White.copy(alpha = 0.78f), shape)
+            .shadow(if(enabled) 1.dp else 0.dp,shape)
+            .background(Brush.verticalGradient(if(active) listOf(Color(0xFF397453),Room.Accent) else listOf(Color(0xFFFFFEF9),Color(0xFFE1DFD3))), shape)
             .border(1.dp, if (active) Room.Accent else Room.Ink.copy(alpha = 0.10f), shape)
             .clickable(
                 enabled = enabled,
@@ -76,10 +80,10 @@ fun Pill(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 13.dp),
+            .padding(horizontal = 13.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(text, style = Room.Label.copy(color = if (active) Color.White else Room.Ink, fontWeight = FontWeight.Medium), maxLines = 1)
+        BasicText(text, style = Room.Label.copy(color = if (active) Color.White else Room.Ink, fontWeight = FontWeight.Medium), maxLines = 2)
     }
 }
 
@@ -105,7 +109,8 @@ fun ToggleRow(
             ) { onChange(!checked) }
             .semantics { stateDescription = if (checked) "On" else "Off" }
             .testTag("toggle:$title")
-            .padding(vertical = 7.dp),
+            .heightIn(min = 48.dp)
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -179,6 +184,7 @@ fun Field(
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     secret: Boolean = false,
+    onSubmit: (() -> Unit)? = null,
 ) {
     Box(
         modifier
@@ -190,10 +196,15 @@ fun Field(
             onValueChange = onChange,
             singleLine = singleLine,
             visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = if (secret) KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false) else KeyboardOptions.Default,
+            keyboardOptions = when {
+                secret -> KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
+                onSubmit != null -> KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search)
+                else -> KeyboardOptions.Default
+            },
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSubmit?.invoke() }),
             textStyle = Room.Title.copy(fontSize = 14.sp),
             cursorBrush = SolidColor(Room.Accent),
-            modifier = Modifier.fillMaxWidth().testTag("field:$placeholder").padding(vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("field:$placeholder").semantics { contentDescription = placeholder }.padding(vertical = 12.dp),
             decorationBox = { inner ->
                 Box {
                     if (value.isEmpty()) BasicText(placeholder, style = Room.Title.copy(fontSize = 14.sp, color = Room.Faint))

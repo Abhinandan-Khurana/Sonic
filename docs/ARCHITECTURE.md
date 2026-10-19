@@ -4,7 +4,7 @@ Runout is a single Android application module with a small Rust workspace for So
 
 ```mermaid
 flowchart TD
-    UI[Compose listening room and panels] --> Actions[RoomActions / MainActivity]
+    UI[RunoutScreen / SetupScreen / DiscoveryScreen] --> Actions[RoomActions / MainActivity]
     Actions --> Library[Library, pressing and record repositories]
     Actions --> Soulseek[SoulseekRepository]
     Actions --> Deck[Deck and PlaybackService]
@@ -12,10 +12,13 @@ flowchart TD
     Deck --> FLAC
     Deck --> Audio[Media3 / SoundEngine / DspAudioSink]
     Soulseek --> DB[(Local Room database)]
-    Soulseek --> Vault[Android Keystore credential vault]
+    Soulseek --> Connection[SoulseekConnectionManager]
+    Connection --> Vault[Android Keystore credential vault]
+    UI --> Discovery[DiscoveryRepository / LocalMusicIndex]
+    Discovery --> Soulseek
     Soulseek --> Storage[DownloadStorage / SAF]
     Drops[DropsRepository / Internet Archive HTTPS] --> Storage
-    Soulseek --> Transport[SoulseekTransport / NativeSoulseek JNI]
+    Connection --> Transport[SoulseekTransport / NativeSoulseek JNI]
     Transport --> Bridge[Rust adapter]
     Bridge --> Core[Vendored soulseek-rs-lib]
     Core --> Network[Soulseek server and peers]
@@ -28,19 +31,26 @@ The Archive publication callback passes through `SoulseekRepository` to enforce 
 
 `RunoutApp.AppGraph` constructs shared repositories, an application coroutine scope and the deck once. It combines scanned folders, imported records, pressings, Archive albums and Soulseek albums into one crate. Document identity deduplication keeps a managed download from appearing again when its folder is scanned.
 
-`MainActivity` collects flows into `RoomState` and supplies `RoomActions` to Compose. It handles folder pickers, notification permission and activity lifecycle. Panels render state and request actions; they do not open sockets or query the database.
+`MainActivity` collects flows into `RoomState` and supplies `RoomActions` to Compose. It handles folder pickers and notification permission. `RunoutApp` observes process lifecycle and the default network, preventing individual activity transitions from signing the account out. Panels render state and request actions; they do not open sockets or query the database.
+
+`RunoutScreen` owns the four destinations and global overlays. `SetupScreen` guides offline or Soulseek setup. Home embeds the existing turntable/crate renderer. Navigation preserves the discovery query/options and account data; network availability never gates the local deck.
 
 The retained `account/`, `nostr/` and friend-card code supports legacy data/tests. The production graph creates no Nostr relay client or online Nostr account session. Local `.vinyl` sharing still uses the Android share sheet.
 
 ## Soulseek boundary
 
-- `SoulseekRepository` coordinates sign-in, session generations, account-scoped state, commands, event handling and publication. A mutex serializes calls to the current native session. Blocking work runs on IO coroutines.
+- `SoulseekConnectionManager` owns exactly one native connection, generation checks, secure remembered credentials and reconnect policy. Separate lifecycle and wire mutexes serialize session changes and native access. Account identity survives connection loss; `connected` remains the strict download/send gate.
+- `SoulseekRepository` coordinates account-scoped state, event handling, sharing, transfer services and publication. Account, search and publication mutations have separate mutexes. Blocking work runs on IO coroutines.
 - `SoulseekTransport` is the injectable command/event boundary. Unit tests provide a local fake; `NativeTransport` delegates to `NativeSoulseek` in the app.
 - `NativeSoulseek` owns the JNI handle. Requests and events use JSON; the bridge command reference is in [native/README.md](../native/README.md).
 - `native/bridge` adapts the pinned MIT core without exposing Android filesystem assumptions to the network layer. Kotlin gives it an explicit share manifest and opens requested files through opaque descriptor keys.
-- Foreground services cover transfers and optional stay-online behavior. Android timeouts disconnect and preserve resumable state. An idle background app disconnects unless stay-online is enabled.
+- Foreground services cover transfers and optional stay-online behavior. Android timeouts disconnect and preserve resumable state. An idle app-only session pauses after five seconds in the background and reconnects on return. External pickers suppress this idle pause.
 
-Search results are bounded to 5,000 entries and displayed in pages of 100. Folder downloads enqueue only the selected peer directory's FLAC files. Reachability still depends on peer availability and network conditions.
+`DiscoveryRepository` builds a metadata-only `LocalMusicIndex` per library revision. Local matching is debounced 150 ms and runs on Default; incoming peer batches do not repeat it. Online results drain from native every 100 ms in batches of up to 100 files, with a 5,000-FLAC cap and stable identity map. No full accumulated native result list is repeatedly copied. Kotlin groups the complete shortlist by exact peer and directory before a stable-key Compose `LazyColumn` virtualizes it. Default ranking favors the match, then advertised availability, queue and speed; missing quality remains visible.
+
+The Android peer registry is limited to 48 connections. A ten-second admission grace prevents bursts from evicting newly connected search peers before they reply. Explicit browse/download/message work can preempt unprotected discovery peers. This bounded scheduling policy does not guarantee that every public response is collected.
+
+Album search matches are a shortlist, not proof of a complete release. Preview requests the selected peer's complete directory, filters to FLAC, and requires separate confirmation plus a writable destination before enqueuing. Reachability still depends on peer availability and network conditions.
 
 ## Persistence and identity
 
@@ -49,6 +59,8 @@ Search results are bounded to 5,000 entries and displayed in pages of 100. Folde
 Incoming private messages commit before the explicit native acknowledgement. Stable server-message identities deduplicate replay after interruption. Outgoing messages persist as pending and become sent when accepted by the transport; this is not a delivery/read receipt.
 
 Remembered credentials use a Keystore AES-GCM key and a ciphertext file in `noBackupFilesDir`. Remembering is optional, and logout clears saved credentials. Backup rules also exclude the private chat database and legacy account secrets. The Soulseek protocol itself is plaintext.
+
+`SoulseekPreferences` keeps onboarding progress and per-account sharing/background choices. Share folder URIs are also per account. Actual runtime activity is separate from consent: missing Android permission or an inaccessible folder does not silently activate the feature. A revision counter discards a sharing scan if its account, session or consent changed before publication.
 
 ## Music admission and publication
 

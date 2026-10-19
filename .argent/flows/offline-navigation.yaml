@@ -1,0 +1,19 @@
+steps:
+  - launch: app.runout.dev
+  - when: { visible: { id: setup-offline } }
+    steps:
+      - tap: { id: setup-offline }
+      - tap: { id: setup-finish }
+  - await: { visible: { id: 'screen:home' } }
+  - tap: { id: 'destination:LIBRARY' }
+  - await: { visible: { id: 'screen:library' } }
+  - tap: { id: 'destination:DISCOVER' }
+  - await: { visible: { id: 'screen:search' } }
+  - tap: { id: 'destination:MESSAGES' }
+  - await: { visible: { id: 'screen:messages' } }
+  - tap: { id: 'destination:HOME' }
+  - await: { visible: { id: 'screen:home' } }
+  - tap: { id: open-downloads }
+  - await: { visible: { id: 'panel:transfers' } }
+  - tap: { id: close-page }
+  - await: { visible: { id: 'screen:home' } }

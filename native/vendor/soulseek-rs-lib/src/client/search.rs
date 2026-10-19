@@ -181,6 +181,14 @@ impl Client {
             .unwrap_or_default()
     }
 
+    /// Consume only newly arrived replies, retaining the registered search token.
+    /// Android publishes bounded deltas rather than repeatedly cloning every prior reply.
+    pub fn take_search_results(&self, search_key: &str) -> Vec<SearchResult> {
+        self.context.write_safe().ok().and_then(|mut ctx| {
+            ctx.searches.get_mut(search_key).map(|s| std::mem::take(&mut s.results))
+        }).unwrap_or_default()
+    }
+
     /// Non-blocking variant that returns None if the lock is unavailable
     #[must_use]
     pub fn try_get_search_results(

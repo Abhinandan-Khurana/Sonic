@@ -168,9 +168,21 @@ class Deck(
     fun load(album: Album) {
         val verified = FlacPolicy.filterAlbum(context, album, refreshMetadata = false) ?: return
         val sides = SideSplitter.split(verified.tracks)
+        rampJob?.cancel()
         sfx.stopCrackle()
         _state.value = DeckState(album = verified, sides = sides, speed = _state.value.speed)
         cueSide(verified, sides.firstOrNull())
+    }
+
+    /** Search can start a song on any record side without losing its album context. */
+    fun playTrack(album: Album, trackId: String?) {
+        load(album)
+        val loaded = _state.value
+        if (loaded.album?.id != album.id) return
+        val sideIndex = loaded.sides.indexOfFirst { side -> trackId == null || side.tracks.any { it.id == trackId } }
+        if (sideIndex < 0) return
+        val trackIndex = loaded.sides[sideIndex].tracks.indexOfFirst { trackId == null || it.id == trackId }
+        jumpTo(sideIndex,trackIndex.coerceAtLeast(0))
     }
 
     private fun cueSide(album: Album, side: Side?) {

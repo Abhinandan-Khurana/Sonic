@@ -55,8 +55,14 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
     Column(Modifier.fillMaxWidth().testTag("panel:account")) {
         BasicText("Your local FLAC library is yours to play without an account.", style = Room.Title.copy(fontSize = 14.sp))
         BasicText("Sign in to search Soulseek, download from Soulseek or Internet Archive, and message people.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 6.dp))
-        if (session.signedIn) {
-            SectionTitle("Signed in as ${session.username}")
+        if (session.hasAccount) {
+            SectionTitle("Account · ${session.username}")
+            BasicText(if(session.connected) "Connected to Soulseek" else session.error ?: when(session.state) {
+                SoulseekConnection.CONNECTING -> "Connecting to Soulseek"
+                SoulseekConnection.RECONNECTING -> "Reconnecting to Soulseek"
+                else -> "Connection paused"
+            },style = Room.LabelQuiet,modifier = Modifier.testTag("account-connection"))
+            if(!session.connected) Pill("Reconnect",actions::reconnectSoulseek,enabled = session.state != SoulseekConnection.RECONNECTING)
             Pill("Sign out", actions::signOutSoulseek)
         } else {
             var username by rememberSaveable(state.soulseekSavedUsername) { mutableStateOf(state.soulseekSavedUsername.orEmpty()) }
@@ -84,8 +90,10 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
         SectionTitle("Share FLAC on Soulseek")
         BasicText(state.sharedFolder ?: "Choose a folder to share. Only validated FLAC files in that folder will be visible to other users.", style = Room.LabelQuiet)
         Pill(if (state.sharedFolder == null) "Choose sharing folder" else "Change sharing folder", actions::pickSharedFolder, modifier = Modifier.padding(vertical = 8.dp))
-        ToggleRow("Share selected FLAC folder", "Other Soulseek users can search and download files you explicitly share.", state.soulseekSharing, actions::setSoulseekSharing, enabled = session.signedIn && state.sharedFolder != null)
-        ToggleRow("Stay online in the background", "Keep private messages and sharing available with an ongoing notification. You can disconnect from that notification.", state.soulseekStayOnline, actions::setSoulseekStayOnline, enabled = session.signedIn)
+        ToggleRow("Share selected FLAC folder", "Other Soulseek users can search and download files you explicitly share.", state.soulseekShareConsent, actions::setSoulseekSharing, enabled = session.hasAccount && (state.soulseekShareConsent || (session.connected && state.sharedFolder != null)))
+        ToggleRow("Stay online in the background", "Keep private messages and sharing available with an ongoing notification. You can disconnect from that notification.", state.soulseekBackgroundConsent, actions::setSoulseekStayOnline, enabled = session.hasAccount && (state.soulseekBackgroundConsent || session.connected))
+        if(state.soulseekShareConsent && !state.soulseekSharing) BasicText("Sharing is paused. It resumes after connection and folder checks succeed.",style = Room.LabelQuiet)
+        if(state.soulseekBackgroundConsent && !state.soulseekStayOnline) BasicText("Background mode is paused. Check notification permission and reconnect to resume.",style = Room.LabelQuiet)
         BasicText("Soulseek's protocol does not encrypt sign-in credentials or private messages.", style = Room.LabelQuiet, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
     }
 }
@@ -93,7 +101,7 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
 @Composable
 fun SoulseekSearchPanel(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onTransfers: () -> Unit, onMessage: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().testTag("panel:search")) {
-        if (!state.soulseekSession.signedIn) { SignInNotice(onAccount); return@Column }
+        if (!state.soulseekSession.hasAccount) { SignInNotice(onAccount); return@Column }
         var query by rememberSaveable { mutableStateOf("") }
         var searched by rememberSaveable { mutableStateOf(false) }
         var resultPage by rememberSaveable { mutableStateOf(0) }

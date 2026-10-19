@@ -32,7 +32,9 @@ Commands have an `op` field and return `{ "ok": true }` or `{ "ok": false, "erro
 | contact | exact username |
 | shares | files array: opaque key, virtual FLAC path, expected size |
 
-Events use `type`: session, search_result, search_done, browse_result, transfer, message, message_sent, presence, upload, shares, or error. Transfer events carry the host id, state, bytes, total, speed, optional queue position, staged path and error. Message timestamps are server Unix seconds and incoming IDs are acknowledged only by an explicit host `ack` after persistence. Polling never acknowledges a message. Commands and polling run off Android's main thread.
+Events use `type`: session, search_batch, search_done, browse_result, transfer, message, message_sent, presence, upload, shares, or error. Transfer events carry the host id, state, bytes, total, speed, optional queue position, staged path and error. Message timestamps are server Unix seconds and incoming IDs are acknowledged only by an explicit host `ack` after persistence. Polling never acknowledges a message. Commands and polling run off Android's main thread.
+
+`search_batch` carries `id` and a `files` array of at most 100 FLAC entries, including peer availability/speed/optional queue length. The bridge drains new core replies every 100 ms, deduplicates by peer/path/size and caps at 5,000 FLAC entries. `search_done` includes cancelled/limited flags and diagnostic rawFiles/peerReplies/elapsedMs counts. Kotlin accepts legacy `search_result` in fixture transports only. Session failures carry a typed `reasonCode` such as NETWORK_LOST, AUTH_REJECTED or DISPLACED; no automatic retry is performed inside JNI.
 
 ## Narrow vendor changes
 
@@ -41,9 +43,11 @@ Events use `type`: session, search_result, search_done, browse_result, transfer,
 - Prompt shutdown for a client shared by background workers.
 - Portable rlimit comparison for 32-bit Android.
 - Bounded Android host upload queues, duplicate-request handling and recent upload history.
+- Optional peer admission grace (zero by default upstream; ten seconds for Android), preserving new discovery connections before eviction while allowing explicit work to preempt them.
+- Incremental `take_search_results` drain that retains the active query token, plus optional peer queue length parsed from search replies.
 
 The adapter adds strict remote FLAC selection, local header checks, bounded discovery events, typed errors, storage descriptors and session/transfer tracking. Kotlin applies the complete application admission policy and durable publication.
 
 ## Verification
 
-Core unit tests and an adapter loopback login/DM test run on the host. `SoulseekNativeIntegrationTest` uses the packaged Android library, local central-server broker and two actual peers to verify search, folder listing, download bytes, upload descriptors and message acknowledgements. No public server login, account creation or third-party messaging is performed.
+Core unit tests and an adapter loopback login/DM test run on the host. `SoulseekNativeIntegrationTest` uses the packaged Android library, local central-server broker and two actual peers to verify search, folder listing, download bytes, upload descriptors and message acknowledgements. Ordinary tests perform no public server login, account creation or third-party messaging. The separately opt-in `SoulseekLiveNetworkTest` uses private provisioned credentials, searches public FLAC and observes a session without downloads or messages; see the build guide.

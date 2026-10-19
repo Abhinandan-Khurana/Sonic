@@ -276,6 +276,13 @@ impl Client {
         Ok(())
     }
 
+    /// Protect newly admitted peers long enough to finish their response handshake.
+    pub fn set_peer_admission_grace(&self, grace: Duration) {
+        if let Ok(ctx) = self.context.read_safe() {
+            if let Some(registry) = &ctx.peer_registry { registry.set_admission_grace(grace); }
+        }
+    }
+
     pub fn set_max_peers(&self, max_peers: usize) {
         if let Ok(ctx) = self.context.read_safe() {
             ctx.max_peers

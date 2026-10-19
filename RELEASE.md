@@ -1,6 +1,6 @@
 # Releasing Runout
 
-The current artifact is [Runout 0.4.0 development](https://github.com/Somchandra17/runout/releases/tag/v0.4.0-dev.1). It is a GitHub **pre-release**, built as **Runout Dev** (`app.runout.dev`) for Android 9 or newer, with ARM64, ARMv7, x86-64 and x86 support.
+The current artifact is [Runout 0.4.1 development](https://github.com/Somchandra17/runout/releases/tag/v0.4.1-dev.1). It is a GitHub **pre-release**, built as **Runout Dev** (`app.runout.dev`) for Android 9 or newer, with ARM64, ARMv7, x86-64 and x86 support.
 
 ## Prepare and verify
 

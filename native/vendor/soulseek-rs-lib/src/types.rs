@@ -62,6 +62,7 @@ pub struct SearchResult {
     pub files: Vec<File>,
     pub slots: u8,
     pub speed: u32,
+    pub queue_length: Option<u32>,
     pub username: String,
 }
 
@@ -151,12 +152,14 @@ impl SearchResult {
         }
         let slots = message.read_int8();
         let speed = message.read_int32();
+        let queue_length = (message.get_pointer() + 4 <= message.get_size()).then(|| message.read_int32());
 
         Ok(Self {
             token,
             files,
             slots,
             speed,
+            queue_length,
             username,
         })
     }

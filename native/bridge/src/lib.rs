@@ -148,13 +148,15 @@ impl Runtime {
                         Ok(true) => {
                             client.set_upload_slots(2);
                             client.set_max_peers(48);
+                            client.set_peer_admission_grace(Duration::from_secs(10));
                             *lock(&runtime.client) = Some(Arc::new(client));
                             runtime.push(json!({"type":"session","state":"connected","username":username}));
                         }
                         other => {
+                            let reason_code = if matches!(&other, Ok(false) | Err(soulseek_rs::error::SoulseekRs::AuthenticationFailed)) { "AUTH_REJECTED" } else { "NETWORK_LOST" };
                             let reason = match other { Ok(false) => "The Soulseek username or password was rejected".to_string(), Err(e) => e.to_string(), _ => unreachable!() };
                             client.shutdown();
-                            runtime.push(json!({"type":"session","state":"error","reason":reason}));
+                            runtime.push(json!({"type":"session","state":"error","reason":reason,"reasonCode":reason_code}));
                         }
                     }
                 });
@@ -178,23 +180,34 @@ impl Runtime {
                 std::thread::spawn(move || {
                     let started = Instant::now();
                     let mut seen = HashSet::new();
+                    let mut raw_files = 0usize;
+                    let mut replies = 0usize;
                     while started.elapsed() < duration && !cancelled.load(Ordering::Relaxed)
-                        && runtime.generation.load(Ordering::SeqCst) == generation {
-                        for response in client.get_search_results(&query) {
+                        && runtime.generation.load(Ordering::SeqCst) == generation && seen.len() < 5000 {
+                        let mut batch = Vec::new();
+                        for response in client.take_search_results(&query) {
+                            replies += 1;
+                            raw_files += response.files.len();
                             for file in response.files {
+                                if seen.len() >= 5000 { break; }
                                 if flac_path(&file.name) && seen.insert((response.username.clone(), file.name.clone(), file.size)) {
                                     let mut event = file_json(&file.name, file.size, &file.attribs);
-                                    event["type"] = json!("search_result"); event["id"] = json!(id);
                                     event["username"] = json!(response.username); event["freeSlots"] = json!(response.slots);
-                                    event["uploadSpeed"] = json!(response.speed);
-                                    runtime.push(event);
+                                    event["uploadSpeed"] = json!(response.speed); event["queueLength"] = json!(response.queue_length);
+                                    batch.push(event);
+                                    if batch.len() == 100 {
+                                        runtime.push(json!({"type":"search_batch","id":id,"files":batch}));
+                                        batch = Vec::new();
+                                    }
                                 }
                             }
                         }
-                        std::thread::sleep(Duration::from_millis(150));
+                        if !batch.is_empty() { runtime.push(json!({"type":"search_batch","id":id,"files":batch})); }
+                        std::thread::sleep(Duration::from_millis(100));
                     }
                     if runtime.generation.load(Ordering::SeqCst) == generation {
-                        runtime.push(json!({"type":"search_done","id":id,"cancelled":cancelled.load(Ordering::Relaxed)}));
+                        runtime.push(json!({"type":"search_done","id":id,"cancelled":cancelled.load(Ordering::Relaxed),"limited":seen.len()>=5000,
+                            "rawFiles":raw_files,"peerReplies":replies,"elapsedMs":started.elapsed().as_millis() as u64}));
                     }
                     // Do not remove a newer search registered under the same query.
                     let mut searches = lock(&runtime.searches);
@@ -305,7 +318,7 @@ impl Runtime {
         let Some(client) = lock(&self.client).clone() else { return json!(events); };
         if let Some(loss) = client.session_loss() {
             if !self.seen_loss.swap(true, Ordering::Relaxed) {
-                events.push(json!({"type":"session","state":"disconnected","reason":match loss {SessionLoss::Displaced=>"This Soulseek ID signed in on another device",_=>"The Soulseek connection was lost"}}));
+                events.push(json!({"type":"session","state":"disconnected","reasonCode":match loss {SessionLoss::Displaced=>"DISPLACED",_=>"NETWORK_LOST"},"reason":match loss {SessionLoss::Displaced=>"This Soulseek ID signed in on another device",_=>"The Soulseek connection was lost"}}));
             }
         }
         for message in client.take_private_messages() {

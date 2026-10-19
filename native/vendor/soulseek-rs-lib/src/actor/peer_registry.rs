@@ -8,6 +8,7 @@ use crate::{debug, error};
 
 use std::collections::{HashMap, HashSet};
 use std::net::TcpStream;
+use std::time::{Duration, Instant};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -26,6 +27,8 @@ pub struct PeerRegistry {
     client_channel: Sender<ClientOperation>,
     own_username: String,
     capacity: Arc<AtomicUsize>,
+    admission_grace_ms: Arc<AtomicU64>,
+    admitted: Arc<Mutex<HashMap<u64, Instant>>>,
 }
 
 impl PeerRegistry {
@@ -56,7 +59,13 @@ impl PeerRegistry {
             client_channel,
             own_username,
             capacity,
+            admission_grace_ms: Arc::new(AtomicU64::new(0)),
+            admitted: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn set_admission_grace(&self, grace: Duration) {
+        self.admission_grace_ms.store(grace.as_millis() as u64, Ordering::Relaxed);
     }
 
     pub fn register_peer(
@@ -99,10 +108,13 @@ impl PeerRegistry {
             .map_err(|e| format!("peer registry lock poisoned: {e}"))?;
 
         let capacity = self.capacity.load(Ordering::Relaxed).max(1);
+        let mut admitted = self.admitted.lock_safe().map_err(|_| "peer admission lock poisoned")?;
+        admitted.retain(|id, _| peers.values().any(|(current,_)| current == id));
+        let grace = Duration::from_millis(self.admission_grace_ms.load(Ordering::Relaxed));
         if peers.len() >= capacity && !peers.contains_key(&username) {
             let victim = peers
                 .iter()
-                .filter(|(name, _)| !protected.contains(name.as_str()))
+                .filter(|(name, (id, _))| !protected.contains(name.as_str()) && (protected.contains(&username) || admitted.get(id).is_none_or(|time| time.elapsed() >= grace)))
                 .min_by_key(|(_, (id, _))| *id)
                 .map(|(name, _)| name.clone());
             let Some(victim) = victim else {
@@ -140,6 +152,7 @@ impl PeerRegistry {
             );
         }
 
+        admitted.insert(id, Instant::now());
         Ok(handle)
     }
 
@@ -260,6 +273,8 @@ impl Clone for PeerRegistry {
             client_channel: self.client_channel.clone(),
             own_username: self.own_username.clone(),
             capacity: self.capacity.clone(),
+            admission_grace_ms: self.admission_grace_ms.clone(),
+            admitted: self.admitted.clone(),
         }
     }
 }
@@ -308,6 +323,36 @@ mod tests {
             Arc::new(AtomicUsize::new(capacity)),
         );
         (registry, rx)
+    }
+
+    #[test]
+    fn mobile_admission_does_not_evict_a_peer_before_its_reply_can_arrive() {
+        let (registry,_rx) = capped_registry(1);
+        registry.set_admission_grace(std::time::Duration::from_secs(10));
+        let (a,a_stream,_a_far) = loopback_peer("responding");
+        registry.register_peer(a,Some(a_stream),None).unwrap();
+        for i in 0..100 {
+            let (b,b_stream,_b_far) = loopback_peer(&format!("burst-{i}"));
+            assert!(registry.register_peer(b,Some(b_stream),None).is_err());
+        }
+        assert!(registry.contains("responding"));
+        registry.set_admission_grace(std::time::Duration::ZERO);
+        let (b,b_stream,_b_far) = loopback_peer("later");
+        registry.register_peer(b,Some(b_stream),None).unwrap();
+        assert!(registry.contains("later"));
+        registry.stop_all();
+    }
+
+    #[test]
+    fn an_explicit_download_or_browse_can_preempt_young_discovery_peers() {
+        let (registry,_rx) = capped_registry(1);
+        registry.set_admission_grace(std::time::Duration::from_secs(10));
+        let (a,a_stream,_a_far) = loopback_peer("discovery");
+        registry.register_peer(a,Some(a_stream),None).unwrap();
+        let (b,b_stream,_b_far) = loopback_peer("selected");
+        registry.register_peer_protected(b,Some(b_stream),None,&HashSet::from(["selected".into()])).unwrap();
+        assert!(registry.contains("selected"));
+        registry.stop_all();
     }
 
     #[test]

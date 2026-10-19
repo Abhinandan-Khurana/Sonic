@@ -132,6 +132,25 @@ class SoulseekRepositoryTest {
         assertTrue(db.soulseek().messages("second").first().isEmpty())
     }
 
+    @Test fun `a sharing folder and consent never carry over to another account`() = runBlocking {
+        login("first")
+        val folder = destination()
+        File(folder, "01 Opening.flac").writeBytes(flac)
+        val uri = FolderProvider.install(folder, allowWrite = true)
+        repo.setSharedFolder(uri).join()
+        repo.setSharing(true).join()
+        assertTrue(repo.error.value, repo.sharing.value)
+        assertEquals(uri, repo.sharedFolder.value)
+        login("second")
+        await("second account connected callback") { repo.sharedFolder.value == null }
+        assertFalse(repo.sharing.value)
+        assertFalse(repo.preferences.sharing("second"))
+        assertNull(repo.preferences.sharedFolder("second"))
+        login("first")
+        await("first sharing restored") { repo.sharing.value }
+        assertEquals(uri, repo.sharedFolder.value)
+    }
+
     @Test fun `search ignores stale and non FLAC results without requiring quality metadata`() = runBlocking {
         login()
         repo.search("Vela Park").join()
@@ -187,6 +206,38 @@ class SoulseekRepositoryTest {
         await("invalid download failed") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.FAILED }
         assertTrue(repo.downloadAlbums.value.isEmpty())
         assertTrue(folder.walkTopDown().none { it.isFile })
+    }
+
+    @Test fun `folder preview filters the full listing and never downloads until confirmed`() = runBlocking {
+        login()
+        val selected=SoulseekSearchResult("maya","Artist/Album/01 First.flac",100)
+        repo.previewFolder(selected).join()
+        val id=transport.commands.last {it.optString("op")=="browse"}.getString("id")
+        val files=JSONArray().put(JSONObject().put("path","Artist/Album/01 First.flac").put("size",100))
+            .put(JSONObject().put("path","Artist/Album/02 Second.FLAC").put("size",200))
+            .put(JSONObject().put("path","Artist/Album/03 Other.mp3").put("size",300))
+            .put(JSONObject().put("path","Artist/Other/04 Wrong.flac").put("size",400))
+        transport.emit(JSONObject().put("type","browse_result").put("id",id).put("username","maya").put("directory","Artist/Album").put("files",files))
+        await("full folder preview") {repo.folderPreview.value?.loading==false}
+        assertEquals(2,repo.folderPreview.value!!.files.size)
+        assertTrue(transport.commands.none {it.optString("op")=="download"})
+        destination();repo.confirmFolderDownload().join()
+        assertEquals(2,transport.commands.count {it.optString("op")=="download"})
+        assertNull(repo.folderPreview.value)
+    }
+
+    @Test fun `batched search deltas deduplicate and report the visible result limit`() = runBlocking {
+        login();repo.search("Album").join()
+        val id=transport.commands.last {it.optString("op")=="search"}.getString("id")
+        val files=JSONArray()
+        repeat(5001) {files.put(JSONObject().put("username","maya").put("path","Album/track-$it.flac").put("size",100))}
+        files.put(JSONObject().put("username","maya").put("path","Album/no.mp3").put("size",100))
+        transport.emit(JSONObject().put("type","search_batch").put("id",id).put("files",files))
+        transport.emit(JSONObject().put("type","search_done").put("id",id))
+        await("bounded completed result set") {repo.searchStatus.value.phase==SearchPhase.COMPLETE}
+        assertEquals(5000,repo.searchResults.value.size)
+        assertTrue(repo.searchStatus.value.limited)
+        assertFalse(repo.searching.value)
     }
 
     private class FakeTransport : SoulseekTransport {

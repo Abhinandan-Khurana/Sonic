@@ -1,13 +1,13 @@
 # Contributing to Runout
 
-Start with the [README](README.md), [build guide](docs/BUILDING.md), [architecture](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md). This fork's current integration is Runout 0.4.0 development; older Nostr guides describe v0.3.
+Start with the [README](README.md), [build guide](docs/BUILDING.md), [architecture](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md). This fork's current integration is Runout 0.4.1 development; older Nostr guides describe v0.3.
 
 ## Product boundaries
 
-- Local FLAC playback works without an account or network connection. Soulseek sign-in gates downloads from both providers, search, messages and sharing.
+- Local FLAC playback works without an account or network connection. Soulseek sign-in gates downloads from both providers, online search, messages and sharing. Local metadata search works offline.
 - Music is FLAC-only at every entry point. Validate bytes through `FlacPolicy`; an extension or peer-reported codec alone is insufficient. Artwork, `.vinyl` containers and synthesized turntable effects are separate assets.
 - Use Android's folder picker and persisted URI grants. Never request broad storage access or assume a document URI is a filesystem path. Completed downloads belong in the user's selected folder.
-- Sharing and staying online require explicit opt-in. Keep Soulseek credentials out of logs, backups, crash reports and Internet Archive requests.
+- Sharing and staying online require explicit opt-in per account. A share-folder grant for one account is not consent for another. Preserve account identity during temporary disconnection and use the process lifecycle connection owner. Keep Soulseek credentials out of logs, backups, crash reports and Internet Archive requests.
 - Preserve the turntable controls, audio quality reporting and Pure mode. Output fidelity depends on the device and audio route; avoid unconditional bit-perfect claims.
 - Runout has no hosted application backend. Room is an on-device database; Soulseek uses its existing central server and peer network, and Archive uses HTTPS.
 - Soulseek downloads do not confer ownership or a redistribution license. Keep the existing original-music/Creative Commons checks for `.vinyl` audio bundles.
@@ -27,7 +27,8 @@ Start with the [README](README.md), [build guide](docs/BUILDING.md), [architectu
    ```
 
 5. Review the generated reports. Lint must have zero errors; existing warnings are not evidence that a new warning is acceptable. Explain any skipped or unavailable check.
-6. Update user-facing documentation for behavior changes. Update `native/README.md`, provenance and license notices when touching vendored code or dependencies. Commit exported Room schemas with database changes.
+6. For navigation/login/search changes, run the [Argent flows](.argent/README.md), check keyboard and folder-picker transitions, and exercise large local/remote result sets on an emulator. Use incremental results and stable list identities; do not query storage from UI composition.
+7. Update user-facing documentation for behavior changes. Update `native/README.md`, provenance and license notices when touching vendored code or dependencies. Commit exported Room schemas with database changes.
 
 Use clear commit subjects such as `fix(downloads): preserve progress after folder permission loss`. Keep generated build directories, SDK paths, credentials and signing keys out of commits. New APKs belong in GitHub Releases, rather than Git history.
 

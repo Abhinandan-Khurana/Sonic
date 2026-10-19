@@ -1,7 +1,14 @@
 package app.runout
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import app.runout.drops.DropsRepository
+import app.runout.discovery.DiscoveryRepository
 import app.runout.library.ArtworkRepository
 import app.runout.library.LibraryRepository
 import app.runout.library.LibraryScanner
@@ -35,6 +42,18 @@ class RunoutApp : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) { graph.soulseek.onForegroundChanged(true) }
+            override fun onStop(owner: LifecycleOwner) { graph.soulseek.onForegroundChanged(false) }
+        })
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { graph.soulseek.onNetworkChanged(true) }
+            override fun onLost(network: Network) { graph.soulseek.onNetworkChanged(connectivity.activeNetwork != null) }
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) graph.soulseek.onNetworkChanged(true)
+            }
+        })
     }
 }
 
@@ -57,6 +76,8 @@ class AppGraph(app: Application) {
     val shelf: StateFlow<List<Album>> = combine(library.albums, share.received, drops.albums, pressing.records, soulseek.downloadAlbums) { lib, rx, dr, pr, sl ->
         mergeShelf(lib, rx, dr, pr, sl)
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    val discovery = DiscoveryRepository(shelf, soulseek, scope)
 
     init {
         // Pure mode also switches off the turntable's own effects.

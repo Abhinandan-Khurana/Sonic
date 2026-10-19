@@ -76,6 +76,26 @@ class TurntableDeckTest {
 
     private val s: DeckState get() = deck.state.value
 
+    @Test fun `search starts the selected song on its correct record side`() {
+        val record = album()
+        deck.playTrack(record, "t4")
+        settle()
+        assertEquals("deck", s.album?.id)
+        assertEquals("B2", s.trackCode)
+        assertEquals("t4", player.currentMediaItem?.mediaId)
+        assertTrue(player.playWhenReady)
+    }
+
+    @Test fun `loading a new record cancels the previous needle settling playback`() {
+        deck.load(album())
+        deck.startStop()
+        deck.load(album().copy(id = "next-record"))
+        settle()
+        assertEquals("next-record", s.album?.id)
+        assertFalse(s.needleDown)
+        assertFalse(player.playWhenReady)
+    }
+
     @Test
     fun `start and stop like the big square key`() {
         deck.load(album())

@@ -126,14 +126,23 @@ data class RoomState(
     val sharedFolder: String? = null,
     val soulseekSharing: Boolean = false,
     val soulseekStayOnline: Boolean = false,
+    val soulseekShareConsent: Boolean = false,
+    val soulseekBackgroundConsent: Boolean = false,
     val soulseekSavedUsername: String? = null,
     val soulseekError: String? = null,
+    val discovery: app.runout.discovery.DiscoveryState = app.runout.discovery.DiscoveryState(),
+    val soulseekSearchStatus: SoulseekSearchStatus = SoulseekSearchStatus(),
+    val folderPreview: SoulseekFolderPreview? = null,
+    val onboardingComplete: Boolean = true,
+    val onboardingStep: Int = 0,
+
 )
 
 interface RoomActions : DeckActions {
     fun pickFolder()
     fun rescan()
     fun load(album: Album)
+    fun playLocalTrack(album: Album, index: Int) { load(album); needleDrop(0f) }
     fun toggleCrackle()
 
     fun updateSound(transform: (SoundSettings) -> SoundSettings) {}
@@ -187,6 +196,17 @@ interface RoomActions : DeckActions {
     fun sendSoulseekMessage(username: String, text: String) {}
     fun markSoulseekRead(username: String) {}
     fun clearSoulseekError() {}
+    fun reconnectSoulseek() {}
+    fun previewSoulseekFolder(result: SoulseekSearchResult) { downloadSoulseekFolder(result) }
+    fun confirmSoulseekFolder() {}
+    fun closeSoulseekFolder() {}
+    fun setSearchQuery(value: String) {}
+    fun setSearchOptions(value: app.runout.discovery.DiscoveryOptions) {}
+    fun broadenSearch() {}
+    fun finishOnboarding() {}
+    fun setOnboardingStep(value: Int) {}
+    fun disconnectSoulseek() {}
+
 }
 
 /**
@@ -201,6 +221,7 @@ fun RoomScreen(
     initialPulledId: String? = null,
     initialCrateIndex: Int = 0,
     initialPanel: Panel? = null,
+    showChrome: Boolean = true,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -281,7 +302,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 16.dp, end = 16.dp, top = 70.dp, bottom = 86.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = if (showChrome) 70.dp else 8.dp, bottom = if (showChrome) 86.dp else 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     turntable(Modifier.fillMaxWidth().weight(0.42f), Alignment.Center)
@@ -293,7 +314,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 28.dp, end = 20.dp, top = 46.dp, bottom = 42.dp),
+                        .padding(start = 28.dp, end = 20.dp, top = if (showChrome) 46.dp else 8.dp, bottom = if (showChrome) 42.dp else 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     turntable(Modifier.weight(0.53f).fillMaxHeight(), Alignment.CenterStart)
@@ -302,7 +323,7 @@ fun RoomScreen(
                 }
             }
 
-            CornerLabels(state, pulled != null, portrait, backdrop, actions, onOpen = { panel = it; pulledId = null })
+            if (showChrome) CornerLabels(state, pulled != null, portrait, backdrop, actions, onOpen = { panel = it; pulledId = null })
         }
 
         // The pulled record, drawn above everything so it can travel across the room.

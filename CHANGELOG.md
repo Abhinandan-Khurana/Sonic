@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.1] - 2026-10-20 (development)
+
+### Fixed
+- Keep account identity through network loss and app background pauses; reconnect without asking for credentials again. Distinguish another-client displacement from temporary connection loss.
+- Protect newly connected discovery peers long enough to reply, fixing public searches that previously returned zero results under connection churn. Explicit browsing/downloads can take priority over discovery.
+- Stream bounded native result batches, cache result identities and path components, avoid repeated folder-wide matching and filename collation, and keep local indexing separate from network updates.
+- Preserve sessions during external folder pickers and notification permission prompts, scope sharing consent and folders to each account, and discard stale sharing scans after account/session changes.
+- Cancel the previous needle-settling ramp when loading a different record, and play locally searched songs on their correct side.
+
+### Added
+- Guided offline/Soulseek onboarding with download folder, optional sharing and explained connection modes.
+- Retro Home, Library, Discover and Messages navigation, global transfers/account access and mini player; retain the vinyl home.
+- Unified metadata search, song/album views, availability/quality filters, sorting and complete peer folder preview before album download.
+- Argent device flows, Android performance checks and an explicit private-credential public-network probe.
+
+---
+
 ## [0.4.0] - 2026-10-19 (development)
 
 ### Added

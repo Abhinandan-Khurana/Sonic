@@ -1,0 +1,25 @@
+executionPrerequisite: Runout Dev is onboarded and signed out, with the supplied account configured as local Argent secrets.
+steps:
+  - tap: { id: open-account }
+  - await: { visible: { id: 'field:Soulseek username' } }
+  - tap: { id: 'field:Soulseek username' }
+  - await: { idle: true, stableFor: 1000 }
+  - tool: keyboard
+    args: { text: '{{secret:SLSK_USERNAME}}' }
+  - tap: { id: 'field:Soulseek password' }
+  - await: { idle: true, stableFor: 1000 }
+  - tool: keyboard
+    args: { text: '{{secret:SLSK_PASSWORD}}' }
+  - tool: button
+    args: { button: back }
+  - tap: { id: 'toggle:Remember my sign-in' }
+  - scroll-to: { target: { id: submit-soulseek } }
+  - tap: { id: submit-soulseek }
+  - await: { visible: { id: setup-download-folder }, timeout: 70000 }
+  - tap: { id: setup-continue }
+  - tap: { id: setup-continue }
+  - scroll-to: { target: { id: setup-continue } }
+  - tap: { id: setup-continue }
+  - tap: { id: setup-finish }
+  - await: { visible: { id: open-account } }
+  - assert: { text: { in: { id: open-account }, contains: Online } }

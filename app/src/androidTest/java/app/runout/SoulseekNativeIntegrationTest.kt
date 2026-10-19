@@ -107,7 +107,8 @@ class SoulseekNativeIntegrationTest {
                         put("files", JSONArray().put(JSONObject().put("key", "approved-track").put("path", "Music\\Night Drive\\01 Opening.flac").put("size", shared.length())))
                     }
                     command(downloader, "search") { put("id", "search-one"); put("query", "Night Drive"); put("timeoutMs", 15000) }
-                    val result = awaitEvent(downloader, "FLAC search result from local peer") { it.optString("type") == "search_result" }
+                    val batch = awaitEvent(downloader, "FLAC search result from local peer") { it.optString("type") == "search_batch" }
+                    val result = batch.getJSONArray("files").getJSONObject(0)
                     assertEquals("runout-uploader", result.getString("username"))
                     assertTrue(result.getString("path").endsWith(".flac"))
                     assertEquals(shared.length(), result.getLong("size"))

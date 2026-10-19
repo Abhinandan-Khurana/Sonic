@@ -1,0 +1,16 @@
+executionPrerequisite: Runout is on Home with an empty discovery query. The Night Drive fixture album is available in the selected local music folder; emulator handwriting is disabled as documented. No account is needed.
+steps:
+  - await: { visible: { id: open-account } }
+  - tap: { id: 'destination:DISCOVER' }
+  - await: { visible: { id: 'field:Search songs, albums or artists' } }
+  - tap: { text: On this device }
+  - tap: { id: 'field:Search songs, albums or artists' }
+  - await: { idle: true, stableFor: 1000 }
+  - tool: keyboard
+    args: { text: Opening }
+  - tool: button
+    args: { button: back }
+  - scroll-to: { target: { text: Play song } }
+  - tap: { text: Play song }
+  - await: { visible: { id: 'deck:screen' } }
+  - assert: { text: { in: { id: 'deck:screen' }, contains: Opening } }

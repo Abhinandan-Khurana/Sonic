@@ -48,27 +48,30 @@ class SoulseekRepository(
     private val db = database ?: Room.databaseBuilder(context.applicationContext, SoulseekDatabase::class.java, "soulseek.db").build()
     private val dao = db.soulseek()
     private val prefs = context.getSharedPreferences("soulseek", Context.MODE_PRIVATE)
-    private val vault = SoulseekCredentialVault(context)
-    private val clientMutex = Mutex()
+    val preferences = SoulseekPreferences(context)
+    private val accountMutex = Mutex()
     private val publicationMutex = Mutex()
+    private val searchMutex = Mutex()
     private val archiveJobs = ConcurrentHashMap<String, Job>()
-    @Volatile private var client: SoulseekTransport? = null
-    @Volatile private var generation = 0L
-    private var pollJob: Job? = null
     private var ownerJob: Job? = null
-    private var sessionCredentials: Pair<String, String>? = null
-    private var rememberCredentials = false
-    private var foreground = true
-    private var reconnectOnForeground = false
+    private var observedOwner: String? = null
+    private val connection = SoulseekConnectionManager(context, scope, { transportFactory(::openSharedFile) },
+        { backgroundConsented() || hasActiveTransfers() }, ::handleEvent, { _error.value = it })
+    private val generation get() = connection.generation
     private val activeTransfers = ConcurrentHashMap.newKeySet<String>()
     private val publicationJobs = ConcurrentHashMap<String, Job>()
     private val pendingBrowse = ConcurrentHashMap<String, SoulseekSearchResult>()
     private val shares = ConcurrentHashMap<String, SharedFile>()
+    private val shareRevision = java.util.concurrent.atomic.AtomicLong()
     private var searchId: String? = null
-    private val _session = MutableStateFlow(SoulseekSession())
-    val session = _session.asStateFlow()
+    val session = connection.session
     private val _searchResults = MutableStateFlow<List<SoulseekSearchResult>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
+    private val _searchStatus = MutableStateFlow(SoulseekSearchStatus())
+    val searchStatus = _searchStatus.asStateFlow()
+    private val searchIndex = LinkedHashMap<String, SoulseekSearchResult>()
+    private val _folderPreview = MutableStateFlow<SoulseekFolderPreview?>(null)
+    val folderPreview = _folderPreview.asStateFlow()
     private val _searching = MutableStateFlow(false)
     val searching = _searching.asStateFlow()
     private val _transfers = MutableStateFlow<List<SoulseekTransfer>>(emptyList())
@@ -84,22 +87,21 @@ class SoulseekRepository(
     private val _destination = MutableStateFlow(prefs.getString("destination", null)?.let(Uri::parse))
     val destination = _destination.asStateFlow()
     private val storage = DownloadStorage(context) { destination.value }
-    private val _sharedFolder = MutableStateFlow(prefs.getString("sharedFolder", null)?.let(Uri::parse))
+    private val _sharedFolder = MutableStateFlow<Uri?>(null)
     val sharedFolder = _sharedFolder.asStateFlow()
-    // Both switches require an explicit action each process lifetime.
+    // Actual runtime activity is distinct from each account's saved consent.
     private val _sharing = MutableStateFlow(false)
     val sharing = _sharing.asStateFlow()
     private val _stayOnline = MutableStateFlow(false)
     val stayOnline = _stayOnline.asStateFlow()
-    private val _savedUsername = MutableStateFlow<String?>(null)
-    val savedUsername = _savedUsername.asStateFlow()
+    val savedUsername = connection.savedUsername
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
     private val initialized = scope.async(Dispatchers.IO) {
         dao.pauseInterrupted("Interrupted. Sign in and resume to continue.")
         dao.offlineContacts()
         dao.failInterruptedMessages()
-        _savedUsername.value = vault.load()?.first
+        connection.initialize()
     }
 
     init {
@@ -123,46 +125,21 @@ class SoulseekRepository(
     fun signIn(username: String, password: String, remember: Boolean): Job = work {
         require(SoulseekPolicy.validUsername(username)) { "Use a Soulseek username of 1–30 printable ASCII characters, without surrounding spaces." }
         require(password.isNotEmpty() && password.length <= 128 && password.none { it == '\u0000' }) { "Enter a password of 1–128 characters." }
-        disconnect("Account changed", clearAccount = true)
-        sessionCredentials = username to password
-        rememberCredentials = remember
-        if (!remember) { vault.clear(); _savedUsername.value = null }
-        observeOwner(username)
-        _error.value = null
-        connect(username, password)
+        accountMutex.withLock {
+            connection.disconnect(SoulseekDisconnectReason.MANUAL)
+            clearSessionWork("Account changed", true)
+            connection.signIn(username, password, remember)
+            observeOwner(username)
+            _error.value = null
+        }
     }
     fun signInSaved(): Job = work {
-        val credentials = vault.load() ?: throw IllegalStateException("No saved account is available. Enter your username and password.")
-        disconnect("Account changed", clearAccount = true)
-        sessionCredentials = credentials; rememberCredentials = true
-        observeOwner(credentials.first)
-        connect(credentials.first, credentials.second)
+        accountMutex.withLock { connection.disconnect(SoulseekDisconnectReason.MANUAL); clearSessionWork("Account changed", true); connection.signInSaved() }
     }
-    private suspend fun connect(username: String, password: String) {
-        _session.value = SoulseekSession(SoulseekConnection.CONNECTING, username)
-        val current = try { transportFactory(::openSharedFile) } catch (_: UnsatisfiedLinkError) {
-            _session.value = SoulseekSession(SoulseekConnection.ERROR, username, "Soulseek is unavailable in this build.")
-            throw IllegalStateException("Soulseek is unavailable in this build. Install an APK containing the native Soulseek library.")
-        }
-        clientMutex.withLock { client = current; generation++ }
-        val epoch = generation
-        try { command("login") { put("username", username); put("password", password) } }
-        catch (e: Throwable) { disconnect("Could not connect", false); _session.value = SoulseekSession(SoulseekConnection.ERROR, username, friendly(e)); throw e }
-        pollJob = scope.launch(Dispatchers.IO) {
-            while (generation == epoch && client === current) {
-                try {
-                    val events = clientMutex.withLock { if (client === current) JSONArray(current.poll()) else JSONArray() }
-                    for (i in 0 until events.length()) {
-                        if (generation != epoch) break
-                        handleEvent(events.getJSONObject(i), username)
-                    }
-                } catch (e: CancellationException) { throw e }
-                catch (e: Throwable) { _error.value = friendly(e) }
-                delay(100)
-            }
-        }
-    }
+    fun reconnect(): Job = work { connection.reconnect() }
     private fun observeOwner(username: String) {
+        if (observedOwner == username) return
+        observedOwner = username
         ownerJob?.cancel()
         ownerJob = scope.launch(Dispatchers.IO) {
             launch { dao.transfers(username).collectLatest { rows -> _transfers.value = rows.map { it.model() }; updateServices() } }
@@ -171,51 +148,68 @@ class SoulseekRepository(
         }
     }
     fun logout(): Job = work {
-        sessionCredentials = null; rememberCredentials = false; reconnectOnForeground = false
-        vault.clear(); _savedUsername.value = null
-        _sharing.value = false; shares.clear(); _stayOnline.value = false
-        disconnect("Signed out. Sign in and resume to continue.", clearAccount = true)
+        accountMutex.withLock {
+            connection.disconnect(SoulseekDisconnectReason.MANUAL)
+            clearSessionWork("Signed out. Sign in and resume to continue.", true)
+            connection.disconnect(SoulseekDisconnectReason.MANUAL, clearAccount = true)
+        }
     }
-    private suspend fun disconnect(reason: String, clearAccount: Boolean) {
+    private suspend fun clearSessionWork(reason: String, clearAccount: Boolean) {
         val owner = session.value.username
-        generation++
-        pollJob?.cancel(); pollJob = null
         publicationJobs.values.forEach { it.cancel() }; publicationJobs.clear()
         archiveJobs.values.forEach { it.cancel() }; archiveJobs.clear()
-        clientMutex.withLock { client?.let { runCatching { it.command(JSONObject().put("op", "logout").toString()) }; runCatching { it.close() } }; client = null }
-        activeTransfers.clear(); _uploads.value = emptyList(); pendingBrowse.clear(); searchId = null; _searching.value = false
+        activeTransfers.clear(); _uploads.value = emptyList(); pendingBrowse.clear(); _folderPreview.value = null
+        searchMutex.withLock {
+            searchId = null; _searching.value = false
+            if (_searchStatus.value.phase == SearchPhase.SEARCHING) _searchStatus.update { it.copy(phase = SearchPhase.INTERRUPTED, error = reason) }
+        }
         if (owner != null) { dao.pauseOwner(owner, reason); dao.failPendingMessages(owner) }
         dao.offlineContacts()
-        _session.value = SoulseekSession(username = if (clearAccount) null else owner)
-        if (clearAccount) { ownerJob?.cancel(); _contacts.value = emptyList(); _conversations.value = emptyList(); _transfers.value = emptyList(); _searchResults.value = emptyList() }
+        shareRevision.incrementAndGet(); _sharing.value = false; shares.clear()
+        val preserveBackground = !clearAccount && session.value.state == SoulseekConnection.RECONNECTING && _stayOnline.value && backgroundConsented()
+        if (!preserveBackground) _stayOnline.value = false
+        if (clearAccount) {
+            ownerJob?.cancel(); observedOwner = null
+            _contacts.value = emptyList(); _conversations.value = emptyList(); _transfers.value = emptyList()
+            searchMutex.withLock { searchIndex.clear(); _searchResults.value = emptyList(); _searchStatus.value = SoulseekSearchStatus() }
+        }
         stopService(SoulseekTransferService::class.java)
-        if (!_stayOnline.value || clearAccount) stopService(SoulseekOnlineService::class.java)
+        if (!preserveBackground) stopService(SoulseekOnlineService::class.java)
     }
-    private suspend fun command(op: String, body: JSONObject.() -> Unit = {}) {
-        val request = JSONObject().put("op", op).apply(body).toString()
-        val response = clientMutex.withLock { client?.command(request) ?: throw IllegalStateException("Sign in to Soulseek first.") }
-        val result = JSONObject(response)
-        check(result.optBoolean("ok")) { result.optString("error", "Soulseek could not complete this action.") }
-    }
+    private suspend fun command(op: String, body: JSONObject.() -> Unit = {}) = connection.command(op, body)
 
-    fun search(query: String): Job = work {
-        requireSignedIn(); require(query.trim().isNotEmpty()) { "Enter an artist, album or song." }
+    fun search(query: String): Job = work { searchMutex.withLock {
+        requireSignedIn()
+        val text = query.trim().replace(Regex("\\s+"), " ")
+        require(text.toByteArray(Charsets.UTF_8).size in 2..256) { "Search needs 2–256 bytes. Try an artist, album or song." }
         searchId?.let { old -> command("cancel_search") { put("id", old) } }
         val id = UUID.randomUUID().toString(); searchId = id
-        _searchResults.value = emptyList(); _searching.value = true
-        try { command("search") { put("id", id); put("query", query.trim()); put("timeoutMs", 20000) } }
-        catch (e: Throwable) { _searching.value = false; throw e }
-    }
-    fun stopSearch(): Job = work {
+        searchIndex.clear(); _searchResults.value = emptyList(); _searching.value = true
+        _searchStatus.value = SoulseekSearchStatus(id, text, SearchPhase.SEARCHING)
+        try { command("search") { put("id", id); put("query", text); put("timeoutMs", 30000) } }
+        catch (e: Exception) { _searching.value = false; _searchStatus.update { it.copy(phase = SearchPhase.FAILED, error = friendly(e)) }; throw e }
+    } }
+    fun stopSearch(): Job = work { searchMutex.withLock {
         searchId?.let { id -> command("cancel_search") { put("id", id) } }
         searchId = null; _searching.value = false
-    }
+        _searchStatus.update { it.copy(phase = SearchPhase.CANCELLED) }
+    } }
     fun removeAlbum(id: String): Job = work { dao.removeAlbum(id) }
     fun download(result: SoulseekSearchResult): Job = work { enqueue(result) }
-    fun downloadFolder(result: SoulseekSearchResult): Job = work {
-        requireSignedIn(); storage.requireDestination()
-        val id = UUID.randomUUID().toString(); pendingBrowse[id] = result
+    fun downloadFolder(result: SoulseekSearchResult): Job = previewFolder(result)
+    fun previewFolder(result: SoulseekSearchResult): Job = work {
+        requireSignedIn()
+        val id = UUID.randomUUID().toString(); pendingBrowse.clear(); pendingBrowse[id] = result
+        _folderPreview.value = SoulseekFolderPreview(id, result.username, result.directory)
         command("browse") { put("id", id); put("username", result.username); put("directory", result.directory) }
+    }
+    fun closeFolderPreview() { pendingBrowse.clear(); _folderPreview.value = null }
+    fun confirmFolderDownload(): Job = work {
+        val preview = folderPreview.value ?: return@work
+        check(!preview.loading && preview.error == null) { "Wait for the complete folder listing first." }
+        requireSignedIn(); storage.requireDestination()
+        preview.files.forEach { enqueue(it) }
+        _folderPreview.value = null
     }
     private suspend fun enqueue(result: SoulseekSearchResult) {
         requireSignedIn(); storage.requireDestination()
@@ -299,37 +293,50 @@ class SoulseekRepository(
     fun setSharedFolder(uri: Uri): Job = work {
         context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         check(DocumentFile.fromTreeUri(context, uri)?.canRead() == true) { "Choose a readable folder to share." }
-        _sharing.value = false; shares.clear()
+        shareRevision.incrementAndGet(); _sharing.value = false; shares.clear()
+        session.value.username?.let { preferences.setSharing(it, false) }
         if (session.value.signedIn) command("shares") { put("files", JSONArray()) }
+        session.value.username?.let { preferences.setSharedFolder(it,uri.toString()) }
         prefs.edit().putString("sharedFolder", uri.toString()).apply(); _sharedFolder.value = uri
     }
-    fun setSharing(enabled: Boolean): Job = work {
-        if (!enabled) { _sharing.value = false; shares.clear(); if (session.value.signedIn) command("shares") { put("files", JSONArray()) }; _uploads.value = emptyList(); updateServices(); return@work }
-        requireSignedIn()
-        val tree = sharedFolder.value?.let { DocumentFile.fromTreeUri(context, it) } ?: throw IllegalStateException("Choose a folder to share first.")
-        val manifest = JSONArray(); val indexed = mutableMapOf<String, SharedFile>()
-        val visited = mutableSetOf<String>()
-        suspend fun visit(dir: DocumentFile, prefix: String, depth: Int) {
-            currentCoroutineContext().ensureActive()
-            if (depth > 64 || !visited.add(dir.uri.toString())) return
-            dir.listFiles().forEach { doc ->
-                val name = doc.name ?: return@forEach
-                val virtual = if (prefix.isEmpty()) SoulseekPolicy.safeName(name) else prefix + "\\" + SoulseekPolicy.safeName(name)
-                if (doc.isDirectory) visit(doc, virtual, depth + 1)
-                else if (doc.isFile && FlacPolicy.isFlacName(name)) {
-                    val info = FlacPolicy.read(context, doc.uri, name) ?: return@forEach
-                    val key = SoulseekPolicy.digest(doc.uri.toString()); val size = doc.length()
-                    if (size <= 0) return@forEach
-                    indexed[key] = SharedFile(doc.uri, name, size)
-                    manifest.put(JSONObject().put("key", key).put("path", "Music\\$virtual").put("size", size).apply {
-                        put("durationSec", (info.durationMs / 1000).toInt()); info.sampleRate?.let { put("sampleRate", it) }; info.bits?.let { put("bitDepth", it) }
-                    })
+    fun setSharing(enabled: Boolean): Job {
+        val revision = shareRevision.incrementAndGet()
+        return work {
+            val owner = session.value.username ?: error("Sign in before choosing a shared folder.")
+            val epoch = generation
+            if (shareRevision.get() != revision) return@work
+            preferences.setSharing(owner, enabled)
+            if (!enabled) { _sharing.value = false; shares.clear(); if (session.value.signedIn) command("shares") { put("files", JSONArray()) }; _uploads.value = emptyList(); updateServices(); return@work }
+            requireSignedIn()
+            val tree = sharedFolder.value?.let { DocumentFile.fromTreeUri(context, it) } ?: throw IllegalStateException("Choose a folder to share first.")
+            check(tree.canRead() && tree.isDirectory) { "Sharing folder access was lost. Choose the folder again." }
+            val manifest = JSONArray(); val indexed = mutableMapOf<String, SharedFile>()
+            val visited = mutableSetOf<String>()
+            suspend fun visit(dir: DocumentFile, prefix: String, depth: Int) {
+                currentCoroutineContext().ensureActive()
+                if (depth > 64 || !visited.add(dir.uri.toString())) return
+                dir.listFiles().forEach { doc ->
+                    val name = doc.name ?: return@forEach
+                    val virtual = if (prefix.isEmpty()) SoulseekPolicy.safeName(name) else prefix + "\\" + SoulseekPolicy.safeName(name)
+                    if (doc.isDirectory) visit(doc, virtual, depth + 1)
+                    else if (doc.isFile && FlacPolicy.isFlacName(name)) {
+                        val info = FlacPolicy.read(context, doc.uri, name) ?: return@forEach
+                        val key = SoulseekPolicy.digest(doc.uri.toString()); val size = doc.length()
+                        if (size <= 0) return@forEach
+                        indexed[key] = SharedFile(doc.uri, name, size)
+                        manifest.put(JSONObject().put("key", key).put("path", "Music\\$virtual").put("size", size).apply {
+                            put("durationSec", (info.durationMs / 1000).toInt()); info.sampleRate?.let { put("sampleRate", it) }; info.bits?.let { put("bitDepth", it) }
+                        })
+                    }
                 }
             }
+            visit(tree, "", 0)
+            accountMutex.withLock {
+                if (shareRevision.get() != revision || epoch != generation || session.value.username != owner || !session.value.connected) return@withLock
+                shares.clear(); shares.putAll(indexed); _sharing.value = true
+                try { command("shares") { put("files", manifest) } } catch (e: Throwable) { _sharing.value = false; shares.clear(); throw e }
+            }
         }
-        visit(tree, "", 0)
-        shares.clear(); shares.putAll(indexed); _sharing.value = true
-        try { command("shares") { put("files", manifest) } } catch (e: Throwable) { _sharing.value = false; shares.clear(); throw e }
     }
     private data class SharedFile(val uri: Uri, val name: String, val size: Long)
     private fun openSharedFile(key: String): Int {
@@ -365,73 +372,70 @@ class SoulseekRepository(
         }.getOrDefault(-1)
     }
 
+    private fun backgroundConsented(): Boolean = session.value.username?.let { preferences.background(it) } == true && androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
     fun setStayOnline(enabled: Boolean): Job = work {
-        if (enabled) { requireSignedIn(); startService(SoulseekOnlineService::class.java); _stayOnline.value = true }
-        else { _stayOnline.value = false; stopService(SoulseekOnlineService::class.java); if (!foreground && !hasActiveTransfers()) disconnectForBackground() }
+        val owner = session.value.username ?: error("Sign in before choosing a connection mode.")
+        if (enabled) { requireSignedIn(); startService(SoulseekOnlineService::class.java) }
+        else stopService(SoulseekOnlineService::class.java)
+        preferences.setBackground(owner, enabled); _stayOnline.value = enabled
+        connection.updatePolicy()
     }
-    fun onForegroundChanged(isForeground: Boolean): Job = work {
-        foreground = isForeground
-        if (!isForeground && !stayOnline.value && !hasActiveTransfers()) disconnectForBackground()
-        else if (isForeground && reconnectOnForeground && !session.value.signedIn && session.value.state != SoulseekConnection.CONNECTING) {
-            reconnectOnForeground = false
-            sessionCredentials?.let { connect(it.first, it.second) }
-        }
-    }
-    private suspend fun disconnectForBackground() { reconnectOnForeground = sessionCredentials != null; disconnect("Paused while offline", false) }
+    fun onForegroundChanged(isForeground: Boolean): Job = work { connection.foregroundChanged(isForeground) }
+    fun onExternalFlow(active: Boolean) { connection.externalFlow(active) }
+    fun onNetworkChanged(available: Boolean): Job = work { connection.networkChanged(available) }
     private fun hasActiveTransfers() = archiveJobs.isNotEmpty() || transfers.value.any { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) } || uploads.value.any { it.state == "uploading" || it.state == "queued" }
     private fun startService(type: Class<*>) { ContextCompat.startForegroundService(context, Intent(context, type)) }
     private fun stopService(type: Class<*>) { context.stopService(Intent(context, type)) }
     private suspend fun updateServices() {
-        if (!hasActiveTransfers()) {
-            stopService(SoulseekTransferService::class.java)
-            if (!foreground && !stayOnline.value && session.value.signedIn) disconnectForBackground()
-        }
+        if (!hasActiveTransfers()) stopService(SoulseekTransferService::class.java)
+        connection.updatePolicy()
     }
     fun onServiceTimeout(): Job = work {
-        _stayOnline.value = false
-        disconnect("Android stopped background activity. Open Runout, sign in and resume.", false)
-        stopService(SoulseekOnlineService::class.java)
-        _error.value = "Android stopped background activity. Your progress is saved. Open Runout and resume."
+        clearSessionWork(SoulseekDisconnectReason.SERVICE_TIMEOUT.label, false)
+        connection.disconnect(SoulseekDisconnectReason.SERVICE_TIMEOUT)
+        _error.value = "Android stopped background activity. Your progress is saved. Open Runout and reconnect."
     }
     fun disconnectFromNotification(): Job = work {
-        _stayOnline.value = false; reconnectOnForeground = false
-        disconnect("Disconnected from the notification", false)
-        stopService(SoulseekOnlineService::class.java)
+        clearSessionWork(SoulseekDisconnectReason.MANUAL.label, false)
+        connection.disconnect(SoulseekDisconnectReason.MANUAL)
     }
 
     private suspend fun handleEvent(event: JSONObject, owner: String) {
         when (event.optString("type")) {
             "session" -> when (event.optString("state")) {
-                "connecting" -> _session.value = SoulseekSession(SoulseekConnection.CONNECTING, owner)
                 "connected" -> {
-                    _session.value = SoulseekSession(SoulseekConnection.CONNECTED, owner)
-                    if (rememberCredentials) sessionCredentials?.let { vault.save(it.first, it.second); _savedUsername.value = it.first }
+                    observeOwner(owner)
+                    _sharedFolder.value = preferences.sharedFolder(owner)?.let(Uri::parse)
+                    if (backgroundConsented()) {
+                        try { startService(SoulseekOnlineService::class.java); _stayOnline.value = true }
+                        catch (_: RuntimeException) { _error.value = "Background connection is unavailable. Open Account to check notification permission." }
+                    }
                     _contacts.value.forEach { contact -> command("contact") { put("username", contact.username) } }
+                    if (preferences.sharing(owner) && preferences.sharedFolder(owner) != null) setSharing(true)
                 }
-                "error", "disconnected" -> {
-                    val reason = event.optString("reason").ifBlank { "Disconnected. Sign in to reconnect." }
-                    _session.value = SoulseekSession(if (event.optString("state") == "error") SoulseekConnection.ERROR else SoulseekConnection.OFFLINE, owner, reason)
-                    dao.pauseOwner(owner, reason); dao.offlineContacts(); _searching.value = false
-                    publicationJobs.values.forEach { it.cancel() }; publicationJobs.clear()
-                    activeTransfers.clear()
-                    _uploads.value = emptyList()
-                    _sharing.value = false; shares.clear(); _stayOnline.value = false
-                    stopService(SoulseekTransferService::class.java); stopService(SoulseekOnlineService::class.java)
+                "error", "disconnected", "paused" -> clearSessionWork(event.optString("reason", "Connection interrupted. Reconnect and resume."), false)
+            }
+            "search_result", "search_batch" -> searchMutex.withLock { if (event.optString("id") == searchId) {
+                val files = event.optJSONArray("files") ?: JSONArray().put(event)
+                for (i in 0 until files.length()) {
+                    val file = files.getJSONObject(i)
+                    val result = parseResult(file, file.optString("username", event.optString("username")))
+                    if (FlacPolicy.isFlacName(result.fileName) && result.size > 0 && searchIndex.size < 5000) searchIndex.putIfAbsent(result.id, result)
                 }
-            }
-            "search_result" -> if (event.optString("id") == searchId) {
-                val result = parseResult(event, event.optString("username"))
-                if (FlacPolicy.isFlacName(result.fileName) && result.size > 0) _searchResults.update { results -> if (results.any { it.id == result.id } || results.size >= 5000) results else results + result }
-            }
-            "search_done" -> if (event.optString("id") == searchId) _searching.value = false
+                _searchResults.value = searchIndex.values.toList()
+            } }
+            "search_done" -> searchMutex.withLock { if (event.optString("id") == searchId) {
+                _searching.value = false
+                _searchStatus.update { it.copy(phase = if (event.optBoolean("cancelled")) SearchPhase.CANCELLED else SearchPhase.COMPLETE, limited = event.optBoolean("limited") || searchIndex.size >= 5000) }
+            } }
             "browse_result" -> {
                 val requested = pendingBrowse.remove(event.optString("id")) ?: return
                 if (event.optString("username") != requested.username || event.optString("directory").replace('\\', '/') != requested.directory) return
-                val files = event.optJSONArray("files") ?: return
-                for (i in 0 until files.length()) {
-                    val result = parseResult(files.getJSONObject(i), requested.username)
-                    if (result.directory == requested.directory && FlacPolicy.isFlacName(result.fileName)) enqueue(result)
-                }
+                val files = event.optJSONArray("files") ?: JSONArray()
+                val valid = (0 until files.length()).map { parseResult(files.getJSONObject(it), requested.username) }
+                    .filter { it.directory == requested.directory && FlacPolicy.isFlacName(it.fileName) && it.size > 0 }.distinctBy { it.id }
+                    .sortedWith(compareBy({ it.fileName.lowercase(java.util.Locale.ROOT) }, { it.path }))
+                if (_folderPreview.value?.requestId == event.optString("id")) _folderPreview.value = SoulseekFolderPreview(event.optString("id"), requested.username, requested.directory, valid, loading = false)
             }
             "transfer" -> {
                 val id = event.optString("id"); val row = dao.transfer(id) ?: return
@@ -473,12 +477,13 @@ class SoulseekRepository(
             "error" -> {
                 val id = event.optString("id"); val message = event.optString("error", "Soulseek could not complete this action.")
                 if (event.optString("operation") == "message" && id.isNotBlank()) dao.messageState(id, "FAILED")
-                if (id == searchId) _searching.value = false
+                if (id == searchId) { _searching.value = false; _searchStatus.update { it.copy(phase = SearchPhase.FAILED, error = message) } }
+                if (id == folderPreview.value?.requestId) _folderPreview.update { it?.copy(loading = false, error = message) }
                 pendingBrowse.remove(id); _error.value = message
             }
         }
     }
-    private fun parseResult(o: JSONObject, username: String) = SoulseekSearchResult(username, o.optString("path"), o.optLong("size"), o.intOrNull("durationSec"), o.intOrNull("sampleRate"), o.intOrNull("bitDepth"), o.intOrNull("bitrate"), o.optInt("freeSlots"), o.optLong("uploadSpeed"))
+    private fun parseResult(o: JSONObject, username: String) = SoulseekSearchResult(username, o.optString("path"), o.optLong("size"), o.intOrNull("durationSec"), o.intOrNull("sampleRate"), o.intOrNull("bitDepth"), o.intOrNull("bitrate"), o.optInt("freeSlots"), o.optLong("uploadSpeed"), if (o.has("queueLength") && !o.isNull("queueLength")) o.optLong("queueLength") else null)
     private fun JSONObject.intOrNull(key: String): Int? = if (has(key) && !isNull(key)) optInt(key).takeIf { it > 0 } else null
     private fun publishAsync(row: TransferRow) {
         if (publicationJobs.containsKey(row.id)) return
