@@ -73,9 +73,12 @@ class SoundEngine(private val context: Context?) {
 
     /** Called when a new track starts, with its ReplayGain values. */
     fun setGains(albumDb: Float?, trackDb: Float?) {
-        if (albumDb == albumGainDb && trackDb == trackGainDb) return
-        albumGainDb = albumDb
-        trackGainDb = trackDb
+        // Also guard cached/imported metadata, which does not necessarily pass through TagReader.
+        val album = albumDb?.takeIf { it.isFinite() }?.coerceIn(-24f, 12f)
+        val track = trackDb?.takeIf { it.isFinite() }?.coerceIn(-24f, 12f)
+        if (album == albumGainDb && track == trackGainDb) return
+        albumGainDb = album
+        trackGainDb = track
         version++
     }
 

@@ -484,7 +484,8 @@ object TagReader {
 
     fun leadingInt(s: String?): Int? = s?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull()
     fun year(s: String?): Int? = s?.trim()?.take(4)?.toIntOrNull()?.takeIf { it in 1000..2999 }
-    fun gain(s: String?): Float? = s?.trim()?.removeSuffix("dB")?.removeSuffix("DB")?.trim()?.toFloatOrNull()
+    fun gain(s: String?): Float? = s?.trim()?.replace(Regex("(?i)db$"), "")?.trim()?.toFloatOrNull()
+        ?.takeIf { it.isFinite() }?.coerceIn(-24f, 12f)
 
     private fun synchsafe(b: ByteArray, at: Int) =
         ((b[at].toInt() and 0x7F) shl 21) or ((b[at + 1].toInt() and 0x7F) shl 14) or
