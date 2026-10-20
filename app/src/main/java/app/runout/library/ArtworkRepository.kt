@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -68,8 +69,9 @@ class ArtworkRepository(
             val groupId = findReleaseGroup(artist, title)
             val file = groupId?.let { httpGet("https://coverartarchive.org/release-group/$it/front-500") }
                 ?.let { decodeScaled(it) }?.let { write(albumId, it) }
-            if (file == null) misses.edit().putLong(key, timestamp + MISS_TTL_MS).apply()
-            else misses.edit().remove(key).apply()
+            misses.edit {
+                if (file == null) putLong(key, timestamp + MISS_TTL_MS) else remove(key)
+            }
             file
         }
     }

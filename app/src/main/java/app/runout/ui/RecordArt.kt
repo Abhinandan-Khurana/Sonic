@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import app.runout.model.Album
 import app.runout.model.DiscStyle
 import app.runout.model.Pressing
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random

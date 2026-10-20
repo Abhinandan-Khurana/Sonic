@@ -3,6 +3,7 @@ package app.runout.library
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.edit
 import app.runout.model.Album
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,19 +39,19 @@ class LibraryRepository(
             val existing = prefs.contains(KEY_FOLDER) || listOf("library.json", "pressings.json", "received.json", "drops.json")
                 .any { File(context.filesDir, it).exists() } ||
                 context.getSharedPreferences("soulseek-setup", Context.MODE_PRIVATE).getBoolean("onboarded", false)
-            coverPrefs.edit().putBoolean("policy-initialized", true).putBoolean("notice-pending", existing).commit()
+            coverPrefs.edit(commit = true) { putBoolean("policy-initialized", true); putBoolean("notice-pending", existing) }
         }
         coverPrefs.getBoolean("notice-pending", false)
     })
     val coverLookupNoticePending: StateFlow<Boolean> = _coverLookupNoticePending.asStateFlow()
 
     fun setCoverLookupEnabled(enabled: Boolean) {
-        coverPrefs.edit().putBoolean("enabled", enabled).apply()
+        coverPrefs.edit { putBoolean("enabled", enabled) }
         _coverLookupEnabled.value = enabled
     }
 
     fun dismissCoverLookupNotice() {
-        coverPrefs.edit().putBoolean("notice-pending", false).apply()
+        coverPrefs.edit { putBoolean("notice-pending", false) }
         _coverLookupNoticePending.value = false
     }
 

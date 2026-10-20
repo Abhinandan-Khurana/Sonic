@@ -48,8 +48,7 @@ class Slice0CoverPrivacyTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {
             val repo = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context), scope)
-            val field = LibraryRepository::class.java.getDeclaredField("lookupCoversOnline").apply { isAccessible = true }
-            assertFalse("Artist/title must not leave the device without opt in", field.getBoolean(repo))
+            assertFalse("Artist/title must not leave the device without opt in", repo.coverLookupEnabled.value)
         } finally { scope.cancel() }
     }
 }
