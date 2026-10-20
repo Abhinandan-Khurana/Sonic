@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.3] - 2026-10-21 (development)
+
+### Added
+- Idle home opens on a full-screen vinyl rack. Scroll up or down to move records, tap the facing disc to unbox it, then drag it onto the platter.
+- First inked home shell: paper room, soft pills, Settings, Crate, and a printed transcription deck when a record is in the room.
+
+---
+
 ## [0.4.2] - 2026-10-21 (development)
 
 ### Fixed

@@ -35,7 +35,7 @@ class Slice0CoverNoticeTest {
     @Test fun `library shows unavailable record access without claiming valid playback`() {
         val album = Album("missing", "Missing Record", "Artist", 2020, "content://missing", emptyList(), AudioQuality("FLAC"), unavailableReason = "Unavailable · repair access")
         compose.setContent { RunoutScreen(state(listOf(album), hasFolder = true), RecordingActions()) }
-        compose.onNodeWithText("Library", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Crate", useUnmergedTree = true).performClick()
         compose.onNodeWithText("Unavailable · repair access").assertIsDisplayed()
     }
 }

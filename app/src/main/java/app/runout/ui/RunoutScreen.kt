@@ -28,7 +28,7 @@ import app.runout.discovery.*
 import app.runout.model.Album
 import app.runout.soulseek.*
 
-private enum class Destination(val label: String) { HOME("Home"), LIBRARY("Library"), DISCOVER("Discover"), MESSAGES("Messages") }
+private enum class Destination(val label: String) { HOME("Home"), LIBRARY("Crate"), DISCOVER("Discover"), MESSAGES("Messages") }
 
 @Composable
 internal fun ConsoleTitle(kicker: String, title: String, detail: String? = null) {
@@ -68,11 +68,12 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp,vertical = 6.dp),verticalAlignment = Alignment.CenterVertically,horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
-                        BasicText("RUNOUT",style = Room.Brand.copy(fontSize = 18.sp,letterSpacing = 2.sp))
-                        BasicText("YOUR LISTENING ROOM",style = Room.LabelQuiet.copy(fontFamily = FontFamily.Monospace,fontSize = 9.sp,letterSpacing = 1.sp))
+                        BasicText("RUNOUT",style = Room.Brand.copy(fontSize = 20.sp,letterSpacing = 1.2.sp))
+                        BasicText("your room",style = Room.LabelQuiet.copy(fontSize = 12.sp))
                     }
-                    Pill("↓ ${state.soulseekTransfers.count { it.state in setOf(SoulseekTransferState.QUEUED,SoulseekTransferState.DOWNLOADING,SoulseekTransferState.PUBLISHING,SoulseekTransferState.VALIDATING) }}",{ overlay = Panel.TRANSFERS },Modifier.testTag("open-downloads"))
-                    Pill(connectionLabel(state.soulseekSession),{ if(state.soulseekSession.hasAccount) overlay = Panel.ACCOUNT else openSetup() },Modifier.testTag("open-account"),active = state.soulseekSession.connected)
+                    Pill("↓ Downloads · ${state.soulseekTransfers.count { it.state in setOf(SoulseekTransferState.QUEUED,SoulseekTransferState.DOWNLOADING,SoulseekTransferState.PUBLISHING,SoulseekTransferState.VALIDATING) }}",{ overlay = Panel.TRANSFERS },Modifier.testTag("open-downloads"))
+                    Pill("Settings",{ overlay = Panel.SOUND },Modifier.testTag("open-settings"))
+                    BasicText(connectionLabel(state.soulseekSession),style = Room.LabelQuiet,modifier = Modifier.clickable { if(state.soulseekSession.hasAccount) overlay = Panel.ACCOUNT else openSetup() }.testTag("open-account"))
                 }
                 state.soulseekError?.let { error ->
                     Row(Modifier.fillMaxWidth().background(Color(0xFFF2DACC)).padding(horizontal = 12.dp),verticalAlignment = Alignment.CenterVertically) {
@@ -82,13 +83,7 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when(destination) {
-                        Destination.HOME -> Column(Modifier.fillMaxSize().testTag("screen:home")) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Pill("Sound",{ overlay = Panel.SOUND },Modifier.testTag("open-sound"))
-                                Pill(if(state.crackleOn) "Crackle on" else "Crackle off",actions::toggleCrackle)
-                            }
-                            RoomScreen(state,actions,modifier = Modifier.weight(1f),showChrome = false)
-                        }
+                        Destination.HOME -> RoomScreen(state,actions,modifier = Modifier.fillMaxSize().testTag("screen:home"),showChrome = false,idleRack = state.deck.album == null,inked = true)
                         Destination.LIBRARY -> LibraryScreen(state,actions) { destination = Destination.HOME }
                         Destination.DISCOVER -> Column(Modifier.fillMaxSize().testTag("screen:discover")) {
                             Chips(listOf(false,true),drops,{ if(it) "Friday Drops" else "Find music" },{ drops = it },Modifier.padding(horizontal = 16.dp,vertical = 4.dp))
@@ -106,7 +101,7 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                     if(destination == Destination.LIBRARY) Pill("Press a record",{ overlay = Panel.PRESSING },Modifier.align(Alignment.BottomEnd).padding(16.dp).testTag("open-pressing"),active = true)
                 }
                 if(destination != Destination.HOME || state.deck.album != null) NowPlayingStrip(state,actions) { destination = Destination.HOME }
-                Row(Modifier.fillMaxWidth().background(Color(0xFFE6E3D7)).navigationBarsPadding().padding(8.dp),horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(8.dp),horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Destination.entries.forEach { item ->
                         val unread = item == Destination.MESSAGES && state.soulseekConversations.any { it.unread > 0 }
                         Pill(item.label + if(unread) " •" else "",{ destination = item },Modifier.weight(1f).testTag("destination:${item.name}"),active = destination == item)

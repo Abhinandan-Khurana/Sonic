@@ -230,6 +230,8 @@ fun RoomScreen(
     initialCrateIndex: Int = 0,
     initialPanel: Panel? = null,
     showChrome: Boolean = true,
+    idleRack: Boolean = false,
+    inked: Boolean = false,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -284,7 +286,8 @@ fun RoomScreen(
 
             val nearPlatter = dragging && platterCenter?.let { (disc.value + rootOrigin - it).getDistance() < platterRadius * 0.95f } == true
             val turntable = @Composable { m: Modifier, alignment: Alignment ->
-                Turntable(
+                if (inked) InkedDeck(state.deck, nearPlatter, { c, r -> platterCenter = c; platterRadius = r }, actions, m)
+                else Turntable(
                     deck = state.deck,
                     backdrop = backdrop,
                     dropTargetActive = nearPlatter,
@@ -339,6 +342,15 @@ fun RoomScreen(
             }
 
             if (showChrome) CornerLabels(state, pulled != null, portrait, backdrop, actions, onOpen = { panel = it; pulledId = null })
+        }
+
+        if (idleRack && pulledId == null && state.deck.album == null && state.albums.isNotEmpty()) {
+            VinylRack(
+                albums = state.albums,
+                onUnbox = { pulledId = it.id },
+                modifier = Modifier.fillMaxSize().zIndex(4f),
+                initialIndex = initialCrateIndex,
+            )
         }
 
         // The pulled record, drawn above everything so it can travel across the room.

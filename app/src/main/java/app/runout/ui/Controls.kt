@@ -71,8 +71,8 @@ fun Pill(
             .widthIn(min = 48.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .shadow(if(enabled) 1.dp else 0.dp,shape)
-            .background(Brush.verticalGradient(if(active) listOf(Color(0xFF397453),Room.Accent) else listOf(Color(0xFFFFFEF9),Color(0xFFE1DFD3))), shape)
-            .border(1.dp, if (active) Room.Accent else Room.Ink.copy(alpha = 0.10f), shape)
+            .background(if (active) Room.Ink else Color.White.copy(alpha = 0.85f), shape)
+            .border(1.dp, Room.Ink.copy(alpha = 0.12f), shape)
             .clickable(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
@@ -83,7 +83,7 @@ fun Pill(
             .padding(horizontal = 13.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(text, style = Room.Label.copy(color = if (active) Color.White else Room.Ink, fontWeight = FontWeight.Medium), maxLines = 2)
+        BasicText(text, style = Room.Label.copy(color = if (active) Room.Background else Room.Ink, fontWeight = FontWeight.Medium), maxLines = 2)
     }
 }
 
