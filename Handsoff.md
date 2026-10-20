@@ -4,6 +4,16 @@ Updated: 2026-10-20, Asia/Kolkata.
 
 This file transfers project context to Hermes or another coding agent. Continue the existing Android project; this handoff does not request a rewrite, a different application framework, or a Hermes runtime inside the APK. The workflows below use ordinary Git, Gradle, Cargo, Android SDK tools and Argent, so they do not depend on Codex tools or conversation history.
 
+## Latest: listening-room redesign planning (2026-10-20)
+
+The application code is still `64e1222`. Planning documents now exist under `docs/design/`:
+
+- **`RUNOUT-REDESIGN-DRAFT-v2.md`** is the current plan. It enforces album-only playback with album-first discovery, replaces the DJ deck with a 1950s-style mechanism on a flat printed plate, and adds a reconciled deck state machine, lead-in and runout as deck phases, a signal-path view with Bluetooth and DAC guidance, and build slices 0–5.
+- **`RUNOUT-REDESIGN-REVIEW.md`** holds the source-checked findings. §16 is a second-pass register from six parallel audits, which includes data-loss, privacy, crash and retry-war bugs.
+- **`HERMES-NEXT-PROMPT.md`** is the next task: **Slice 0, "Stop the damage"**.
+
+No build or test ran during planning. Every finding is labelled source-confirmed or hypothesis, and must be reproduced red-first before it is fixed.
+
 ## Start here
 
 1. Read this file, [README.md](README.md), [architecture](docs/ARCHITECTURE.md) and [developer notes](docs/DEVELOPMENT.md). Follow any applicable repository instructions.
