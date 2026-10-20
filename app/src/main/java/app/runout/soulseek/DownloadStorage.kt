@@ -8,6 +8,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 
 /** Shared SAF storage boundary for Soulseek and Internet Archive downloads.
  * The repository owns account checks, renaming, and the database commit.
@@ -28,12 +29,14 @@ internal class DownloadStorage(
     }
 
     suspend fun copyValidated(stage: File, target: Uri, size: Long) {
+        val source = MessageDigest.getInstance("SHA-256")
         context.contentResolver.openOutputStream(target, "wt")?.use { output ->
             stage.inputStream().use { input ->
                 val buffer = ByteArray(128 * 1024)
                 while (true) {
                     currentCoroutineContext().ensureActive()
                     val count = input.read(buffer); if (count < 0) break
+                    source.update(buffer, 0, count)
                     output.write(buffer, 0, count)
                 }
             }
@@ -41,6 +44,15 @@ internal class DownloadStorage(
         } ?: throw IOException("Your download folder is unavailable. Choose it again and retry.")
         val valid = context.contentResolver.openInputStream(target)?.use { FlacPolicy.isValid(it) } == true
         val actualSize = context.contentResolver.openAssetFileDescriptor(target, "r")?.use { it.length } ?: -1
+        val saved = MessageDigest.getInstance("SHA-256")
+        context.contentResolver.openInputStream(target)?.use { input ->
+            val buffer = ByteArray(128 * 1024)
+            while (true) {
+                val count = input.read(buffer); if (count < 0) break
+                saved.update(buffer, 0, count)
+            }
+        } ?: throw IOException("The saved FLAC could not be read back.")
+        check(source.digest().contentEquals(saved.digest())) { "The saved FLAC does not match the download byte for byte." }
         check(valid && (actualSize < 0 || actualSize == size)) { "The destination could not save the complete FLAC file. Free storage and retry." }
     }
 

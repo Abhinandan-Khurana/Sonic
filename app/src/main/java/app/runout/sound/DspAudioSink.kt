@@ -38,12 +38,12 @@ class DspAudioSink(
     private var scratch = FloatArray(0)
 
     override fun getFormatSupport(format: Format): Int =
-        if (canProcess(format)) delegate.getFormatSupport(asFloat(format)) else delegate.getFormatSupport(format)
+        if (canProcess(format) && !engine.settings.value.pure) delegate.getFormatSupport(asFloat(format)) else delegate.getFormatSupport(format)
 
     override fun supportsFormat(format: Format): Boolean = getFormatSupport(format) != AudioSink.SINK_FORMAT_UNSUPPORTED
 
     override fun configure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
-        if (canProcess(inputFormat)) {
+        if (canProcess(inputFormat) && !engine.settings.value.pure) {
             processing = true
             inEncoding = inputFormat.pcmEncoding
             channels = inputFormat.channelCount
@@ -56,6 +56,7 @@ class DspAudioSink(
         } else {
             processing = false
             delegate.configure(inputFormat, specifiedBufferSize, outputChannels)
+            if (canProcess(inputFormat)) engine.onStreamConfigured(inputFormat, floatPath = false)
         }
     }
 

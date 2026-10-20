@@ -66,7 +66,7 @@ class PlaybackService : MediaSessionService() {
 
         // Switching hi-res output on or off needs a new audio output; carry the record across.
         scope.launch {
-            engine.settings.map { it.hiResOutput }.distinctUntilChanged().drop(1).collect { rebuildPlayer() }
+            engine.settings.map { it.hiResOutput to it.pure }.distinctUntilChanged().drop(1).collect { rebuildPlayer() }
         }
     }
 
@@ -85,8 +85,8 @@ class PlaybackService : MediaSessionService() {
         next.addListener(gainListener)
         if (items.isNotEmpty()) {
             next.setMediaItems(items, old.currentMediaItemIndex.coerceAtLeast(0), old.currentPosition)
-            next.playbackParameters = old.playbackParameters
-            next.volume = old.volume
+            next.playbackParameters = if (engine.settings.value.pure) androidx.media3.common.PlaybackParameters(1f, 1f) else old.playbackParameters
+            next.volume = if (engine.settings.value.pure) 1f else old.volume
             next.prepare()
             next.playWhenReady = old.playWhenReady
         }

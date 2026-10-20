@@ -110,7 +110,7 @@ class Deck(
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED && _state.value.needleDown) {
                 sfx.stopCrackle()
-                sfx.runout()
+                if (!pure) sfx.runout()
                 _state.update { it.copy(needleDown = false, isPlaying = false, sideFinished = true, positionMs = it.side?.durationMs ?: 0) }
             }
         }
@@ -226,7 +226,7 @@ class Deck(
     fun liftNeedle() {
         if (!_state.value.needleDown) return
         rampJob?.cancel()
-        sfx.lift()
+        if (!pure) sfx.lift()
         sfx.stopCrackle()
         withController { c -> c.pause(); c.volume = 1f }
         _state.update { it.copy(needleDown = false, held = false) }
@@ -314,7 +314,7 @@ class Deck(
         if (sideIndex != s.sideIndex) {
             // Another side: lift, turn the record over, then drop at the track.
             rampJob?.cancel()
-            if (s.needleDown) sfx.lift()
+            if (s.needleDown && !pure) sfx.lift()
             sfx.stopCrackle()
             _state.update { it.copy(sideIndex = sideIndex, sideFinished = false, positionMs = 0, needleDown = false, held = false) }
             cueSide(album, s.sides[sideIndex])
