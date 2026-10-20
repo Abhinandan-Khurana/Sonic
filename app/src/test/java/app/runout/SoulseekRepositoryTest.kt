@@ -240,6 +240,28 @@ class SoulseekRepositoryTest {
         assertFalse(repo.searching.value)
     }
 
+    @Test fun `message draft is acknowledged only after durable insertion even when send fails`() = runBlocking {
+        login()
+        var persisted = 0
+        var existedAtCallback = false
+        transport.failMessage = true
+        repo.sendMessage("maya", "Keep in failed history") {
+            persisted++
+            existedAtCallback = runBlocking { db.soulseek().messages("runout-test").first().any { it.text == "Keep in failed history" } }
+        }.join()
+        assertEquals(1, persisted)
+        assertTrue(existedAtCallback)
+        assertEquals("FAILED", db.soulseek().messages("runout-test").first().single().state)
+    }
+
+    @Test fun `invalid message never acknowledges draft persistence`() = runBlocking {
+        login()
+        var persisted = false
+        repo.sendMessage("maya", "é".repeat(2049)) { persisted = true }.join()
+        assertFalse(persisted)
+        assertTrue(db.soulseek().messages("runout-test").first().isEmpty())
+    }
+
     @Test fun `invalid incoming sender is not stored as a contact`() = runBlocking {
         login()
         transport.emit(incoming().put("username", " invalid "))

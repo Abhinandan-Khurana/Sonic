@@ -275,12 +275,13 @@ class SoulseekRepository(
         command("contact") { put("username", username) }
     }
     fun markRead(username: String): Job = work { session.value.username?.let { dao.markRead(it, username) } }
-    fun sendMessage(username: String, text: String): Job = work {
+    fun sendMessage(username: String, text: String, onPersisted: () -> Unit = {}): Job = work {
         requireSignedIn(); require(SoulseekPolicy.validUsername(username)) { "Enter an exact Soulseek username." }
         val body = text.trim(); require(body.isNotEmpty() && body.toByteArray(Charsets.UTF_8).size <= 4096) { "Messages must contain 1–4,096 bytes of text." }
         val owner = session.value.username!!; val id = UUID.randomUUID().toString()
         dao.addContact(ContactRow(owner, username))
         dao.insertMessage(MessageRow(id, owner, username, body, System.currentTimeMillis(), true, "PENDING", true))
+        onPersisted()
         try { command("message") { put("username", username); put("text", body); put("clientId", id) } }
         catch (e: Throwable) { dao.messageState(id, "FAILED"); throw e }
     }
