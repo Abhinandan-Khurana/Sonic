@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -139,6 +140,30 @@ fun Crate(
                 return@Box
             }
             val center = pos.value
+            // One soft shadow on the "floor" under the front slot. It never turns with a sleeve (a
+            // shadow cast by a half-turned sleeve smears into a grey wedge mid-flick), and it only
+            // darkens as a sleeve settles square to you.
+            val settled = 1f - (abs(center - center.roundToInt()) * 2f).coerceIn(0f, 1f)
+            Canvas(
+                Modifier
+                    .align(Alignment.Center)
+                    .padding(bottom = boxHeight * 0.12f)
+                    .size(sleeve)
+                    .zIndex(-10f),
+            ) {
+                val floor = Offset(size.width / 2f, size.height * 1.02f)
+                val r = size.width * 0.62f
+                // A round soft shadow squashed flat, so it fades out evenly on every side.
+                scale(1f, 0.16f, pivot = floor) {
+                    drawCircle(
+                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                            listOf(Color.Black.copy(alpha = 0.24f * settled), Color.Transparent),
+                            center = floor, radius = r,
+                        ),
+                        radius = r, center = floor,
+                    )
+                }
+            }
             val first = (center - 6).toInt().coerceAtLeast(0)
             val last = (center + 6).toInt().coerceAtMost(albums.lastIndex)
             for (i in first..last) {
@@ -167,12 +192,6 @@ fun Crate(
                                 scaleY = s
                                 cameraDistance = 16f * density.density
                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
-                                // The front sleeve lifts off the others: a soft shadow under it only.
-                                // (Tilted sleeves would cast distorted shadows, so they get none.)
-                                shadowElevation = if (adx < 0.6f) (1f - adx / 0.6f) * 16.dp.toPx() else 0f
-                                ambientShadowColor = Color.Black.copy(alpha = 0.25f)
-                                spotShadowColor = Color.Black.copy(alpha = 0.35f)
-                                shape = RoundedCornerShape(2.dp)
                                 alpha = if (hidden) 0f else (1f - (adx - 2.4f).coerceAtLeast(0f)).coerceIn(0f, 1f)
                             }
                             .combinedClickable(

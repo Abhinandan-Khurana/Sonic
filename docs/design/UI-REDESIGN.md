@@ -106,11 +106,12 @@ Answers:
 - [x] **DK-9** Performance: cache the static deck layers, and spin the platter and record as their own layer instead of redrawing the whole deck every frame.
   - This was agreed in discussion: the deck stays code-drawn vector. Figma is used as the design reference, and Rive or Lottie only for the intro and transitions.
 
-- [~] **DK-10** *(added after the interview)* "the disk spins way to fast keep it slow and real".
-  - The platter already ran at true 33⅓ rpm. The racing look came from the strobe dots redrawn rotating every frame.
-  - Now the strobe follows real mains-strobe physics: it stands still at speed and drifts during spin-up and coast-down.
-  - The heavy-platter spin-up is slower (about 1.5 s).
-  - Waiting for the owner to confirm the feel on the device.
+- [x] **DK-10** *(added after the interview)* "the disk spins way to fast keep it slow and real".
+  - First pass: true 33⅓ rpm with real mains-strobe physics and a slower spin-up. The owner said it was still too fast.
+  - Now: the picture turns at half speed (one turn every 3.6 s). The strobe is re-tuned to a 50 Hz flash, so the dots stand still at that speed.
+  - The music still plays at its recorded speed.
+- [x] **DK-11** *(added after phase-2 review)* "can we get some grassy finish over the buttons keeping the current texture". The deck keys get a clear glass coat over their existing colours: a glossy top, a diagonal reflection and a bright rim.
+- [x] **HM-13** *(added after phase-2 review)* A weird shadow flashed between sleeves while flicking (the owner sent a screenshot). Sleeves no longer cast their own shadows. One soft floor shadow sits under the front slot and fades in only when a sleeve settles square.
 
 ### 2.2 Crate, caption and footer
 Answers:

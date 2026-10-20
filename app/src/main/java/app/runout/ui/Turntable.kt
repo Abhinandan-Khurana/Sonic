@@ -163,13 +163,17 @@ class DeckGeometry(val size: Size) {
     }
 }
 
-/** 33⅓ rpm, in degrees a second: one turn every 1.8 s. Records always play at the speed they were cut. */
-const val RPM_33_DEG = 200f
+/**
+ * How fast the platter turns on screen, in degrees a second: one turn every 3.6 s. A true 33⅓
+ * (200°/s) reads as racing on a phone-sized platter, so the picture turns at half that; the music
+ * always plays at the speed it was cut.
+ */
+const val RPM_33_DEG = 100f
 
-/** 180 dots to a row: the spacing at which a 100 Hz mains flash freezes them at 33⅓. */
+/** 180 dots to a row, lit by a 50 Hz flash: the pattern freezes exactly at platter speed. */
 private const val STROBE_DOTS = 180
 private const val STROBE_SPACING = 360f / STROBE_DOTS
-private const val FLASH_PERIOD_S = 0.01f
+private const val FLASH_PERIOD_S = 0.02f
 
 /**
  * How fast the strobe dots appear to move at platter speed [omega], in degrees a second. Between
@@ -653,7 +657,21 @@ private fun DrawScope.teKey(r: Rect, cap: Color, skirt: Color, pressed: Boolean)
     drawRoundRect(skirt, topLeft = r.topLeft + Offset(0f, travel), size = r.size, cornerRadius = radius)
     val face = Rect(r.topLeft + Offset(0f, if (pressed) travel * 0.8f else 0f), r.size)
     drawRoundRect(cap, topLeft = face.topLeft, size = face.size, cornerRadius = radius)
-    drawRoundRect(Color.White.copy(alpha = 0.45f), topLeft = face.topLeft, size = Size(face.width, face.height * 0.5f), cornerRadius = radius, style = Stroke(1f))
+    // A clear glass coat over the cap: its colour shows through untouched, with a glossy top,
+    // a soft diagonal reflection and a bright rim where the light catches the edge.
+    drawRoundRect(
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.06f), Color.Transparent), startY = face.top, endY = face.top + face.height * 0.62f),
+        topLeft = face.topLeft, size = face.size, cornerRadius = radius,
+    )
+    drawRoundRect(
+        Brush.linearGradient(
+            0f to Color.Transparent, 0.42f to Color.Transparent, 0.5f to Color.White.copy(alpha = 0.22f), 0.6f to Color.Transparent, 1f to Color.Transparent,
+            start = face.topLeft, end = face.bottomRight,
+        ),
+        topLeft = face.topLeft, size = face.size, cornerRadius = radius,
+    )
+    drawRoundRect(Color.Black.copy(alpha = 0.10f), topLeft = face.topLeft + Offset(0f, face.height * 0.55f), size = Size(face.width, face.height * 0.45f), cornerRadius = radius)
+    drawRoundRect(Color.White.copy(alpha = 0.75f), topLeft = face.topLeft, size = face.size, cornerRadius = radius, style = Stroke(1.2f))
     return face
 }
 
