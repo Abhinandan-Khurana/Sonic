@@ -69,7 +69,7 @@ class FlacPolicyTest {
         assertNull(FlacPolicy.read(flac.copyOf(frameStart + 9).inputStream()))
     }
 
-    @Test fun `migration preserves valid FLAC identities and original files with an index backup`() {
+    @Test fun `legacy index keeps unsupported records unavailable without rewriting or deleting files`() {
         val good = Fixtures.nightDrive()
         val unsupported = Fixtures.paperMoons()
         val mixed = good.copy(tracks = good.tracks + unsupported.tracks)
@@ -77,11 +77,13 @@ class FlacPolicyTest {
         AlbumJson.writeList(index, listOf(mixed, unsupported))
         val before = index.readText()
         val result = AlbumJson.readValidatedList(Fixtures.context, index)
-        assertEquals(listOf(good.id), result.map { it.id })
-        assertEquals(good.tracks.map { it.id }, result.single().tracks.map { it.id })
-        assertEquals("FLAC", result.single().quality.codec)
-        assertEquals(before, File(index.parentFile, index.name + ".before-flac").readText())
+        assertEquals(listOf(good.id, unsupported.id), result.map { it.id })
+        assertEquals(mixed.tracks.map { it.id }, result.first().tracks.map { it.id })
+        assertTrue(result.all { it.unavailableReason != null })
+        assertEquals(before, index.readText())
         assertTrue(unsupported.tracks.all { File(Uri.parse(it.uri).path!!).exists() })
+        assertEquals(good.tracks.map { it.id }, FlacPolicy.filterAlbum(Fixtures.context, result.first())!!.tracks.map { it.id })
+        assertNull(FlacPolicy.filterAlbum(Fixtures.context, result.last()))
         assertEquals(result, AlbumJson.readValidatedList(Fixtures.context, index))
     }
 
