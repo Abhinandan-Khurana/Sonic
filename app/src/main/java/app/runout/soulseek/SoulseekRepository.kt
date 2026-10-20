@@ -232,12 +232,31 @@ class SoulseekRepository(
     }
     private suspend fun startTransfer(row: TransferRow) {
         requireSignedIn(); check(row.owner == session.value.username) { "Sign in with the account that started this download." }
+        if (preferences.turtle() && activeTransfers.isNotEmpty() && row.id !in activeTransfers) {
+            dao.putTransfer(row.copy(state = "QUEUED", error = null))
+            return
+        }
         if (activeTransfers.contains(row.id)) command("resume") { put("id", row.id) }
         else {
             command("download") { put("id", row.id); put("username", row.username); put("path", row.path); put("size", row.size); put("localDirectory", storage.stagingDirectory(row.id).absolutePath) }
             activeTransfers.add(row.id)
         }
     }
+    private suspend fun pumpQueue() {
+        if (!preferences.turtle() || activeTransfers.isNotEmpty()) return
+        val owner = session.value.username ?: return
+        val next = dao.resumable(owner).firstOrNull { it.state == "QUEUED" && it.error == null } ?: return
+        startTransfer(next)
+    }
+    fun pauseAll(): Job = work {
+        requireSignedIn()
+        _transfers.value.filter { it.state in setOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING) }.forEach { pause(it.id).join() }
+    }
+    fun resumeAll(): Job = work {
+        requireSignedIn()
+        dao.resumable(session.value.username!!).filter { it.error == null }.forEach { resume(it.id).join() }
+    }
+    fun setTurtle(enabled: Boolean) { preferences.setTurtle(enabled) }
     fun pause(id: String): Job = work {
         val row = ownTransfer(id)
         publicationJobs.remove(id)?.cancel()
@@ -457,11 +476,12 @@ class SoulseekRepository(
                 if (row.state == "PAUSED" && state !in listOf("PAUSED", "CANCELLED")) return
                 val updated = row.copy(bytes = event.optLong("bytes", row.bytes).coerceIn(0, row.size), state = if (state == "COMPLETED") "VALIDATING" else state,
                     queuePosition = if (event.has("queuePosition") && !event.isNull("queuePosition")) event.optLong("queuePosition") else null,
-                    speed = event.optDouble("speed", 0.0), stagePath = event.optString("path").ifBlank { row.stagePath }, error = if (event.isNull("error")) null else event.optString("error").takeIf { it.isNotBlank() }, updatedAt = System.currentTimeMillis())
+                    speed = event.optDouble("speed", 0.0), stagePath = event.optString("path").ifBlank { row.stagePath }, error = if (event.isNull("error")) null else event.optString("error").takeIf { it.isNotBlank() })
                 if (runCatching { SoulseekTransferState.valueOf(updated.state) }.isFailure) return
                 dao.putTransfer(updated)
                 if (state == "COMPLETED") { activeTransfers.remove(id); publishAsync(updated) }
                 if (state == "FAILED" || state == "CANCELLED") activeTransfers.remove(id)
+                if (state == "COMPLETED" || state == "FAILED" || state == "CANCELLED") pumpQueue()
             }
             "message" -> {
                 val serverId = event.getLong("id"); val username = event.getString("username")
@@ -618,10 +638,14 @@ class SoulseekRepository(
     private fun writeDownloadRecord(folder: DocumentFile, album: Album, links: List<String>) {
         runCatching {
             val bytes = java.io.ByteArrayOutputStream().use { out ->
-                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("runout", "Runout", 0), album, sleeve = album.coverPath?.let(::File), sources = links)
+                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("runout", "Runout", 0), album, sleeve = album.coverPath?.let(::File), sources = links + listOf("thumbnails/${album.id}.jpg"))
                 out.toByteArray()
             }
             storage.writeDocument(folder, "record.vinyl", bytes)
+            album.coverPath?.let(::File)?.takeIf { it.isFile }?.readBytes()?.let { thumb ->
+                val thumbs = storage.thumbnailsDirectory()
+                storage.writeDocument(thumbs, "${album.id}.jpg", thumb)
+            }
         }
     }
 

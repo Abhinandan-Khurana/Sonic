@@ -137,6 +137,7 @@ data class RoomState(
     val onboardingStep: Int = 0,
     val coverLookupEnabled: Boolean = false,
     val coverLookupNoticePending: Boolean = false,
+    val turtleMode: Boolean = false,
 
 )
 
@@ -189,6 +190,9 @@ interface RoomActions : DeckActions {
     fun downloadSoulseek(result: SoulseekSearchResult) {}
     fun downloadSoulseekFolder(result: SoulseekSearchResult) {}
     fun pauseSoulseekTransfer(id: String) {}
+    fun pauseAllDownloads() {}
+    fun resumeAllDownloads() {}
+    fun setTurtleMode(enabled: Boolean) {}
     fun resumeSoulseekTransfer(id: String) {}
     fun cancelSoulseekTransfer(id: String) {}
     fun retrySoulseekTransfer(id: String) {}
@@ -244,6 +248,7 @@ fun RoomScreen(
     var platterRadius by remember { mutableStateOf(0f) }
     var slot by remember { mutableStateOf<SleeveSlot?>(null) }
     var pulledId by remember { mutableStateOf(initialPulledId) }
+    var peek by remember { mutableStateOf(false) }
     var removeId by remember { mutableStateOf<String?>(null) }
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
@@ -436,6 +441,10 @@ fun RoomScreen(
             Layout(
                 content = {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) {
+                        GlassPill("Sleeve back", backdrop, onClick = { peek = !peek }, modifier = Modifier.testTag("sleeve-back"))
+                        if (peek) pulled.tracks.take(12).forEach { track ->
+                            BasicText("Side ${'A' + (track.discNumber - 1).coerceAtLeast(0)} ${track.trackNumber}  ${track.title}", style = Room.LabelQuiet)
+                        }
                         GlassPill(
                             if (pulled.audioShareable) "Send with audio" else "Send as a card",
                             backdrop, active = true, onClick = { actions.share(pulled) }, modifier = Modifier.testTag("send"),

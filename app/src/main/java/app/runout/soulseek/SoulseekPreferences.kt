@@ -23,5 +23,7 @@ class SoulseekPreferences(context: Context) {
     fun background(owner: String) = prefs.getBoolean(key(owner, "background"), false)
     fun setSharing(owner: String, enabled: Boolean) { prefs.edit().putBoolean(key(owner, "sharing"), enabled).apply(); _revision.value++ }
     fun setBackground(owner: String, enabled: Boolean) { prefs.edit().putBoolean(key(owner, "background"), enabled).apply(); _revision.value++ }
+    fun turtle() = prefs.getBoolean("turtle", false)
+    fun setTurtle(enabled: Boolean) { prefs.edit().putBoolean("turtle", enabled).apply(); _revision.value++ }
     private fun key(owner: String, option: String) = SoulseekPolicy.digest(owner) + ":" + option
 }

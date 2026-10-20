@@ -166,6 +166,11 @@ fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
         BasicText("Completed FLAC downloads are added to your crate and kept in your selected music folder.", style = Room.LabelQuiet)
         NetworkNote(state, actions)
         if (state.soulseekTransfers.isEmpty()) BasicText("No downloads yet. Search Soulseek or claim a Friday Drop.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 12.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            Pill("Pause all", actions::pauseAllDownloads, enabled = state.soulseekSession.signedIn)
+            Pill("Resume all", actions::resumeAllDownloads, enabled = state.soulseekSession.signedIn)
+            Pill(if (state.turtleMode) "Turtle on" else "Turtle mode", { actions.setTurtleMode(!state.turtleMode) }, active = state.turtleMode)
+        }
         state.soulseekTransfers.forEach { transfer ->
             SectionTitle(transfer.fileName)
             BasicText("${transfer.username} · ${transfer.state.name.lowercase().replaceFirstChar { it.uppercase() }}", style = Room.LabelQuiet)

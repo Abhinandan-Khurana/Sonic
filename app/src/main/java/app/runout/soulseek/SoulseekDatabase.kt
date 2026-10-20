@@ -50,7 +50,8 @@ data class DownloadAlbumRow(@PrimaryKey val id: String, val json: String)
 
 @Dao
 interface SoulseekDao {
-    @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner ORDER BY updatedAt DESC") fun transfers(owner: String): Flow<List<TransferRow>>
+    @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner ORDER BY updatedAt ASC, id ASC") fun transfers(owner: String): Flow<List<TransferRow>>
+    @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner AND state IN ('QUEUED','PAUSED') ORDER BY updatedAt ASC, id ASC") suspend fun resumable(owner: String): List<TransferRow>
     @Query("SELECT * FROM soulseek_transfers WHERE id = :id") suspend fun transfer(id: String): TransferRow?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTransfer(row: TransferRow)
     @Query("UPDATE soulseek_transfers SET state = 'PAUSED', speed = 0, error = :reason WHERE state IN ('QUEUED','DOWNLOADING','VALIDATING','PUBLISHING')") suspend fun pauseInterrupted(reason: String)

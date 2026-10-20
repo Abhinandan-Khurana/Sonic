@@ -50,13 +50,11 @@ class VinylRackTest {
         assertEquals(emptyList<String>(), actions.log.filter { it.startsWith("load:") })
     }
 
-    @Test fun `idle home uses the disc rack and the inked room chrome`() {
-        val album = album("Night Drive")
-        compose.setContent { RunoutScreen(RoomState(listOf(album), true, null, DeckState(), false, "12:00"), RecordingActions()) }
-        compose.onNodeWithText("your room").assertIsDisplayed()
-        compose.onNodeWithTag("vinyl-rack").assertIsDisplayed()
-        compose.onNodeWithText("Crate").assertIsDisplayed()
-        compose.onNodeWithTag("open-settings").assertIsDisplayed()
-        compose.onNodeWithTag("open-sound").assertDoesNotExist()
+    @Test fun `home is the glass room again`() {
+        compose.setContent { RunoutScreen(RoomState(emptyList(), false, null, DeckState(), false, "12:00"), RecordingActions()) }
+        compose.onNodeWithTag("screen:home").assertIsDisplayed()
+        compose.onNodeWithTag("turntable").assertIsDisplayed()
+        compose.onNodeWithTag("vinyl-rack").assertDoesNotExist()
+        compose.onNodeWithText("Library").assertIsDisplayed()
     }
 }

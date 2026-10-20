@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
             val settingsRevision by graph.soulseek.preferences.revision.collectAsStateWithLifecycle()
             val shareConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::sharing) ?: false }
             val backgroundConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::background) ?: false }
+            val turtleMode = remember(settingsRevision) { graph.soulseek.preferences.turtle() }
             val discovery by graph.discovery.state.collectAsStateWithLifecycle()
             val discoveryQuery by graph.discovery.query.collectAsStateWithLifecycle()
             val coverLookupEnabled by graph.library.coverLookupEnabled.collectAsStateWithLifecycle()
@@ -193,6 +194,9 @@ class MainActivity : ComponentActivity() {
                     }
                     override fun downloadSoulseekFolder(result: SoulseekSearchResult) { graph.soulseek.downloadFolder(result) }
                     override fun pauseSoulseekTransfer(id: String) { graph.soulseek.pause(id) }
+                    override fun pauseAllDownloads() { graph.soulseek.pauseAll() }
+                    override fun resumeAllDownloads() { graph.soulseek.resumeAll() }
+                    override fun setTurtleMode(enabled: Boolean) { graph.soulseek.setTurtle(enabled) }
                     override fun resumeSoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun cancelSoulseekTransfer(id: String) { graph.soulseek.cancel(id) }
                     override fun retrySoulseekTransfer(id: String) { resumeDownload(id) }
@@ -272,6 +276,7 @@ class MainActivity : ComponentActivity() {
                     onboardingStep = onboardingStep,
                     coverLookupEnabled = coverLookupEnabled,
                     coverLookupNoticePending = coverLookupNoticePending,
+                    turtleMode = turtleMode,
                 ),
                 actions = actions,
             )

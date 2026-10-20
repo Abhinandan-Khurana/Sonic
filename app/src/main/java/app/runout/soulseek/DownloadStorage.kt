@@ -44,6 +44,11 @@ internal class DownloadStorage(
         check(valid && (actualSize < 0 || actualSize == size)) { "The destination could not save the complete FLAC file. Free storage and retry." }
     }
 
+    fun thumbnailsDirectory(): DocumentFile {
+        val root = requireDestination()
+        return root.findFile("thumbnails")?.takeIf { it.isDirectory } ?: root.createDirectory("thumbnails")
+            ?: throw IOException("Could not create the thumbnails folder.")
+    }
     fun writeDocument(folder: DocumentFile, name: String, bytes: ByteArray) {
         val mime = if (name.endsWith(".vinyl")) "application/zip" else "application/octet-stream"
         val target = folder.findFile(name) ?: folder.createFile(mime, name) ?: return

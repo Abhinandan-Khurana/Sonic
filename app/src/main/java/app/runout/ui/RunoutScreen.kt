@@ -28,7 +28,7 @@ import app.runout.discovery.*
 import app.runout.model.Album
 import app.runout.soulseek.*
 
-private enum class Destination(val label: String) { HOME("Home"), LIBRARY("Crate"), DISCOVER("Discover"), MESSAGES("Messages") }
+private enum class Destination(val label: String) { HOME("Home"), LIBRARY("Library"), DISCOVER("Discover"), MESSAGES("Messages") }
 
 @Composable
 internal fun ConsoleTitle(kicker: String, title: String, detail: String? = null) {
@@ -84,7 +84,7 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when(destination) {
-                        Destination.HOME -> RoomScreen(state,actions,modifier = Modifier.fillMaxSize().testTag("screen:home"),showChrome = false,idleRack = state.deck.album == null,inked = true,showDeckControls = showDeckControls)
+                        Destination.HOME -> RoomScreen(state,actions,modifier = Modifier.fillMaxSize().testTag("screen:home"),showChrome = true,idleRack = false,inked = false)
                         Destination.LIBRARY -> LibraryScreen(state,actions) { destination = Destination.HOME }
                         Destination.DISCOVER -> Column(Modifier.fillMaxSize().testTag("screen:discover")) {
                             Chips(listOf(false,true),drops,{ if(it) "Friday Drops" else "Find music" },{ drops = it },Modifier.padding(horizontal = 16.dp,vertical = 4.dp))

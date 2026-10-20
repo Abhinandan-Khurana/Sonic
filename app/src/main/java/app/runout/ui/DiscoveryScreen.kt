@@ -47,6 +47,7 @@ internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: 
                     BasicText("Reported FLAC quality",style = Room.LabelQuiet)
                     Chips(SearchQuality.entries,options.quality,{ it.label },{ actions.setSearchOptions(options.copy(quality = it)) })
                     ToggleRow("Available upload slots only","Peer availability is advertised and can change.",options.availableOnly,{ actions.setSearchOptions(options.copy(availableOnly = it)) })
+                    BasicText("Soulseek shows FLAC only. Every search word must match the artist, album, folder, or track title.", style = Room.LabelQuiet)
                 }
                 if(!state.soulseekSession.connected && state.soulseekSession.hasAccount) BasicText(state.soulseekSession.error ?: "Your account is kept. Reconnect to search online.",style = Room.LabelQuiet,modifier = Modifier.padding(vertical = 8.dp))
             }

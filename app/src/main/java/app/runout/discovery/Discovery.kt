@@ -123,7 +123,7 @@ fun remoteAlbums(query: String, results: List<SoulseekSearchResult>, options: Di
         val ordered = tracks.map { it to it.fileName.lowercase(Locale.ROOT) }
             .sortedWith(compareBy({ it.second }, { it.first.path })).map { it.first }
         RemoteAlbum(folder.first,folder.second,ordered,score)
-    }
+    }.filter { album -> album.score > 0 && album.tracks.all { it.fileName.substringAfterLast('.').equals("flac", true) } }
     val available = compareByDescending<RemoteAlbum> { it.available }.thenBy { it.queue ?: Long.MAX_VALUE }.thenByDescending { it.speed }
     val comparator = when(options.sort) {
         SearchSort.MATCH -> compareByDescending<RemoteAlbum> { it.score }.then(available)
