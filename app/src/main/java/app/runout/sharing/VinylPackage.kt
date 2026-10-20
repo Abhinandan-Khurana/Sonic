@@ -187,7 +187,8 @@ object VinylPackage {
         if (m.optInt("format", 0) > FORMAT) throw Invalid("Made by a newer version of Runout")
         val kind = runCatching { Kind.valueOf(m.getString("kind")) }.getOrElse { throw Invalid("Unknown record kind") }
         val from = Profile.fromJson(m.getJSONObject("from"))
-        val album = m.optJSONObject("album")?.let { AlbumJson.fromJson(it) }
+        // A sender's own-music declaration is not an ownership grant to the recipient.
+        val album = m.optJSONObject("album")?.let { AlbumJson.fromJson(it).copy(owned = false) }
         val shelfJson = m.optJSONArray("shelf") ?: JSONArray()
         val shelf = (0 until shelfJson.length()).map { ShelfItem.fromJson(shelfJson.getJSONObject(it)) }
         if (kind != Kind.FRIEND && album == null) throw Invalid("Record has no album")
