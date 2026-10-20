@@ -237,6 +237,7 @@ fun RoomScreen(
     var platterRadius by remember { mutableStateOf(0f) }
     var slot by remember { mutableStateOf<SleeveSlot?>(null) }
     var pulledId by remember { mutableStateOf(initialPulledId) }
+    var removeId by remember { mutableStateOf<String?>(null) }
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
     var pressingChanged by remember { mutableStateOf(false) }
@@ -423,7 +424,7 @@ fun RoomScreen(
                             backdrop, active = true, onClick = { actions.share(pulled) }, modifier = Modifier.testTag("send"),
                         )
                         if (pulled.source != Source.FOLDER) {
-                            GlassPill("Remove", backdrop, onClick = { actions.removeRecord(pulled); pulledId = null })
+                            GlassPill("Remove", backdrop, onClick = { removeId = pulled.id })
                         }
                     }
                 },
@@ -437,6 +438,17 @@ fun RoomScreen(
                     p.place(x, (s.rect.top - rootOrigin.y).roundToInt())
                 }
             }
+        }
+
+        state.albums.firstOrNull { it.id == removeId }?.let { record ->
+            ConfirmationDialog(
+                "Remove record?",
+                if (record.source == Source.RECEIVED) "“${record.title}” and its received audio will be deleted from this device."
+                else "“${record.title}” will be removed from your shelf. Original music files are kept.",
+                "Remove record", "Keep it",
+                onConfirm = { actions.removeRecord(record); removeId = null; pulledId = null },
+                onDismiss = { removeId = null },
+            )
         }
 
         if (discardPressing) ConfirmationDialog(
