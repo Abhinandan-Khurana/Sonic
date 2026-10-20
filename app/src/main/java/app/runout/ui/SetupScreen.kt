@@ -30,7 +30,7 @@ internal fun SetupScreen(state: RoomState, actions: RoomActions, initialStep: In
     LaunchedEffect(state.soulseekSession.connected,step) {
         if(step == 1 && state.soulseekSession.connected) move(2)
     }
-    BackHandler { if(step == 0) onFinish() else previous() }
+    BackHandler(enabled = step != 0 || state.onboardingComplete) { if(step == 0) onFinish() else previous() }
     Column(Modifier.fillMaxSize().background(Room.Background).safeDrawingPadding().imePadding().padding(horizontal = 20.dp).testTag("screen:setup")) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),verticalAlignment = Alignment.CenterVertically) {
             BasicText("RUNOUT / SETUP",style = Room.Brand.copy(fontFamily = FontFamily.Monospace,letterSpacing = 1.2.sp),modifier = Modifier.weight(1f))
