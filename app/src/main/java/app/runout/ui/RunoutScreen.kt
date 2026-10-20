@@ -51,9 +51,15 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
     var setup by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
     var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
     var drops by rememberSaveable { mutableStateOf(false) }
+    var pressingChanged by remember { mutableStateOf(false) }
+    var discardPressing by remember { mutableStateOf(false) }
+    fun closeOverlay() {
+        if (overlay == Panel.PRESSING && pressingChanged) discardPressing = true
+        else { overlay = null; pressingChanged = false }
+    }
     val openSetup = { setupStart = 1; setup = true }
     BackHandler(enabled = overlay != null || destination != Destination.HOME) {
-        if(overlay != null) overlay = null else destination = Destination.HOME
+        if(overlay != null) closeOverlay() else destination = Destination.HOME
     }
     Box(Modifier.fillMaxSize().background(Room.Background).semantics { testTagsAsResourceId = true }) {
         if (setup) {
@@ -107,7 +113,7 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                     }
                 }
             }
-            if(overlay != null) RetroPage(overlay!!.title,{ overlay = null }) {
+            if(overlay != null) RetroPage(overlay!!.title,{ closeOverlay() }) {
                 when(overlay) {
                     Panel.ACCOUNT -> {
                         ConnectionNotice(state,actions,openSetup)
@@ -116,11 +122,17 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                     }
                     Panel.TRANSFERS -> SoulseekTransfersPanel(state,actions)
                     Panel.SOUND -> SoundPanel(state.sound,state.output,actions)
-                    Panel.PRESSING -> PressingPanel(state.albums,state.profile,actions)
+                    Panel.PRESSING -> PressingPanel(state.albums,state.profile,actions) { pressingChanged = it }
                     else -> Unit
                 }
             }
         }
+        if (discardPressing) ConfirmationDialog(
+            "Discard pressing draft?", "Your selected tracks, sleeve and record details will be lost.",
+            "Discard draft", "Keep editing",
+            onConfirm = { discardPressing = false; pressingChanged = false; overlay = null },
+            onDismiss = { discardPressing = false },
+        )
         state.folderPreview?.let { FolderPreviewScreen(it,state,actions) { peer ->
             actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); destination = Destination.MESSAGES; overlay = null
         } }
@@ -160,6 +172,23 @@ internal fun NowPlayingStrip(state: RoomState, actions: RoomActions, onHome: () 
             BasicText(state.deck.album?.let { "${it.artist} · ${it.title}" } ?: "Choose a record from your library",style = Room.Label.copy(color = Color(0xFFCDD2C4)),maxLines = 1,overflow = TextOverflow.Ellipsis)
         }
         Pill(if(state.deck.isPlaying) "Pause" else "Play",actions::startStop,Modifier.testTag("mini-play"),enabled = state.deck.album != null)
+    }
+}
+
+@Composable
+internal fun ConfirmationDialog(
+    title: String, detail: String, confirm: String, dismiss: String,
+    onConfirm: () -> Unit, onDismiss: () -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        ConsoleCard {
+            BasicText(title, style = Room.Title)
+            BasicText(detail, style = Room.LabelQuiet)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill(dismiss, onDismiss)
+                Pill(confirm, onConfirm)
+            }
+        }
     }
 }
 

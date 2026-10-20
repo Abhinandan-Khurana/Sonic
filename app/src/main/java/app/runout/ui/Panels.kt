@@ -250,7 +250,7 @@ private fun fallbackColorFor(title: String): Color {
 private val LABEL_COLOURS = Profile.ACCENTS + listOf(0xFFFFD166.toInt(), 0xFF9AD7FF.toInt())
 
 @Composable
-fun PressingPanel(shelf: List<Album>, profile: Profile, actions: RoomActions) {
+fun PressingPanel(shelf: List<Album>, profile: Profile, actions: RoomActions, onDraftChanged: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     var title by rememberSaveable { mutableStateOf("") }
     var artist by rememberSaveable { mutableStateOf("") }
@@ -263,6 +263,10 @@ fun PressingPanel(shelf: List<Album>, profile: Profile, actions: RoomActions) {
     var search by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf<String?>(null) }
     val picked = remember { mutableStateListOf<Pair<Album, Track>>() }
+    var pressing by remember { mutableStateOf(false) }
+    val changed = title.isNotEmpty() || artist.isNotEmpty() || notes.isNotEmpty() || picked.isNotEmpty() ||
+        picture != null || pattern != 0 || disc != DiscStyle.COLOUR || labelColour != profile.accent || owned
+    LaunchedEffect(changed) { onDraftChanged(changed) }
 
     val pictureBitmap by produceState<ImageBitmap?>(null, picture) {
         value = picture?.let { uri ->
@@ -383,18 +387,27 @@ fun PressingPanel(shelf: List<Album>, profile: Profile, actions: RoomActions) {
             owned, { owned = it },
         )
         Spacer(Modifier.height(10.dp))
-        val ready = title.isNotBlank() && picked.isNotEmpty()
+        val ready = title.isNotBlank() && picked.isNotEmpty() && !pressing
         Pill(
             if (ready) "Press it" else if (title.isBlank()) "Give it a title" else "Add some tracks",
             {
-                actions.press(
-                    PressingDraft(
+                val submitted = PressingDraft(
                         title = title, artist = artist.ifBlank { profile.name }, tracks = picked.map { it.second },
                         quality = PressingRepository.qualityFor(picked.map { it.first }.distinctBy { it.id }),
                         disc = disc, labelColor = labelColour, coverImage = picture, pattern = pattern, owned = owned, notes = notes,
-                    ),
-                )
-                title = ""; artist = ""; notes = ""; picked.clear(); picture = null
+                    )
+                val originalArtist = artist
+                pressing = true
+                actions.press(submitted) { saved ->
+                    pressing = false
+                    // A late result must not erase edits made while this press was in flight.
+                    if (saved && title == submitted.title && artist == originalArtist && notes == submitted.notes &&
+                        picked.map { it.second } == submitted.tracks && picture == submitted.coverImage &&
+                        pattern == submitted.pattern && disc == submitted.disc && labelColour == submitted.labelColor && owned == submitted.owned) {
+                        title = ""; artist = ""; notes = ""; picked.clear(); picture = null
+                        pattern = 0; disc = DiscStyle.COLOUR; labelColour = profile.accent; owned = false
+                    }
+                }
             },
             active = ready, enabled = ready,
         )

@@ -162,6 +162,8 @@ interface RoomActions : DeckActions {
 
     fun pickImage(onPicked: (Uri?) -> Unit) {}
     fun press(draft: PressingDraft) {}
+    /** Completion means the pressing was durably saved, not merely requested. */
+    fun press(draft: PressingDraft, onResult: (Boolean) -> Unit) { press(draft) }
 
     fun dismissMessage() {}
 
@@ -235,11 +237,17 @@ fun RoomScreen(
     var pulledId by remember { mutableStateOf(initialPulledId) }
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
+    var pressingChanged by remember { mutableStateOf(false) }
+    var discardPressing by remember { mutableStateOf(false) }
+    fun closePanel() {
+        if (panel == Panel.PRESSING && pressingChanged) discardPressing = true
+        else { panel = null; pressingChanged = false }
+    }
     val disc = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     val pulled = state.albums.firstOrNull { it.id == pulledId }
 
     BackHandler(enabled = panel != null || pulledId != null) {
-        if (panel != null) panel = null else pulledId = null
+        if (panel != null) closePanel() else pulledId = null
     }
 
     BoxWithConstraints(
@@ -429,6 +437,13 @@ fun RoomScreen(
             }
         }
 
+        if (discardPressing) ConfirmationDialog(
+            "Discard pressing draft?", "Your selected tracks, sleeve and record details will be lost.",
+            "Discard draft", "Keep editing",
+            onConfirm = { discardPressing = false; pressingChanged = false; panel = null },
+            onDismiss = { discardPressing = false },
+        )
+
         // Panels
         val open = panel
         Box(Modifier.fillMaxSize().zIndex(10f)) {
@@ -437,7 +452,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .background(Color.Black.copy(alpha = 0.06f))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { panel = null },
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { closePanel() },
                 )
             }
             AnimatedVisibility(
@@ -454,7 +469,7 @@ fun RoomScreen(
                     portrait = portrait,
                     width = (screenW * 0.46f).coerceIn(340.dp, 520.dp),
                     height = screenH * 0.74f,
-                    onClose = { panel = null },
+                    onClose = { closePanel() },
                 ) {
                     when (shown) {
                         Panel.SOUND -> SoundPanel(state.sound, state.output, actions)
@@ -463,7 +478,7 @@ fun RoomScreen(
                         Panel.ACCOUNT -> SoulseekAccountPanel(state, actions, onOffline = { panel = null })
                         Panel.FRIENDS -> SoulseekMessagesPanel(state, actions, onAccount = { panel = Panel.ACCOUNT })
                         Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = { panel = Panel.ACCOUNT })
-                        Panel.PRESSING -> PressingPanel(state.albums, state.profile, actions)
+                        Panel.PRESSING -> PressingPanel(state.albums, state.profile, actions) { pressingChanged = it }
                     }
                 }
             }

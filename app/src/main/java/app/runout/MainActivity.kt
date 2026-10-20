@@ -173,6 +173,7 @@ class MainActivity : ComponentActivity() {
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                     override fun press(draft: PressingDraft) = pressRecord(draft)
+                    override fun press(draft: PressingDraft, onResult: (Boolean) -> Unit) = pressRecord(draft, onResult)
                     override fun dismissMessage() { message.value = null }
 
                     override fun signInSoulseek(username: String, password: String, remember: Boolean) { graph.soulseek.signIn(username, password, remember) }
@@ -369,13 +370,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun pressRecord(draft: PressingDraft) {
+    private fun pressRecord(draft: PressingDraft, onResult: (Boolean) -> Unit = {}) {
         message.value = "Pressing “${draft.title}”…"
         graph.scope.launch {
-            message.value = runCatching { graph.pressing.press(draft) }.fold(
+            val result = runCatching { graph.pressing.press(draft) }
+            message.value = result.fold(
                 { "Pressed “${it.title}”. It's in your crate." },
                 { "Couldn't press it: ${it.message}" },
             )
+            onResult(result.isSuccess)
         }
     }
 
