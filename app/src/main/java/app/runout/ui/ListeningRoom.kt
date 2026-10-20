@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,9 +49,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +67,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -147,7 +154,8 @@ interface RoomActions : DeckActions {
     fun setCoverLookupEnabled(enabled: Boolean) {}
     fun dismissCoverLookupNotice() {}
     fun load(album: Album)
-    fun playLocalTrack(album: Album, index: Int) { load(album); needleDrop(0f) }
+    /** Puts the record on the platter cued at [trackId], needle up. Only the deck starts the music. */
+    fun cueTrack(album: Album, trackId: String?) { load(album) }
     fun toggleCrackle()
 
     fun updateSound(transform: (SoundSettings) -> SoundSettings) {}
@@ -222,9 +230,12 @@ interface RoomActions : DeckActions {
 }
 
 /**
- * The listening room. Landscape: glass turntable on the left, the crate on the right.
- * Portrait: the turntable on top, the crate below. Panels slide in as sheets of glass.
+ * The listening room, and the whole app. Landscape: glass turntable on the left, the crate on the
+ * right. Portrait: the turntable on top, the crate below. Everything else (digging for records,
+ * Friday Drops, friends, the pressing plant, settings, downloads, setup) slides in as a sheet of
+ * glass. The music itself is only ever started and stopped on the turntable.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun RoomScreen(
     state: RoomState,
@@ -233,10 +244,7 @@ fun RoomScreen(
     initialPulledId: String? = null,
     initialCrateIndex: Int = 0,
     initialPanel: Panel? = null,
-    showChrome: Boolean = true,
-    idleRack: Boolean = false,
-    inked: Boolean = false,
-    showDeckControls: Boolean = false,
+    initialSettings: SettingsSection = SettingsSection.SOUND,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -252,11 +260,26 @@ fun RoomScreen(
     var removeId by remember { mutableStateOf<String?>(null) }
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
+    var settings by remember { mutableStateOf(initialSettings) }
     var pressingChanged by remember { mutableStateOf(false) }
     var discardPressing by remember { mutableStateOf(false) }
+    // First launch opens setup as a glass sheet over the room; it can be reviewed later from Settings.
+    var setupOpen by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
+    var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
+    val openSetup = { setupStart = 1; setupOpen = true; panel = null }
+    val openAccount = {
+        if (state.soulseekSession.hasAccount) { settings = SettingsSection.ACCOUNT; panel = Panel.SETTINGS; pulledId = null } else openSetup()
+    }
     fun closePanel() {
         if (panel == Panel.PRESSING && pressingChanged) discardPressing = true
-        else { panel = null; pressingChanged = false }
+        else {
+            if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
+            panel = null; pressingChanged = false
+        }
+    }
+    // A folder preview always opens inside the Dig sheet, wherever it was asked for.
+    LaunchedEffect(state.folderPreview != null) {
+        if (state.folderPreview != null && panel == null) panel = Panel.DIG
     }
     val disc = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     val pulled = state.albums.firstOrNull { it.id == pulledId }
@@ -269,6 +292,8 @@ fun RoomScreen(
         modifier
             .fillMaxSize()
             .background(Room.Background)
+            .semantics { testTagsAsResourceId = true }
+            .testTag("screen:room")
             .onGloballyPositioned { rootOrigin = it.positionInRoot() },
     ) {
         val portrait = maxHeight > maxWidth
@@ -292,8 +317,7 @@ fun RoomScreen(
 
             val nearPlatter = dragging && platterCenter?.let { (disc.value + rootOrigin - it).getDistance() < platterRadius * 0.95f } == true
             val turntable = @Composable { m: Modifier, alignment: Alignment ->
-                if (inked) InkedDeck(state.deck, nearPlatter, { c, r -> platterCenter = c; platterRadius = r }, actions, m, showControls = showDeckControls)
-                else Turntable(
+                Turntable(
                     deck = state.deck,
                     backdrop = backdrop,
                     dropTargetActive = nearPlatter,
@@ -301,7 +325,6 @@ fun RoomScreen(
                     actions = actions,
                     modifier = m,
                     contentAlignment = alignment,
-                    pitchEnabled = !state.sound.pure,
                 )
             }
             val crate = @Composable { m: Modifier ->
@@ -326,7 +349,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 16.dp, end = 16.dp, top = if (showChrome) 70.dp else 8.dp, bottom = if (showChrome) 86.dp else 8.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 70.dp, bottom = 86.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     turntable(Modifier.fillMaxWidth().weight(0.42f), Alignment.Center)
@@ -338,7 +361,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 28.dp, end = 20.dp, top = if (showChrome) 46.dp else 8.dp, bottom = if (showChrome) 42.dp else 8.dp),
+                        .padding(start = 28.dp, end = 20.dp, top = 46.dp, bottom = 42.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     turntable(Modifier.weight(0.53f).fillMaxHeight(), Alignment.CenterStart)
@@ -347,15 +370,11 @@ fun RoomScreen(
                 }
             }
 
-            if (showChrome) CornerLabels(state, pulled != null, portrait, backdrop, actions, onOpen = { panel = it; pulledId = null })
-        }
-
-        if (idleRack && pulledId == null && state.deck.album == null && state.albums.isNotEmpty()) {
-            VinylRack(
-                albums = state.albums,
-                onUnbox = { pulledId = it.id },
-                modifier = Modifier.fillMaxSize().zIndex(4f),
-                initialIndex = initialCrateIndex,
+            CornerLabels(
+                state, pulled != null, portrait, screenW, backdrop, actions,
+                onOpen = { panel = it; pulledId = null },
+                onDownloads = { panel = Panel.DOWNLOADS; pulledId = null },
+                onAccount = openAccount,
             )
         }
 
@@ -452,6 +471,7 @@ fun RoomScreen(
                         if (pulled.source != Source.FOLDER) {
                             GlassPill("Remove", backdrop, onClick = { removeId = pulled.id })
                         }
+                        pulled.unavailableReason?.let { BasicText(it, style = Room.LabelQuiet.copy(color = Color(0xFF9A3429))) }
                     }
                 },
                 modifier = Modifier.zIndex(7f).fillMaxSize(),
@@ -466,26 +486,9 @@ fun RoomScreen(
             }
         }
 
-        state.albums.firstOrNull { it.id == removeId }?.let { record ->
-            ConfirmationDialog(
-                "Remove record?",
-                if (record.source == Source.RECEIVED) "“${record.title}” and its received audio will be deleted from this device."
-                else "“${record.title}” will be removed from your shelf. Original music files are kept.",
-                "Remove record", "Keep it",
-                onConfirm = { actions.removeRecord(record); removeId = null; pulledId = null },
-                onDismiss = { removeId = null },
-            )
-        }
-
-        if (discardPressing) ConfirmationDialog(
-            "Discard pressing draft?", "Your selected tracks, sleeve and record details will be lost.",
-            "Discard draft", "Keep editing",
-            onConfirm = { discardPressing = false; pressingChanged = false; panel = null },
-            onDismiss = { discardPressing = false },
-        )
-
         // Panels
         val open = panel
+        val sheetWidth = (screenW * 0.46f).coerceIn(340.dp, 520.dp)
         Box(Modifier.fillMaxSize().zIndex(10f)) {
             AnimatedVisibility(open != null, enter = fadeIn(), exit = fadeOut()) {
                 Box(
@@ -501,33 +504,99 @@ fun RoomScreen(
                 exit = if (portrait) slideOutVertically { it } + fadeOut() else slideOutHorizontally { it } + fadeOut(),
                 modifier = Modifier.align(if (portrait) Alignment.BottomCenter else Alignment.CenterEnd),
             ) {
-                var shown by remember { mutableStateOf(open ?: Panel.SOUND) }
+                var shown by remember { mutableStateOf(open ?: Panel.SETTINGS) }
                 if (open != null) shown = open
                 PanelSheet(
                     title = shown.title,
                     backdrop = roomBackdrop,
                     portrait = portrait,
-                    width = (screenW * 0.46f).coerceIn(340.dp, 520.dp),
-                    height = screenH * 0.74f,
+                    width = sheetWidth,
+                    // Dig and Friends get the taller sheet: they hold a list plus a keyboard.
+                    height = screenH * (if (shown == Panel.DIG || shown == Panel.FRIENDS) 0.86f else 0.74f),
                     onClose = { closePanel() },
+                    // Dig scrolls its own lazy results list.
+                    scroll = shown != Panel.DIG,
                 ) {
                     when (shown) {
-                        Panel.SOUND -> SoundPanel(state.sound, state.output, actions)
-                        Panel.SEARCH -> SoulseekSearchPanel(state, actions, onAccount = { panel = Panel.ACCOUNT }, onTransfers = { panel = Panel.TRANSFERS }, onMessage = { peer -> actions.openSoulseekConversation(peer); panel = Panel.FRIENDS })
-                        Panel.TRANSFERS -> SoulseekTransfersPanel(state, actions)
-                        Panel.ACCOUNT -> SoulseekAccountPanel(state, actions, onOffline = { panel = null })
-                        Panel.FRIENDS -> SoulseekMessagesPanel(state, actions, onAccount = { panel = Panel.ACCOUNT })
-                        Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = { panel = Panel.ACCOUNT })
+                        Panel.DIG -> {
+                            NetworkNote(state, actions)
+                            val preview = state.folderPreview
+                            if (preview != null) FolderPreview(preview, state, actions) { peer ->
+                                actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); panel = Panel.FRIENDS
+                            } else DiscoveryScreen(state, actions, onAccount = openAccount, onCue = { panel = null })
+                        }
+                        Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount)
+                        Panel.FRIENDS -> {
+                            if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
+                            SoulseekMessagesPanel(state, actions, onAccount = openAccount)
+                        }
                         Panel.PRESSING -> PressingPanel(state.albums, state.profile, actions) { pressingChanged = it }
+                        Panel.SETTINGS -> SettingsPanel(
+                            state, actions, settings, { settings = it },
+                            onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
+                        )
+                        Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions)
                     }
                 }
             }
         }
 
-        // Messages: a small glass note that fades after a few seconds.
-        val msg = state.message
-        if (msg != null) {
-            LaunchedEffect(msg) {
+        // Setup: the same glass sheet, over the room, on first launch or when asked for.
+        val firstRun = !state.onboardingComplete
+        Box(Modifier.fillMaxSize().zIndex(12f)) {
+            AnimatedVisibility(setupOpen, enter = fadeIn(), exit = fadeOut()) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.06f))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { if (!firstRun) setupOpen = false },
+                )
+            }
+            AnimatedVisibility(
+                visible = setupOpen,
+                enter = if (portrait) slideInVertically { it } + fadeIn() else slideInHorizontally { it } + fadeIn(),
+                exit = if (portrait) slideOutVertically { it } + fadeOut() else slideOutHorizontally { it } + fadeOut(),
+                modifier = Modifier.align(if (portrait) Alignment.BottomCenter else Alignment.CenterEnd),
+            ) {
+                PanelSheet(
+                    title = if (firstRun) "Welcome to your room" else "Soulseek setup",
+                    backdrop = roomBackdrop,
+                    portrait = portrait,
+                    width = sheetWidth,
+                    height = screenH * 0.86f,
+                    onClose = null,
+                    scroll = false,
+                ) {
+                    SetupScreen(state, actions, setupStart) { actions.finishOnboarding(); setupOpen = false }
+                }
+            }
+        }
+
+        state.albums.firstOrNull { it.id == removeId }?.let { record ->
+            GlassConfirm(
+                "Remove record?",
+                if (record.source == Source.RECEIVED) "“${record.title}” and its received audio will be deleted from this device."
+                else "“${record.title}” will be removed from your shelf. Original music files are kept.",
+                "Remove record", "Keep it", roomBackdrop,
+                onConfirm = { actions.removeRecord(record); removeId = null; pulledId = null },
+                onDismiss = { removeId = null },
+            )
+        }
+
+        if (discardPressing) GlassConfirm(
+            "Discard pressing draft?", "Your selected tracks, sleeve and record details will be lost.",
+            "Discard draft", "Keep editing", roomBackdrop,
+            onConfirm = { discardPressing = false; pressingChanged = false; panel = null },
+            onDismiss = { discardPressing = false },
+        )
+
+        // Notes: one small glass note at a time. The cover notice waits for OK; a Soulseek problem
+        // stays until it's tapped away; anything else fades after a few seconds.
+        val notice = state.coverLookupNoticePending && !setupOpen
+        val msg = if (setupOpen) null else state.message
+        val problem = state.soulseekError?.takeIf { panel == null && !setupOpen }
+        if (notice || msg != null || problem != null) {
+            if (!notice && msg != null) LaunchedEffect(msg) {
                 delay(4_500)
                 actions.dismissMessage()
             }
@@ -541,13 +610,69 @@ fun RoomScreen(
                         backdrop = roomBackdrop,
                         shape = { RoundedCornerShape(18.dp) },
                         effects = { vibrancy(); blur(10.dp.toPx()); lens(10.dp.toPx(), 18.dp.toPx()) },
-                        onDrawSurface = { drawRect(Color.White.copy(alpha = 0.78f)) },
+                        onDrawSurface = { drawRect(Color.White.copy(alpha = 0.82f)) },
                     )
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { actions.dismissMessage() }
-                    .padding(horizontal = 18.dp, vertical = 11.dp)
-                    .testTag("message"),
+                    .then(
+                        if (notice) Modifier.testTag("cover-lookup-notice")
+                        else Modifier.testTag("message").clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            if (msg != null) actions.dismissMessage() else actions.clearSoulseekError()
+                        },
+                    )
+                    .padding(horizontal = 18.dp, vertical = 11.dp),
             ) {
-                BasicText(msg, style = Room.Label.copy(fontWeight = FontWeight.Medium))
+                if (notice) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BasicText(
+                        "Finding missing covers online is now opt-in. It is off unless you enable it in Settings › Soulseek › Collection & storage. " +
+                            "Lookups send artist and album title to MusicBrainz, the Cover Art Archive and the Internet Archive.",
+                        style = Room.Label.copy(fontWeight = FontWeight.Medium),
+                    )
+                    Pill("OK", actions::dismissCoverLookupNotice)
+                } else BasicText(msg ?: problem.orEmpty(), style = Room.Label.copy(fontWeight = FontWeight.Medium, color = if (msg == null) Color(0xFF9A3429) else Room.Ink))
+            }
+        }
+    }
+}
+
+/** A question asked on glass over the room. Back or a tap outside answers with [dismiss]. */
+@Composable
+private fun GlassConfirm(
+    title: String,
+    detail: String,
+    confirm: String,
+    dismiss: String,
+    backdrop: Backdrop,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BackHandler(onBack = onDismiss)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .zIndex(30f)
+            .background(Color.Black.copy(alpha = 0.12f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .padding(24.dp)
+                .widthIn(max = 420.dp)
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedCornerShape(24.dp) },
+                    effects = { vibrancy(); blur(20.dp.toPx()); lens(12.dp.toPx(), 24.dp.toPx()) },
+                    onDrawSurface = { drawRect(Color.White.copy(alpha = 0.9f)) },
+                )
+                .pointerInput(Unit) { detectTapGestures { } }
+                .padding(20.dp)
+                .testTag("confirm"),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            BasicText(title, style = Room.Title.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold))
+            BasicText(detail, style = Room.LabelQuiet)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill(dismiss, onDismiss)
+                Pill(confirm, onConfirm, active = true)
             }
         }
     }
@@ -573,7 +698,10 @@ private fun PanelSheet(
     portrait: Boolean,
     width: Dp,
     height: Dp,
-    onClose: () -> Unit,
+    /** Null hides Close: first-run setup has to be answered. */
+    onClose: (() -> Unit)?,
+    /** Off for content that scrolls itself, like a lazy list of search results. */
+    scroll: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sheet = if (portrait) Modifier.fillMaxWidth().height(height).padding(horizontal = 8.dp).padding(bottom = 8.dp)
@@ -597,9 +725,11 @@ private fun PanelSheet(
     ) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText(title, style = Room.Title.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f).testTag("panel-title"))
-            TextAction("Close", onClose)
+            if (onClose != null) TextAction("Close", onClose)
         }
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), content = content)
+        // The glass keeps its size; its contents shrink above the keyboard.
+        val body = Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime)
+        Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
     }
 }
 
@@ -636,9 +766,12 @@ private fun CornerLabels(
     state: RoomState,
     pulled: Boolean,
     portrait: Boolean,
+    screenW: Dp,
     backdrop: Backdrop,
     actions: RoomActions,
     onOpen: (Panel) -> Unit,
+    onDownloads: () -> Unit,
+    onAccount: () -> Unit,
 ) {
     val deck = state.deck
     val nowSpinning = when {
@@ -654,10 +787,18 @@ private fun CornerLabels(
     }
     val status = listOfNotNull(state.clock, "${state.albums.size} records", scanText).joinToString("   ")
     val newDrop = state.drops is DropState.Ready && state.claimed.size < DropsRepository.CLAIMS_PER_WEEK
+    // Downloads still in the queue or waiting for attention; finished and cancelled ones don't count.
+    val waiting = state.soulseekTransfers.count { it.state != SoulseekTransferState.COMPLETED && it.state != SoulseekTransferState.CANCELLED }
 
+    // One row of glass pills that scrolls sideways rather than wrapping when it doesn't fit.
     val nav = @Composable {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Panel.entries.forEach { p ->
+        Row(
+            Modifier
+                .widthIn(max = if (portrait) screenW - 36.dp else screenW * 0.58f)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Panel.entries.filter { it.inStrip }.forEach { p ->
                 GlassPill(
                     text = p.nav + when {
                         p == Panel.DROPS && newDrop -> " •"
@@ -671,30 +812,37 @@ private fun CornerLabels(
             }
         }
     }
+    // Downloads and the Soulseek connection, as quiet text beside the clock.
+    val links = @Composable {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextAction("↓ $waiting", onDownloads, tag = "open-downloads", color = if (waiting > 0) Room.Ink else Room.Quiet)
+            TextAction(connectionLabel(state.soulseekSession), onAccount, tag = "open-account")
+        }
+    }
 
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout).padding(horizontal = if (portrait) 18.dp else 28.dp, vertical = 16.dp)) {
-        Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                BasicText("RUNOUT", style = Room.Brand)
-                BasicText("your room", style = Room.LabelQuiet)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextAction(if (state.hasFolder) "Change folder" else "Choose folder", actions::pickFolder)
-                if (state.hasFolder) TextAction("Rescan", actions::rescan)
-                TextAction(if (state.crackleOn) "Crackle on" else "Crackle off", actions::toggleCrackle)
-            }
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout).padding(start = if (portrait) 18.dp else 28.dp, end = if (portrait) 18.dp else 28.dp, top = 4.dp, bottom = 16.dp)) {
+        Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextAction(if (state.hasFolder) "Change folder" else "Choose folder", actions::pickFolder)
+            if (state.hasFolder) TextAction("Rescan", actions::rescan)
+            TextAction(if (state.crackleOn) "Crackle on" else "Crackle off", actions::toggleCrackle)
         }
 
         if (portrait) {
-            BasicText(status, style = Room.Label, modifier = Modifier.align(Alignment.TopEnd), maxLines = 2)
+            Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End) {
+                links()
+                BasicText(status, style = Room.Label, maxLines = 2)
+            }
             Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 BasicText(nowSpinning, style = Room.Label, maxLines = 1)
                 nav()
             }
         } else {
-            Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 nav()
-                BasicText(status, style = Room.Label)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BasicText(status, style = Room.Label)
+                    links()
+                }
             }
             BasicText(nowSpinning, style = Room.Label, modifier = Modifier.align(Alignment.BottomStart), maxLines = 1)
             val hint = when {
@@ -708,12 +856,14 @@ private fun CornerLabels(
 }
 
 @Composable
-internal fun TextAction(text: String, onClick: () -> Unit) {
+internal fun TextAction(text: String, onClick: () -> Unit, tag: String = "action:$text", color: Color = Room.Quiet) {
     BasicText(
         text,
-        style = Room.LabelQuiet.copy(fontSize = 10.sp),
+        style = Room.LabelQuiet.copy(fontSize = 10.sp, color = color),
         modifier = Modifier
-            .testTag("action:$text")
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+            .testTag(tag)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
+            .touchHeight()
+            .padding(horizontal = 2.dp),
     )
 }

@@ -203,7 +203,10 @@ fun Crate(
                         style = Room.LabelQuiet.copy(textAlign = TextAlign.Center),
                         maxLines = 1,
                     )
-                    provenance(front)?.let {
+                    val unavailable = front.unavailableReason
+                    if (unavailable != null) {
+                        BasicText(unavailable, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Color(0xFF9A3429)), maxLines = 2)
+                    } else provenance(front)?.let {
                         BasicText(it, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Room.Accent), maxLines = 1)
                     }
                 }

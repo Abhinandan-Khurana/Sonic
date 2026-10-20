@@ -4,16 +4,20 @@ steps:
     steps:
       - tap: { id: setup-offline }
       - tap: { id: setup-finish }
-  - await: { visible: { id: 'screen:home' } }
-  - tap: { id: 'destination:LIBRARY' }
-  - await: { visible: { id: 'screen:library' } }
-  - tap: { id: 'destination:DISCOVER' }
+  - await: { visible: { id: turntable } }
+  - scroll-to: { target: { id: 'nav:DIG' } }
+  - tap: { id: 'nav:DIG' }
   - await: { visible: { id: 'screen:search' } }
-  - tap: { id: 'destination:MESSAGES' }
-  - await: { visible: { id: 'screen:messages' } }
-  - tap: { id: 'destination:HOME' }
-  - await: { visible: { id: 'screen:home' } }
+  - tap: { id: 'action:Close' }
+  - scroll-to: { target: { id: 'nav:FRIENDS' } }
+  - tap: { id: 'nav:FRIENDS' }
+  - await: { visible: { id: 'panel:messages' } }
+  - tap: { id: 'action:Close' }
+  - scroll-to: { target: { id: 'nav:SETTINGS' } }
+  - tap: { id: 'nav:SETTINGS' }
+  - await: { visible: { id: 'panel:sound' } }
+  - tap: { id: 'action:Close' }
   - tap: { id: open-downloads }
   - await: { visible: { id: 'panel:transfers' } }
-  - tap: { id: close-page }
-  - await: { visible: { id: 'screen:home' } }
+  - tap: { id: 'action:Close' }
+  - await: { visible: { id: turntable } }

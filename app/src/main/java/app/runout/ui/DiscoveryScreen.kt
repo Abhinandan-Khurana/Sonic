@@ -20,16 +20,16 @@ import app.runout.soulseek.*
 import java.util.Locale
 
 @Composable
-internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onPlay: () -> Unit) {
+internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onCue: () -> Unit) {
     val discovery = state.discovery
     val options = discovery.options
     var filters by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
     val searching = discovery.online.phase == SearchPhase.SEARCHING
     val submit = { if(discovery.query.trim().isNotEmpty()) actions.searchSoulseek(discovery.query) }
-    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("screen:search"),contentPadding = PaddingValues(16.dp,12.dp,16.dp,24.dp),verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().testTag("screen:search"),contentPadding = PaddingValues(bottom = 24.dp),verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item("search-controls") {
-            ConsoleTitle("Dig for a record","Find your next favorite.","Songs, albums and artists · always FLAC")
+            BasicText("Songs, albums and artists · always FLAC",style = Room.LabelQuiet)
             Field(discovery.query,actions::setSearchQuery,"Search songs, albums or artists",onSubmit = { if(state.soulseekSession.connected && !searching) submit() })
             Chips(SearchSource.entries,options.source,{ it.label },{ actions.setSearchOptions(options.copy(source = it)) },Modifier.padding(vertical = 8.dp))
             Chips(SearchKind.entries,options.kind,{ it.label },{ actions.setSearchOptions(options.copy(kind = it)) })
@@ -59,11 +59,11 @@ internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: 
                 ConsoleCard {
                     BasicText(hit.track?.title ?: hit.album.title,style = Room.Title)
                     BasicText("${hit.album.artist} · ${hit.album.title} · ${hit.album.quality.label}",style = Room.LabelQuiet)
-                    Pill(if(hit.track == null) "Play album" else "Play song",{
-                        val index = hit.track?.let { track -> hit.album.tracks.indexOfFirst { it.id == track.id } } ?: 0
-                        actions.playLocalTrack(hit.album,index)
-                        onPlay()
-                    },Modifier.testTag("play-local:${hit.id}"),active = true)
+                    // The record goes on the platter cued at this song; the deck plays it.
+                    Pill("Put on the platter",{
+                        actions.cueTrack(hit.album,hit.track?.id)
+                        onCue()
+                    },Modifier.testTag("cue-local:${hit.id}"),active = true)
                 }
             }
             if(discovery.local.isEmpty()) item("no-local") { BasicText("No local matches. Try fewer words or search Soulseek.",style = Room.LabelQuiet) }
@@ -131,13 +131,14 @@ private fun trackDetails(track: SoulseekSearchResult) = "FLAC · " + listOf(
     sizeLabel(track.size),
 ).joinToString(" · ")
 
+/** A peer's complete album folder, shown inside the Dig sheet before anything downloads. */
 @Composable
-internal fun FolderPreviewScreen(preview: SoulseekFolderPreview, state: RoomState, actions: RoomActions, onMessage: (String) -> Unit = {}) {
+internal fun FolderPreview(preview: SoulseekFolderPreview, state: RoomState, actions: RoomActions, onMessage: (String) -> Unit = {}) {
     BackHandler(onBack = actions::closeSoulseekFolder)
-    Column(Modifier.fillMaxSize().background(Room.Background).safeDrawingPadding().padding(16.dp).testTag("screen:folder-preview")) {
+    Column(Modifier.fillMaxSize().testTag("screen:folder-preview")) {
         Row(Modifier.fillMaxWidth(),verticalAlignment = Alignment.CenterVertically) {
-            BasicText("ALBUM / FOLDER PREVIEW",style = Room.Brand,modifier = Modifier.weight(1f))
-            Pill("Close",actions::closeSoulseekFolder)
+            SectionTitle("Album folder preview",Modifier.weight(1f))
+            Pill("Back to results",actions::closeSoulseekFolder)
         }
         ConsoleTitle(preview.username,preview.directory.substringAfterLast('/').ifBlank { "Shared FLAC" },if(preview.loading) "Getting the complete folder listing…" else "${preview.files.size} FLAC tracks · ${sizeLabel(preview.files.sumOf { it.size })}")
         Pill("Message this peer",{ onMessage(preview.username) },enabled = state.soulseekSession.connected)

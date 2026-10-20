@@ -206,12 +206,12 @@ open class RecordingActions : RoomActions {
     override fun rescan() { log += "rescan" }
     override fun dismissCoverLookupNotice() { log += "dismissCoverLookupNotice" }
     override fun load(album: Album) { log += "load:${album.title}" }
+    override fun cueTrack(album: Album, trackId: String?) { log += "cue:${album.title}:$trackId" }
     override fun toggleCrackle() { log += "crackle" }
     override fun needleDrop(fraction: Float) { log += "needleDrop" }
     override fun liftNeedle() { log += "lift" }
     override fun holdPlatter() { log += "hold" }
     override fun releasePlatter() { log += "release" }
-    override fun toggleSpeed() { log += "speed" }
     override fun flip() { log += "flip" }
     override fun eject() { log += "eject" }
     override fun share(album: Album) { log += "share:${album.title}" }
@@ -225,7 +225,8 @@ open class RecordingActions : RoomActions {
     override fun startStop() { log += "startStop" }
     override fun nextTrack() { log += "next" }
     override fun previousTrack() { log += "prev" }
-    override fun setPitch(percent: Float) { log += "pitch:%.1f".format(percent) }
+    override fun dismissMessage() { log += "dismissMessage" }
+    override fun clearSoulseekError() { log += "clearSoulseekError" }
     override fun createAccount(username: String, name: String, accent: Int) { log += "createAccount:$username:$name" }
     override fun restoreAccount(key: String, username: String?) { log += "restore" }
     override fun searchPeople(query: String) { log += "search:$query" }

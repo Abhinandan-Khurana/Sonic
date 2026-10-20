@@ -7,8 +7,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -67,14 +65,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import app.runout.playback.DeckState
-import app.runout.playback.Speed
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -89,21 +85,19 @@ interface DeckActions {
     fun liftNeedle()
     fun holdPlatter()
     fun releasePlatter()
-    fun toggleSpeed()
     fun flip()
     fun startStop() {}
     fun nextTrack() {}
     fun previousTrack() {}
-    fun setPitch(percent: Float) {}
     /** Lift the record off the platter and clear the deck. */
     fun eject() {}
 }
 
 /**
  * Where everything sits on the plinth, in the canvas's own pixels. The layout follows the classic
- * direct-drive DJ deck: platter left, S-shaped tonearm on its base at the top right, pitch fader on
- * the right, start/stop and 33/45 at the bottom left. The tonearm is solved with the law of cosines
- * so the stylus follows a true arc across the grooves.
+ * direct-drive deck: platter left, S-shaped tonearm on its base at the top right, start/stop at the
+ * bottom left, the transport keys and pixel screen at the bottom right. The tonearm is solved with
+ * the law of cosines so the stylus follows a true arc across the grooves.
  */
 class DeckGeometry(val size: Size) {
     val h = size.height
@@ -119,13 +113,9 @@ class DeckGeometry(val size: Size) {
     val armBaseR = h * 0.125f
     val antiSkate = Offset(w - h * 0.115f, h * 0.27f)
     val adapterWell = Offset(h * 0.105f, h * 0.10f)
-    val powerKnob = Offset(h * 0.075f, h * 0.78f)
 
-    val pitchTrack = Rect(w - h * 0.105f, h * 0.43f, w - h * 0.055f, h * 0.755f)
     val screen = Rect(w - h * 0.47f, h * 0.855f, w - h * 0.04f, h * 0.965f)
     val startStop = Rect(h * 0.03f, h * 0.86f, h * 0.165f, h * 0.965f)
-    val rpm33 = Rect(h * 0.19f, h * 0.922f, h * 0.29f, h * 0.962f)
-    val rpm45 = Rect(h * 0.305f, h * 0.922f, h * 0.405f, h * 0.962f)
     val prev = Rect(h * 0.585f, h * 0.915f, h * 0.675f, h * 0.962f)
     val next = Rect(h * 0.69f, h * 0.915f, h * 0.78f, h * 0.962f)
 
@@ -157,10 +147,6 @@ class DeckGeometry(val size: Size) {
     fun fractionForAlpha(a: Float) = ((alphaOut - a) / (alphaOut - alphaIn)).coerceIn(0f, 1f)
     fun isOnRecord(p: Offset) = (p - center).getDistance() <= recordR
 
-    /** Pitch fader: −8 % at the top, +8 % at the bottom, like the decks it's modelled on. */
-    fun pitchY(percent: Float) = pitchTrack.center.y + (percent / 8f).coerceIn(-1f, 1f) * (pitchTrack.height / 2f - h * 0.02f)
-    fun pitchForY(y: Float) = ((y - pitchTrack.center.y) / (pitchTrack.height / 2f - h * 0.02f) * 8f).coerceIn(-8f, 8f)
-
     fun nearArm(p: Offset, alpha: Float, slop: Float): Boolean {
         val a = pivot
         val b = stylus(alpha)
@@ -183,12 +169,11 @@ fun screenLines(deck: DeckState): Pair<String, String> {
     val title = "${deck.trackCode} ${track?.title ?: album.title} · ${album.artist}"
     val s = deck.trackPositionMs / 1000
     val time = "%d:%02d".format(s / 60, s % 60)
-    val speed = deck.speed.label + if (deck.pitch != 0f) " " + (if (deck.pitch > 0) "+" else "") + "%.1f".format(deck.pitch) else ""
     val status = when {
         deck.sideFinished -> "SIDE ${deck.side?.letter} END"
-        !deck.needleDown -> "CUE ${deck.trackCode}  $speed"
-        deck.held -> "STOP $time  $speed"
-        else -> "$time  $speed"
+        !deck.needleDown -> "CUE ${deck.trackCode}"
+        deck.held -> "STOP $time"
+        else -> time
     }
     return title to status
 }
@@ -202,7 +187,6 @@ fun Turntable(
     actions: DeckActions,
     modifier: Modifier = Modifier,
     contentAlignment: Alignment = Alignment.CenterStart,
-    pitchEnabled: Boolean = true,
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -218,7 +202,7 @@ fun Turntable(
     // Platter: spins up when the needle goes down, winds down when stopped or lifted.
     var rotation by remember { mutableFloatStateOf(0f) }
     var omega by remember { mutableFloatStateOf(0f) }
-    val target = if (deck.album != null && deck.needleDown && !deck.held) 200f * deck.speed.factor * (1f + deck.pitch / 100f) else 0f
+    val target = if (deck.album != null && deck.needleDown && !deck.held) 200f else 0f // 33⅓ rpm, in degrees a second
     val held = deck.held
     LaunchedEffect(target) {
         var last = withFrameNanos { it }
@@ -273,8 +257,6 @@ fun Turntable(
     val armAlpha = dragAlpha ?: animAlpha
     val currentDeck by rememberUpdatedState(deck)
     val currentArm by rememberUpdatedState(armAlpha)
-    var dragPitch by remember { mutableStateOf<Float?>(null) }
-    val pitchShown = dragPitch ?: deck.pitch
 
     BoxWithConstraints(modifier, contentAlignment = contentAlignment) {
         val plinthH = min(maxHeight.value, maxWidth.value / DeckGeometry.ASPECT).dp
@@ -362,7 +344,7 @@ fun Turntable(
                     },
             ) {
                 val gx = DeckGeometry(size)
-                drawPlinth(gx, textMeasurer, deck)
+                drawPlinth(gx, textMeasurer)
                 drawPlatter(gx, rotation, hasRecord = deck.album != null)
                 if (deck.album != null) {
                     drawRecord(
@@ -385,7 +367,6 @@ fun Turntable(
                         style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))),
                     )
                 }
-                drawPitchFader(gx, textMeasurer, pitchShown, pitchEnabled)
                 drawButtons(gx, textMeasurer, deck)
                 drawPixelScreen(gx.screen, pixels1, pixels2, scrollStep)
                 drawArmBase(gx)
@@ -395,12 +376,6 @@ fun Turntable(
             // Touch targets for the controls, with names for TalkBack.
             val (l1, l2) = screenLines(deck)
             ControlArea(gm.startStop, "Start or stop", "deck:startstop", stateText = if (deck.needleDown && !deck.held) "Playing" else "Stopped") { actions.startStop() }
-            ControlArea(gm.rpm33, "33 rpm", "deck:33", stateText = if (deck.speed == Speed.RPM33) "Selected" else null) {
-                if (deck.speed != Speed.RPM33) actions.toggleSpeed()
-            }
-            ControlArea(gm.rpm45, "45 rpm", "deck:45", stateText = if (deck.speed == Speed.RPM45) "Selected" else null) {
-                if (deck.speed != Speed.RPM45) actions.toggleSpeed()
-            }
             ControlArea(gm.prev, "Previous track", "deck:prev") { actions.previousTrack() }
             ControlArea(gm.next, "Next track", "deck:next") { actions.nextTrack() }
             Box(
@@ -408,29 +383,6 @@ fun Turntable(
                     .rectOffset(gm.screen)
                     .testTag("deck:screen")
                     .semantics { contentDescription = "$l1. $l2" },
-            )
-            // The pitch fader: drag the cap; double-tap to snap back to zero.
-            val pitchArea = Rect(gm.pitchTrack.left - gm.h * 0.03f, gm.pitchTrack.top, gm.pitchTrack.right + gm.h * 0.03f, gm.pitchTrack.bottom)
-            Box(
-                Modifier
-                    .rectOffset(pitchArea)
-                    .testTag("deck:pitch")
-                    .semantics { contentDescription = "Pitch"; stateDescription = "%.1f percent".format(deck.pitch) }
-                    .pointerInput(pitchEnabled) {
-                        if (!pitchEnabled) return@pointerInput
-                        detectVerticalDragGestures(
-                            onDragStart = { p -> dragPitch = gm.pitchForY(p.y + pitchArea.top) },
-                            onDragEnd = { dragPitch?.let(actions::setPitch); dragPitch = null },
-                            onDragCancel = { dragPitch = null },
-                        ) { ch, _ ->
-                            ch.consume()
-                            dragPitch = gm.pitchForY(ch.position.y + pitchArea.top)
-                        }
-                    }
-                    .pointerInput(pitchEnabled) {
-                        if (!pitchEnabled) return@pointerInput
-                        detectTapGestures(onDoubleTap = { actions.setPitch(0f) })
-                    },
             )
         }
     }
@@ -470,7 +422,7 @@ private fun DrawScope.label(tm: TextMeasurer, text: String, at: Offset, size: Fl
     return r.size.width.toFloat()
 }
 
-private fun DrawScope.drawPlinth(g: DeckGeometry, tm: TextMeasurer, deck: DeckState) {
+private fun DrawScope.drawPlinth(g: DeckGeometry, tm: TextMeasurer) {
     val h = g.h
     // A hairline inset, like the edge of a cast top plate.
     drawRoundRect(Color.White.copy(alpha = 0.55f), topLeft = Offset(h * 0.012f, h * 0.012f), size = Size(size.width - h * 0.024f, size.height - h * 0.024f), cornerRadius = CornerRadius(h * 0.06f), style = Stroke(1.2f))
@@ -479,17 +431,6 @@ private fun DrawScope.drawPlinth(g: DeckGeometry, tm: TextMeasurer, deck: DeckSt
     drawCircle(SmokedGlass.copy(alpha = 0.10f), h * 0.052f, g.adapterWell)
     drawCircle(Color.White.copy(alpha = 0.7f), h * 0.052f, g.adapterWell, style = Stroke(1.2f))
     drawLine(Color.Black.copy(alpha = 0.12f), g.adapterWell - Offset(h * 0.03f, 0f), g.adapterWell + Offset(h * 0.03f, 0f), strokeWidth = h * 0.012f, cap = StrokeCap.Round)
-
-    // Power / strobe knob with its light.
-    drawCircle(Color.Black.copy(alpha = 0.10f), h * 0.046f, g.powerKnob + Offset(0f, h * 0.005f))
-    drawCircle(Chrome, h * 0.042f, g.powerKnob)
-    drawCircle(Color.Black.copy(alpha = 0.15f), h * 0.042f, g.powerKnob, style = Stroke(1f))
-    drawCircle(SmokedGlass.copy(alpha = 0.85f), h * 0.028f, g.powerKnob)
-    drawLine(Color.White.copy(alpha = 0.9f), g.powerKnob, g.powerKnob + Offset(0f, -h * 0.024f), strokeWidth = h * 0.006f, cap = StrokeCap.Round)
-    val on = deck.album != null
-    drawCircle(if (on) Color(0xFFFF4D4D) else Color(0xFF8C8C8C).copy(alpha = 0.5f), h * 0.007f, g.powerKnob + Offset(h * 0.058f, -h * 0.03f))
-    if (on) drawCircle(Color(0xFFFF4D4D).copy(alpha = 0.25f), h * 0.016f, g.powerKnob + Offset(h * 0.058f, -h * 0.03f))
-    label(tm, "POWER", g.powerKnob + Offset(h * 0.05f, -h * 0.004f), h * 0.022f)
 
     // Name plate above the screen.
     val nameW = label(tm, "RUNOUT", Offset(g.screen.left, g.screen.top - h * 0.056f), h * 0.032f, Room.Ink.copy(alpha = 0.85f), FontWeight.SemiBold)
@@ -512,7 +453,7 @@ private fun DrawScope.drawPlatter(g: DeckGeometry, rotation: Float, hasRecord: B
         radius = g.ringR, center = g.center,
     )
     drawCircle(Color.Black.copy(alpha = 0.16f), g.ringR, g.center, style = Stroke(1.2f))
-    // Four rows of strobe dots on the rim: they appear to stand still at exactly 33 or 45 rpm.
+    // Four rows of strobe dots on the rim: they appear to stand still at exactly 33⅓ rpm.
     rotate(rotation, g.center) {
         val rows = 4
         val band = g.ringR - g.platterR
@@ -619,33 +560,6 @@ private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
     drawCircle(SmokedGlass, h * 0.012f, g.pivot)
 }
 
-private fun DrawScope.drawPitchFader(g: DeckGeometry, tm: TextMeasurer, pitch: Float, enabled: Boolean) {
-    val h = g.h
-    val t = g.pitchTrack
-    val a = if (enabled) 1f else 0.4f
-    // Slot plate with the scale.
-    drawRoundRect(Color.White.copy(alpha = 0.35f * a), topLeft = t.topLeft, size = t.size, cornerRadius = CornerRadius(h * 0.01f))
-    drawRoundRect(Color.Black.copy(alpha = 0.10f), topLeft = t.topLeft, size = t.size, cornerRadius = CornerRadius(h * 0.01f), style = Stroke(1f))
-    val slotX = t.center.x
-    drawLine(SmokedGlass.copy(alpha = 0.7f * a), Offset(slotX, t.top + h * 0.015f), Offset(slotX, t.bottom - h * 0.015f), strokeWidth = h * 0.008f, cap = StrokeCap.Round)
-    for (i in -4..4) {
-        val y = g.pitchY(i * 2f)
-        val wide = i == 0 || abs(i) == 4
-        drawLine(Room.Ink.copy(alpha = 0.35f * a), Offset(t.left + h * 0.006f, y), Offset(t.left + (if (wide) h * 0.016f else h * 0.010f), y), strokeWidth = 1f)
-    }
-    // The green light that shows the fader is at exactly zero.
-    val zeroLit = abs(pitch) < 0.05f
-    drawCircle(if (zeroLit) Color(0xFF39E07A) else Color(0xFF6E7570).copy(alpha = 0.35f), h * 0.007f, Offset(t.left - h * 0.015f, g.pitchY(0f)))
-    if (zeroLit) drawCircle(Color(0xFF39E07A).copy(alpha = 0.25f), h * 0.015f, Offset(t.left - h * 0.015f, g.pitchY(0f)))
-    // Fader cap.
-    val y = g.pitchY(pitch)
-    drawRoundRect(Color.Black.copy(alpha = 0.15f), topLeft = Offset(t.left - h * 0.006f, y - h * 0.018f + h * 0.006f), size = Size(t.width + h * 0.012f, h * 0.036f), cornerRadius = CornerRadius(h * 0.006f))
-    drawRoundRect(Chrome, topLeft = Offset(t.left - h * 0.006f, y - h * 0.018f), size = Size(t.width + h * 0.012f, h * 0.036f), cornerRadius = CornerRadius(h * 0.006f))
-    drawLine(Room.Ink.copy(alpha = 0.6f), Offset(t.left, y), Offset(t.right, y), strokeWidth = 1.2f)
-    label(tm, "PITCH", Offset(t.center.x, t.bottom + h * 0.008f), h * 0.019f, centered = true)
-    label(tm, if (pitch == 0f) "±8%" else (if (pitch > 0) "+" else "") + "%.1f".format(pitch), Offset(t.center.x, t.bottom + h * 0.032f), h * 0.019f, Room.Ink.copy(alpha = 0.8f), centered = true)
-}
-
 private fun DrawScope.flatKey(r: Rect, lit: Boolean) {
     val h = r.height
     drawRoundRect(Color.Black.copy(alpha = 0.12f), topLeft = r.topLeft + Offset(0f, h * 0.12f), size = r.size, cornerRadius = CornerRadius(h * 0.18f))
@@ -665,12 +579,6 @@ private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckS
     label(tm, "STOP", Offset(ss.center.x, ss.center.y + h * 0.002f), h * 0.019f, Room.Ink.copy(alpha = 0.7f), centered = true)
     val playing = deck.needleDown && !deck.held
     drawCircle(if (playing) Color(0xFF39E07A) else Color.Black.copy(alpha = 0.18f), h * 0.006f, Offset(ss.left + h * 0.018f, ss.top + h * 0.018f))
-
-    // 33 / 45.
-    flatKey(g.rpm33, deck.speed == Speed.RPM33)
-    flatKey(g.rpm45, deck.speed == Speed.RPM45)
-    label(tm, "33", Offset(g.rpm33.center.x + h * 0.012f, g.rpm33.top - h * 0.003f), h * 0.026f, Room.Ink.copy(alpha = 0.75f), centered = true)
-    label(tm, "45", Offset(g.rpm45.center.x + h * 0.012f, g.rpm45.top - h * 0.003f), h * 0.026f, Room.Ink.copy(alpha = 0.75f), centered = true)
 
     // Previous / next, in the same style.
     flatKey(g.prev, false)
@@ -777,6 +685,8 @@ fun GlassPill(
 ) {
     Box(
         modifier
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
+            .touchHeight()
             .height(30.dp)
             .widthIn(min = 48.dp)
             .drawBackdrop(
@@ -791,7 +701,6 @@ fun GlassPill(
                     drawRect(if (active) Room.Accent.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.42f))
                 },
             )
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {

@@ -9,7 +9,6 @@ import app.runout.model.AudioQuality
 import app.runout.model.Track
 import app.runout.playback.Deck
 import app.runout.playback.DeckState
-import app.runout.playback.Speed
 import app.runout.playback.VinylSfx
 import app.runout.sound.PlayerFactory
 import app.runout.sound.SoundEngine
@@ -34,8 +33,8 @@ import java.io.File
 import java.time.Duration
 
 /**
- * Suite 12 — the turntable's controls driving a real ExoPlayer: start/stop, next and previous across
- * sides, 33/45 and the pitch fader; plus the deck's layout and its little screen.
+ * Suite 12 — the turntable's controls driving a real ExoPlayer: start/stop, next and previous within
+ * a side, cueing a song from search, the fixed recorded speed; plus the deck's layout and its screen.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
@@ -76,14 +75,21 @@ class TurntableDeckTest {
 
     private val s: DeckState get() = deck.state.value
 
-    @Test fun `search starts the selected song on its correct record side`() {
+    @Test fun `search cues the selected song on its side and only the deck starts it`() {
         val record = album()
-        deck.playTrack(record, "t4")
+        deck.cueTrack(record, "t4")
         settle()
         assertEquals("deck", s.album?.id)
         assertEquals("B2", s.trackCode)
         assertEquals("t4", player.currentMediaItem?.mediaId)
+        assertFalse(s.needleDown)
+        assertFalse(player.playWhenReady)
+        deck.startStop() // START on the deck lowers the needle on the cued song
+        settle()
+        assertTrue(s.needleDown)
         assertTrue(player.playWhenReady)
+        assertEquals("B2", s.trackCode)
+        assertEquals("t4", player.currentMediaItem?.mediaId)
     }
 
     @Test fun `loading a new record cancels the previous needle settling playback`() {
@@ -139,26 +145,21 @@ class TurntableDeckTest {
     }
 
     @Test
-    fun `33, 45 and the pitch fader set the playback speed`() {
+    fun `records always play at the speed they were recorded at`() {
         deck.load(album())
         settle()
         deck.startStop()
         settle()
-        deck.setPitch(4f)
-        assertEquals(1.04f, player.playbackParameters.speed, 0.001f)
-        deck.toggleSpeed()
-        assertEquals(Speed.RPM45, s.speed)
-        assertEquals(1.35f * 1.04f, player.playbackParameters.speed, 0.002f)
-        deck.setPitch(0.2f) // clicks back to zero
-        assertEquals(0f, s.pitch)
-        deck.setPitch(30f)
-        assertEquals(8f, s.pitch)
-        // Pure mode: always the recorded speed, and the fader does nothing.
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+        // Stopping and starting the platter winds down and back up to the recorded speed.
+        deck.startStop()
+        settle()
+        deck.startStop()
+        settle()
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
         engine.update { it.copy(pure = true) }
         deck.onPureChanged(true)
         assertEquals(1f, player.playbackParameters.speed, 0.001f)
-        deck.setPitch(5f)
-        assertEquals(0f, s.pitch)
     }
 
     @Test
@@ -166,14 +167,12 @@ class TurntableDeckTest {
         assertEquals("NO RECORD", screenLines(DeckState()).second)
         deck.load(album())
         settle()
-        assertEquals("CUE A1  33", screenLines(s).second)
+        assertEquals("CUE A1", screenLines(s).second)
         deck.nextTrack()
         settle()
         val (top, bottom) = screenLines(s)
         assertEquals("A2 Track 2 · Runout", top)
         assertTrue(bottom, bottom.startsWith("0:00"))
-        deck.setPitch(-2.5f)
-        assertTrue(screenLines(s).second.endsWith("33 -2.5"))
     }
 
     @Test
@@ -181,7 +180,7 @@ class TurntableDeckTest {
         for (h in listOf(300f, 900f)) {
             val g = DeckGeometry(Size(h * DeckGeometry.ASPECT, h))
             val plinth = androidx.compose.ui.geometry.Rect(0f, 0f, h * DeckGeometry.ASPECT, h)
-            val controls = listOf(g.startStop, g.rpm33, g.rpm45, g.prev, g.next, g.screen, g.pitchTrack)
+            val controls = listOf(g.startStop, g.prev, g.next, g.screen)
             // Inside the plinth...
             controls.forEach { assertTrue("$it inside", plinth.contains(it.topLeft) && plinth.contains(it.bottomRight)) }
             // ...not overlapping each other...
@@ -197,8 +196,6 @@ class TurntableDeckTest {
             assertEquals(g.recordR * 0.95f, (g.stylus(g.alphaOut) - g.center).getDistance(), h * 0.002f)
             assertEquals(g.recordR * 0.43f, (g.stylus(g.alphaIn) - g.center).getDistance(), h * 0.002f)
             assertTrue((g.stylus(g.alphaRest) - g.center).getDistance() > g.ringR)
-            assertEquals(0f, g.pitchForY(g.pitchY(0f)), 0.01f)
-            assertEquals(6f, g.pitchForY(g.pitchY(6f)), 0.01f)
         }
     }
 }

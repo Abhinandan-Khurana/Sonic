@@ -19,6 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
@@ -29,7 +32,7 @@ import app.runout.sharing.ImportResult
 import app.runout.sharing.VinylPackage
 import app.runout.sound.SoundSettings
 import app.runout.ui.RoomActions
-import app.runout.ui.RunoutScreen
+import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
 import app.runout.soulseek.SoulseekSearchResult
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +61,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        immerse()
         if (savedInstanceState == null) handleIncoming(intent)
 
         val graph = graph
@@ -145,19 +149,17 @@ class MainActivity : ComponentActivity() {
                     override fun setCoverLookupEnabled(enabled: Boolean) { graph.library.setCoverLookupEnabled(enabled) }
                     override fun dismissCoverLookupNotice() { graph.library.dismissCoverLookupNotice() }
                     override fun load(album: Album) = graph.deck.load(album)
-                    override fun playLocalTrack(album: Album, index: Int) = graph.deck.playTrack(album,album.tracks.getOrNull(index)?.id)
+                    override fun cueTrack(album: Album, trackId: String?) = graph.deck.cueTrack(album, trackId)
                     override fun toggleCrackle() = graph.deck.toggleCrackle()
                     override fun needleDrop(fraction: Float) = graph.deck.needleDrop(fraction)
                     override fun liftNeedle() = graph.deck.liftNeedle()
                     override fun holdPlatter() = graph.deck.holdPlatter()
                     override fun releasePlatter() = graph.deck.releasePlatter()
-                    override fun toggleSpeed() = graph.deck.toggleSpeed()
                     override fun flip() = graph.deck.flip()
                     override fun eject() = graph.deck.eject()
                     override fun startStop() = graph.deck.startStop()
                     override fun nextTrack() = graph.deck.nextTrack()
                     override fun previousTrack() = graph.deck.previousTrack()
-                    override fun setPitch(percent: Float) = graph.deck.setPitch(percent)
 
                     override fun updateSound(transform: (SoundSettings) -> SoundSettings) = graph.sound.update(transform)
                     override fun applyPreset(name: String) = graph.sound.applyPreset(name)
@@ -236,7 +238,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            RunoutScreen(
+            RoomScreen(
                 state = RoomState(
                     albums = albums,
                     hasFolder = folder != null,
@@ -280,6 +282,20 @@ class MainActivity : ComponentActivity() {
                 ),
                 actions = actions,
             )
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Folder pickers and the share sheet can bring the system bars back; the room is full screen.
+        immerse()
+    }
+
+    /** The room fills the screen; the system bars appear only when swiped in. */
+    private fun immerse() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 

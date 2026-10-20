@@ -30,14 +30,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.soulseek.SoulseekConnection
 import app.runout.soulseek.SoulseekPolicy
-import app.runout.soulseek.SoulseekSearchResult
+import app.runout.soulseek.SoulseekSession
 import app.runout.soulseek.SoulseekTransferState
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
+internal fun connectionLabel(session: SoulseekSession) = when(session.state) {
+    SoulseekConnection.CONNECTED -> "● Online"
+    SoulseekConnection.CONNECTING -> "Connecting"
+    SoulseekConnection.RECONNECTING -> "Reconnecting"
+    SoulseekConnection.PAUSED -> "Paused"
+    SoulseekConnection.ERROR -> "Account !"
+    else -> if (session.hasAccount) "Offline" else "Connect"
+}
+
 @Composable
-private fun NetworkNote(state: RoomState, actions: RoomActions) {
+internal fun ConnectionNotice(state: RoomState, actions: RoomActions, onAccount: () -> Unit) {
+    val session = state.soulseekSession
+    if(session.connected) return
+    ConsoleCard(Modifier.padding(vertical = 8.dp)) {
+        BasicText(if(session.hasAccount) connectionLabel(session) else "Your local music is always available",style = Room.Title)
+        BasicText(session.error ?: "Connect Soulseek to discover FLAC, download records and send messages.",style = Room.LabelQuiet)
+        if(session.hasAccount) Pill("Reconnect",actions::reconnectSoulseek,enabled = session.state != SoulseekConnection.RECONNECTING)
+        else Pill("Connect Soulseek",onAccount,active = true)
+    }
+}
+
+@Composable
+internal fun NetworkNote(state: RoomState, actions: RoomActions) {
     val note = state.soulseekError ?: state.soulseekSession.error ?: return
     BasicText(note, style = Room.LabelQuiet.copy(color = Color(0xFFAD3A22)), modifier = Modifier.padding(vertical = 8.dp).testTag("soulseek-error"))
     Pill("Dismiss", actions::clearSoulseekError)
@@ -99,64 +120,6 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
         BasicText("Soulseek's protocol does not encrypt sign-in credentials or private messages.", style = Room.LabelQuiet, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
     }
 }
-
-@Composable
-fun SoulseekSearchPanel(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onTransfers: () -> Unit, onMessage: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth().testTag("panel:search")) {
-        if (!state.soulseekSession.hasAccount) { SignInNotice(onAccount); return@Column }
-        var query by rememberSaveable { mutableStateOf("") }
-        var searched by rememberSaveable { mutableStateOf(false) }
-        var resultPage by rememberSaveable { mutableStateOf(0) }
-        Field(query, { query = it }, "Artist, album, or track")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pill(if (state.soulseekSearching) "Searching…" else "Search FLAC", { searched = true; resultPage = 0; actions.searchSoulseek(query) }, active = true, enabled = query.isNotBlank() && !state.soulseekSearching)
-            if (state.soulseekSearching) Pill("Stop search", actions::stopSoulseekSearch)
-            Pill("View downloads", onTransfers)
-        }
-        if (state.downloadFolder == null) {
-            BasicText("Choose where to keep your FLAC downloads.", style = Room.LabelQuiet, modifier = Modifier.padding(top = 8.dp))
-            Pill("Choose download folder", actions::pickDownloadFolder)
-        }
-        NetworkNote(state, actions)
-        BasicText("FLAC only · Results come from other Soulseek users. Availability and queue times vary.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 10.dp))
-        if (searched && !state.soulseekSearching && state.soulseekResults.isEmpty()) BasicText("No FLAC results yet. Try a different artist or album.", style = Room.LabelQuiet)
-        // A popular query can contain thousands of results. Keep composition bounded
-        // while retaining access to the complete result set, including on Android 9.
-        val pageSize = 100
-        val pages = ((state.soulseekResults.size + pageSize - 1) / pageSize).coerceAtLeast(1)
-        val page = resultPage.coerceAtMost(pages - 1)
-        if (pages > 1) {
-            BasicText("${state.soulseekResults.size} FLAC results · Page ${page + 1} of $pages", style = Room.LabelQuiet)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 6.dp)) {
-                Pill("Previous results", { resultPage = page - 1 }, enabled = page > 0)
-                Pill("Next results", { resultPage = page + 1 }, enabled = page + 1 < pages)
-            }
-        }
-        state.soulseekResults.drop(page * pageSize).take(pageSize).groupBy { it.username to it.directory }.forEach { (folder, files) ->
-            SectionTitle(folder.second.substringAfterLast('/').ifBlank { "Shared FLAC" })
-            BasicText("${folder.first} · ${files.size} matching FLAC files", style = Room.LabelQuiet)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 6.dp)) {
-                Pill("Download FLAC folder", { actions.downloadSoulseekFolder(files.first()); onTransfers() }, enabled = state.downloadFolder != null)
-                Pill("Message ${folder.first}", { onMessage(folder.first) })
-            }
-            files.forEach { result ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 7.dp).testTag("result:${result.id}"), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        BasicText(result.fileName, style = Room.Title.copy(fontSize = 13.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        BasicText(resultDetails(result), style = Room.LabelQuiet)
-                        BasicText(if (result.freeSlots > 0) "Upload slot available" else "May wait in peer's queue", style = Room.LabelQuiet)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Pill("Download", { actions.downloadSoulseek(result) }, enabled = state.downloadFolder != null)
-                }
-            }
-        }
-    }
-}
-
-private fun resultDetails(result: SoulseekSearchResult): String = listOfNotNull(
-    "FLAC", result.bitDepth?.let { "$it-bit" }, result.sampleRate?.let { String.format(Locale.ROOT, "%.1f kHz", it / 1000.0) }, bytesLabel(result.size),
-).joinToString(" · ")
 
 private fun bytesLabel(bytes: Long): String = if (bytes >= 1_073_741_824L) String.format(Locale.ROOT, "%.1f GB", bytes / 1_073_741_824.0) else String.format(Locale.ROOT, "%.1f MB", bytes / 1_048_576.0)
 

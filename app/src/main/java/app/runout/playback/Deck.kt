@@ -23,13 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import java.io.File
-
-enum class Speed(val factor: Float, val label: String) {
-    RPM33(1f, "33"),
-    RPM45(45f / (100f / 3f), "45"),
-}
 
 data class DeckState(
     val album: Album? = null,
@@ -39,10 +33,7 @@ data class DeckState(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0,
     val sideFinished: Boolean = false,
-    val speed: Speed = Speed.RPM33,
     val held: Boolean = false,
-    /** The pitch fader, in percent (−8 … +8). */
-    val pitch: Float = 0f,
 ) {
     val side: Side? get() = sides.getOrNull(sideIndex)
 
@@ -78,7 +69,8 @@ data class DeckState(
 
 /**
  * The turntable's mechanics. Owns the side that's on the platter and translates turntable
- * gestures (needle drop, lift, hold the platter, flip, 33/45) into player commands.
+ * gestures (needle drop, lift, hold the platter, flip, start/stop) into player commands. Records
+ * always turn at the speed they were recorded at.
  */
 class Deck(
     private val context: Context,
@@ -88,7 +80,7 @@ class Deck(
     /** How the deck reaches a player: the playback service by default; tests hand it one directly. */
     private val connectPlayer: (onReady: (Player?) -> Unit) -> Unit = { ready -> connectToService(context, ready) },
 ) {
-    /** Pure mode turns off everything that alters the sound: crackle, 45 rpm and the platter wind-down. */
+    /** Pure mode turns off everything that alters the sound: crackle and the platter wind-down. */
     private val pure: Boolean get() = sound?.settings?.value?.pure == true
     private val _state = MutableStateFlow(DeckState())
     val state: StateFlow<DeckState> = _state.asStateFlow()
@@ -170,19 +162,26 @@ class Deck(
         val sides = SideSplitter.split(verified.tracks)
         rampJob?.cancel()
         sfx.stopCrackle()
-        _state.value = DeckState(album = verified, sides = sides, speed = _state.value.speed)
+        _state.value = DeckState(album = verified, sides = sides)
         cueSide(verified, sides.firstOrNull())
     }
 
-    /** Search can start a song on any record side without losing its album context. */
-    fun playTrack(album: Album, trackId: String?) {
+    /**
+     * Puts the record on, turns it to the side holding [trackId] and parks the needle over that
+     * song. Nothing plays: the listener lowers the tonearm or presses START on the deck.
+     */
+    fun cueTrack(album: Album, trackId: String?) {
         load(album)
         val loaded = _state.value
-        if (loaded.album?.id != album.id) return
+        val record = loaded.album ?: return
+        if (record.id != album.id) return
         val sideIndex = loaded.sides.indexOfFirst { side -> trackId == null || side.tracks.any { it.id == trackId } }
         if (sideIndex < 0) return
-        val trackIndex = loaded.sides[sideIndex].tracks.indexOfFirst { trackId == null || it.id == trackId }
-        jumpTo(sideIndex,trackIndex.coerceAtLeast(0))
+        val side = loaded.sides[sideIndex]
+        val trackIndex = side.tracks.indexOfFirst { trackId == null || it.id == trackId }.coerceAtLeast(0)
+        _state.update { it.copy(sideIndex = sideIndex, positionMs = side.positionOf(trackIndex, 0), needleDown = false, sideFinished = false) }
+        if (sideIndex != 0) cueSide(record, side) // load() has already cued side A
+        withController { c -> c.seekTo(trackIndex, 0) }
     }
 
     private fun cueSide(album: Album, side: Side?) {
@@ -193,8 +192,7 @@ class Deck(
                 return@withController
             }
             c.setMediaItems(mediaItemsFor(album, side))
-            val f = effectiveSpeed()
-            c.playbackParameters = PlaybackParameters(f, f)
+            c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED)
             c.prepare()
         }
     }
@@ -215,8 +213,7 @@ class Deck(
             withController { c ->
                 c.volume = 1f
                 c.seekTo(index, offset)
-                val f = effectiveSpeed()
-                c.playbackParameters = PlaybackParameters(f, f)
+                c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED)
             }
             delay(420) // the needle settles; the program stays at full volume
             withController { c -> c.play() }
@@ -240,7 +237,7 @@ class Deck(
         rampJob?.cancel()
         rampJob = scope.launch {
             if (!pure) {
-                val start = effectiveSpeed()
+                val start = RECORDED_SPEED
                 for (step in 1..10) {
                     val f = (start * (1f - step / 10f)).coerceAtLeast(MIN_SPEED)
                     withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
@@ -258,7 +255,7 @@ class Deck(
         if (!s.needleDown) return
         rampJob?.cancel()
         rampJob = scope.launch {
-            val end = effectiveSpeed()
+            val end = RECORDED_SPEED
             if (pure) {
                 withController { c -> c.play() }
                 return@launch
@@ -284,13 +281,13 @@ class Deck(
         val s = _state.value
         if (s.album == null) return
         when {
-            !s.needleDown -> needleDrop(if (s.sideFinished) 0f else s.fraction)
+            !s.needleDown -> if (s.sideFinished) needleDrop(0f) else dropAt(s.trackIndex, s.trackPositionMs)
             s.held -> releasePlatter()
             else -> holdPlatter()
         }
     }
 
-    /** Next track. At the end of a side the record is turned over to the next one. */
+    /** Next track on this side. The last track stays put: turn the record over to go on. */
     fun nextTrack() {
         val s = _state.value
         val side = s.side ?: return
@@ -322,38 +319,11 @@ class Deck(
         dropAt(trackIndex, 0)
     }
 
-    /** The pitch fader: ±8 %, like a DJ deck. It clicks into place at zero. Off in Pure mode. */
-    fun setPitch(percent: Float) {
-        if (pure) return
-        val p = percent.coerceIn(-MAX_PITCH, MAX_PITCH).let { if (kotlin.math.abs(it) < 0.25f) 0f else (it * 10).roundToInt() / 10f }
-        if (p == _state.value.pitch) return
-        _state.update { it.copy(pitch = p) }
-        val s = _state.value
-        if (s.album != null && !s.held) {
-            val f = effectiveSpeed()
-            withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
-        }
-    }
-
-    fun toggleSpeed() {
-        if (pure) return
-        val next = if (_state.value.speed == Speed.RPM33) Speed.RPM45 else Speed.RPM33
-        _state.update { it.copy(speed = next) }
-        if (_state.value.album != null) {
-            val f = effectiveSpeed()
-            withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
-        }
-    }
-
-    /** Pure mode always plays at the speed the music was recorded at. */
-    fun effectiveSpeed(): Float = if (pure) 1f else _state.value.speed.factor * (1f + _state.value.pitch / 100f)
-
-    /** Called when Pure mode is switched, so the deck drops crackle and speed changes straight away. */
+    /** Called when Pure mode is switched, so the deck drops crackle and any wind-down straight away. */
     fun onPureChanged(on: Boolean) {
         if (on) {
             sfx.stopCrackle()
-            _state.update { it.copy(speed = Speed.RPM33, pitch = 0f) }
-            withController { c -> c.playbackParameters = PlaybackParameters(1f, 1f) }
+            withController { c -> c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
         } else if (_state.value.isPlaying && _crackleOn.value) {
             sfx.startCrackle()
         }
@@ -377,7 +347,7 @@ class Deck(
     fun eject() {
         liftNeedle()
         withController { c -> c.stop(); c.clearMediaItems() }
-        _state.value = DeckState(speed = _state.value.speed)
+        _state.value = DeckState()
     }
 
     fun toggleCrackle() {
@@ -398,7 +368,8 @@ class Deck(
 
         /** Android's playback-speed control doesn't go much lower without distorting. */
         const val MIN_SPEED = 0.25f
-        const val MAX_PITCH = 8f
+        /** The platter only ever turns at the speed the music was recorded at. */
+        const val RECORDED_SPEED = 1f
         /** Pressing "previous" this far into a track restarts it instead. */
         const val RESTART_WINDOW_MS = 3_000L
 

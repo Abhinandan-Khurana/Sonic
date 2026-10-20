@@ -8,8 +8,8 @@ import androidx.compose.ui.test.performClick
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.playback.DeckState
+import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
-import app.runout.ui.RunoutScreen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -26,16 +26,15 @@ class Slice0CoverNoticeTest {
 
     @Test fun `existing user sees one time cover lookup notice and can acknowledge it`() {
         val actions = RecordingActions()
-        compose.setContent { RunoutScreen(state(notice = true), actions) }
+        compose.setContent { RoomScreen(state(notice = true), actions) }
         compose.onNodeWithTag("cover-lookup-notice").assertIsDisplayed()
         compose.onNodeWithText("OK").performClick()
         assertEquals(listOf("dismissCoverLookupNotice"), actions.log)
     }
 
-    @Test fun `library shows unavailable record access without claiming valid playback`() {
+    @Test fun `the crate shows unavailable record access without claiming valid playback`() {
         val album = Album("missing", "Missing Record", "Artist", 2020, "content://missing", emptyList(), AudioQuality("FLAC"), unavailableReason = "Unavailable · repair access")
-        compose.setContent { RunoutScreen(state(listOf(album), hasFolder = true), RecordingActions()) }
-        compose.onNodeWithText("Library", useUnmergedTree = true).performClick()
+        compose.setContent { RoomScreen(state(listOf(album), hasFolder = true), RecordingActions()) }
         compose.onNodeWithText("Unavailable · repair access").assertIsDisplayed()
     }
 }

@@ -70,15 +70,18 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-enum class Panel(val title: String, val nav: String) {
-    SEARCH("Soulseek · FLAC search", "Search"),
-    TRANSFERS("Downloads", "Downloads"),
+/** The room's glass sheets. Those [inStrip] get a pill in the room; Downloads opens from the ↓ count. */
+enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true) {
+    DIG("Dig", "Dig"),
     DROPS("Friday Drops", "Drops"),
-    FRIENDS("Soulseek · Messages", "Messages"),
-    ACCOUNT("Soulseek account", "Account"),
+    FRIENDS("Friends", "Friends"),
     PRESSING("Pressing Plant", "Pressing Plant"),
-    SOUND("Sound", "Sound"),
+    SETTINGS("Settings", "Settings"),
+    DOWNLOADS("Downloads", "Downloads", inStrip = false),
 }
+
+/** The sections of the Settings sheet. */
+enum class SettingsSection(val label: String) { SOUND("Sound"), ACCOUNT("Soulseek"), LIBRARY("Library"), ABOUT("About") }
 
 // ---------------------------------------------------------------------------------------------
 // Sound
@@ -93,7 +96,7 @@ fun SoundPanel(s: SoundSettings, output: OutputStatus, actions: RoomActions) {
         Spacer(Modifier.height(6.dp))
         ToggleRow(
             "Pure",
-            "Nothing touches the signal: no EQ, ReplayGain, crackle or speed changes. Bit-perfect to a USB DAC on Android 14 and later.",
+            "Nothing touches the signal: no EQ, ReplayGain, crackle or platter wind-down. Bit-perfect to a USB DAC on Android 14 and later.",
             s.pure,
             { on -> actions.updateSound { it.copy(pure = on) } },
         )

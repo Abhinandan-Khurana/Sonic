@@ -34,7 +34,7 @@ object PlayerFactory {
             ): AudioSink {
                 val base = outputSink?.invoke(context, floatOut) ?: DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(floatOut)
-                    // Speed (platter hold, 45 rpm) via Android's AudioTrack, which also works in the float path.
+                    // Speed (the platter-hold wind-down) via Android's AudioTrack, which also works in the float path.
                     .setEnableAudioOutputPlaybackParameters(true)
                     .build()
                 return DspAudioSink(base, engine, floatOutput = floatOut)

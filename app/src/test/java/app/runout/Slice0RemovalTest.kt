@@ -55,11 +55,8 @@ class Slice0RemovalTest {
     @Test fun `Back dismisses removal without deleting received audio`() {
         val removed = open(Source.RECEIVED)
         compose.onNodeWithText("Remove record?").assertIsDisplayed()
-        compose.runOnIdle {
-            // Dialog Back is delivered to its own window, not the underlying activity dispatcher.
-            val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
-            dialog.onBackPressed()
-        }
+        // The glass confirm lives in the room, so Back reaches it through the activity dispatcher.
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("Remove record?").assertDoesNotExist()
         assertEquals(emptyList<String>(), removed)
     }

@@ -7,8 +7,8 @@ import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.Track
 import app.runout.playback.DeckState
+import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
-import app.runout.ui.RunoutScreen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -22,9 +22,8 @@ class Slice0PressingTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val album = Album("local", "Local album", "Artist", null, "", listOf(Track("track", "content://test/track.flac", "Track", 1, 1, 60000)), AudioQuality("FLAC"))
     private fun open(actions: RecordingActions = RecordingActions()) {
-        compose.setContent { RunoutScreen(RoomState(listOf(album), true, null, DeckState(), false, "12:00"), actions) }
-        compose.onNodeWithTag("destination:LIBRARY").performClick()
-        compose.onNodeWithTag("open-pressing").performClick()
+        compose.setContent { RoomScreen(RoomState(listOf(album), true, null, DeckState(), false, "12:00"), actions) }
+        compose.onNodeWithTag("nav:PRESSING").performScrollTo().performClick()
         compose.onNodeWithTag("field:Title").performTextInput("Keep this draft")
     }
     private fun chooseTrack() {
@@ -55,7 +54,7 @@ class Slice0PressingTest {
         compose.runOnIdle { completion!!(true) }
         compose.onNodeWithTag("field:Title").performScrollTo().assertTextEquals("", "Title")
         compose.onNodeWithText("TRACKS · 0").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("close-page").performClick()
+        compose.onNodeWithTag("action:Close").performClick()
         compose.onNodeWithText("Discard pressing draft?").assertDoesNotExist()
     }
 
@@ -73,14 +72,15 @@ class Slice0PressingTest {
 
     @Test fun `Close asks before discarding changed draft and keep retains it`() {
         open()
-        compose.onNodeWithTag("close-page").performClick()
+        compose.onNodeWithTag("action:Close").performClick()
         compose.onNodeWithText("Discard pressing draft?").assertIsDisplayed()
         compose.onNodeWithText("Keep editing").performClick()
         compose.onNodeWithTag("field:Title").assertTextContains("Keep this draft")
-        compose.onNodeWithTag("close-page").performClick()
+        compose.onNodeWithTag("action:Close").performClick()
         compose.onNodeWithText("Discard draft").performClick()
+        compose.waitForIdle()
         compose.onNodeWithTag("panel:pressing").assertDoesNotExist()
-        compose.onNodeWithTag("open-pressing").performClick()
+        compose.onNodeWithTag("nav:PRESSING").performScrollTo().performClick()
         compose.onNodeWithTag("field:Title").assertTextContains("")
     }
 

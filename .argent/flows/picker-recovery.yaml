@@ -16,5 +16,5 @@ steps:
         args: { button: back }
   - await: { visible: { id: account-connection } }
   - assert: { text: { in: { id: account-connection }, equals: Connected to Soulseek } }
-  - tap: { id: close-page }
+  - tap: { id: 'action:Close' }
   - assert: { text: { in: { id: open-account }, contains: Online } }

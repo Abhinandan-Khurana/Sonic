@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,8 +33,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -51,11 +50,23 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
-/** Tactile panel button; a green face marks the primary action or selected choice. */
+/**
+ * Keeps an element's drawn size but gives its touch target at least [min] of height, with the
+ * drawing centred inside. Put it after `clickable` so the whole box answers the tap.
+ */
+internal fun Modifier.touchHeight(min: Dp = 48.dp): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minHeight = 0))
+    val height = maxOf(placeable.height, min.roundToPx()).coerceIn(constraints.minHeight, constraints.maxHeight)
+    layout(placeable.width, height) { placeable.place(0, (height - placeable.height) / 2) }
+}
+
+/** A flat pill button for panels. Solid blue when it's the main action or selected. */
 @Composable
 fun Pill(
     text: String,
@@ -64,15 +75,10 @@ fun Pill(
     active: Boolean = false,
     enabled: Boolean = true,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(50)
     Box(
         modifier
-            .heightIn(min = 48.dp)
-            .widthIn(min = 48.dp)
             .alpha(if (enabled) 1f else 0.4f)
-            .shadow(if(enabled) 1.dp else 0.dp,shape)
-            .background(if (active) Room.Ink else Color.White.copy(alpha = 0.85f), shape)
-            .border(1.dp, Room.Ink.copy(alpha = 0.12f), shape)
             .clickable(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
@@ -80,10 +86,15 @@ fun Pill(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 13.dp, vertical = 8.dp),
+            .touchHeight()
+            .height(30.dp)
+            .widthIn(min = 48.dp)
+            .background(if (active) Room.Accent else Color.White.copy(alpha = 0.78f), shape)
+            .border(1.dp, if (active) Room.Accent else Room.Ink.copy(alpha = 0.10f), shape)
+            .padding(horizontal = 13.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(text, style = Room.Label.copy(color = if (active) Room.Background else Room.Ink, fontWeight = FontWeight.Medium), maxLines = 2)
+        BasicText(text, style = Room.Label.copy(color = if (active) Color.White else Room.Ink, fontWeight = FontWeight.Medium), maxLines = 1)
     }
 }
 
@@ -285,4 +296,23 @@ fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
         drawRoundRect(Room.Ink.copy(alpha = 0.08f), cornerRadius = CornerRadius(size.height))
         drawRoundRect(Room.Accent, size = Size(size.width * fraction.coerceIn(0f, 1f), size.height), cornerRadius = CornerRadius(size.height))
     }
+}
+
+/** A small heading inside a glass sheet: a quiet kicker, a title and an optional line under it. */
+@Composable
+internal fun ConsoleTitle(kicker: String, title: String, detail: String? = null) {
+    BasicText(kicker.uppercase(), style = Room.LabelQuiet.copy(fontSize = 9.5.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium), modifier = Modifier.padding(bottom = 4.dp))
+    BasicText(title, style = Room.Title.copy(fontSize = 18.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold))
+    if (detail != null) BasicText(detail, style = Room.LabelQuiet, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
+}
+
+/** A frosted card for one item inside a glass sheet. */
+@Composable
+internal fun ConsoleCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.55f), shape).border(1.dp, Room.Ink.copy(alpha = 0.08f), shape).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        content = content,
+    )
 }

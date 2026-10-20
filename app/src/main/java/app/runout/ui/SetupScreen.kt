@@ -1,7 +1,6 @@
 package app.runout.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -11,9 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.runout.soulseek.SoulseekConnection
 
 @Composable
@@ -31,13 +28,14 @@ internal fun SetupScreen(state: RoomState, actions: RoomActions, initialStep: In
         if(step == 1 && state.soulseekSession.connected) move(2)
     }
     BackHandler(enabled = step != 0 || state.onboardingComplete) { if(step == 0) onFinish() else previous() }
-    Column(Modifier.fillMaxSize().background(Room.Background).safeDrawingPadding().imePadding().padding(horizontal = 20.dp).testTag("screen:setup")) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),verticalAlignment = Alignment.CenterVertically) {
-            BasicText("RUNOUT / SETUP",style = Room.Brand.copy(fontFamily = FontFamily.Monospace,letterSpacing = 1.2.sp),modifier = Modifier.weight(1f))
+    // Shown inside the room's glass sheet, so the turntable stays in view behind it.
+    Column(Modifier.fillMaxSize().testTag("screen:setup")) {
+        Row(Modifier.fillMaxWidth(),verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle(if(step == 0) "Welcome" else "Setup",Modifier.weight(1f))
             if(step != 0) Pill("Back",{ previous() },Modifier.testTag("setup-back"))
             if(state.onboardingComplete) Pill("Close",onFinish,Modifier.padding(start = 6.dp).testTag("setup-close"))
         }
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 8.dp,bottom = 20.dp),verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when(step) {
                 0 -> {
                     ConsoleTitle("A room for your records","Drop the needle.","Your FLAC collection, a tactile vinyl deck, and a whole world of music when you want it.")
@@ -76,7 +74,7 @@ internal fun SetupScreen(state: RoomState, actions: RoomActions, initialStep: In
                         }
                     }
                     Pill(if(share) "Continue with sharing" else "Not now — continue",{ actions.setSoulseekSharing(share); move(4) },Modifier.testTag("setup-continue"),active = true,enabled = !share || state.sharedFolder != null)
-                    BasicText("Your choice is remembered for this account. You can change it from Account at any time.",style = Room.LabelQuiet)
+                    BasicText("Your choice is remembered for this account. You can change it from Settings › Soulseek at any time.",style = Room.LabelQuiet)
                 }
                 4 -> {
                     ConsoleTitle("04 / Choose your rhythm","When to stay online","Both options reconnect after temporary network loss. Your local player always works offline.")
@@ -103,7 +101,7 @@ internal fun SetupScreen(state: RoomState, actions: RoomActions, initialStep: In
                     Pill("Enter your listening room",onFinish,Modifier.testTag("setup-finish"),active = true)
                 }
                 6 -> {
-                    ConsoleTitle("Offline / No account needed","Bring your own records.","Choose a folder of FLAC albums. You can connect Soulseek later from Discover or Account.")
+                    ConsoleTitle("Offline / No account needed","Bring your own records.","Choose a folder of FLAC albums. You can connect Soulseek later from Settings › Soulseek.")
                     Pill(if(state.hasFolder) "Change music folder" else "Choose music folder",actions::pickFolder,Modifier.testTag("setup-local-folder"),active = true)
                     if(state.hasFolder) BasicText("Music folder selected. Your records will appear in the crate.",style = Room.LabelQuiet)
                     Pill(if(state.hasFolder) "Start listening" else "Skip for now",onFinish,Modifier.testTag("setup-finish"))
