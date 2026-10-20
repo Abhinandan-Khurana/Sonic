@@ -410,7 +410,13 @@ class SoulseekRepository(
                         try { startService(SoulseekOnlineService::class.java); _stayOnline.value = true }
                         catch (_: RuntimeException) { _error.value = "Background connection is unavailable. Open Account to check notification permission." }
                     }
-                    _contacts.value.forEach { contact -> command("contact") { put("username", contact.username) } }
+                    _contacts.value.forEach { contact ->
+                        runCatching { command("contact") { put("username", contact.username) } }
+                            .onFailure {
+                                if (it is CancellationException) throw it
+                                if (app.runout.BuildConfig.DEBUG) android.util.Log.d("RunoutSession", "contact watch rejected")
+                            }
+                    }
                     if (preferences.sharing(owner) && preferences.sharedFolder(owner) != null) setSharing(true)
                 }
                 "error", "disconnected", "paused" -> clearSessionWork(event.optString("reason", "Connection interrupted. Reconnect and resume."), false)
@@ -452,6 +458,7 @@ class SoulseekRepository(
             }
             "message" -> {
                 val serverId = event.getLong("id"); val username = event.getString("username")
+                require(SoulseekPolicy.validUsername(username)) { "Invalid incoming Soulseek sender" }
                 val id = SoulseekPolicy.messageId(owner, serverId)
                 // Commit first. A crash before the ack simply replays the unique server message ID.
                 db.withTransaction {

@@ -113,26 +113,45 @@ internal class SoulseekConnectionManager(
         scope.launch(worker) {
             var deadline = System.nanoTime() + 70_000_000_000L
             while (generation == epoch) {
-                try {
-                    val batch = wire.withLock { if (client === current) JSONArray(current.poll()) else JSONArray() }
-                    for (i in 0 until batch.length()) {
-                        if (generation != epoch) break
+                val batch = try {
+                    wire.withLock { if (client === current) JSONArray(current.poll()) else JSONArray() }
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) {
+                    // A command/poll can fail just before native reports a terminal loss.
+                    // Drain that reason before detaching, otherwise displacement becomes
+                    // a retryable protocol error and kicks the other client back off.
+                    val loss = try {
+                        wire.withLock { if (client === current) JSONArray(current.poll()) else JSONArray() }
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { JSONArray() }
+                    val nativeLoss = (0 until loss.length()).mapNotNull { loss.optJSONObject(it) }
+                        .firstOrNull { it.optString("type") == "session" && it.optString("state") in setOf("error", "disconnected") }
+                    if (generation == epoch) sessionEvent(nativeLoss ?: JSONObject().put("type","session").put("state","error").put("reasonCode","PROTOCOL_ERROR").put("reason","The connection could not process a response"), pair.first, epoch)
+                    JSONArray()
+                }
+                for (i in 0 until batch.length()) {
+                    if (generation != epoch) break
+                    try {
                         val event = batch.getJSONObject(i)
                         if (event.optString("type") == "session") {
                             if (!sessionEvent(event, pair.first, epoch)) break
-                        } else lifecycle.withLock { if (generation == epoch) receive(event, pair.first) }
-                    }
-                    if (session.value.connected) deadline = Long.MAX_VALUE
-                    if (System.nanoTime() > deadline && generation == epoch) {
-                        sessionEvent(JSONObject().put("type","session").put("state","error").put("reasonCode","NETWORK_LOST").put("reason","Soulseek connection timed out"), pair.first, epoch)
-                    }
-                } catch (e: CancellationException) { throw e }
-                catch (e: Exception) {
-                    if (generation == epoch) sessionEvent(JSONObject().put("type","session").put("state","error").put("reasonCode","PROTOCOL_ERROR").put("reason","The connection could not process a response"), pair.first, epoch)
+                        } else lifecycle.withLock { if (generation == epoch) deliver(event, pair.first) }
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { trace("event rejected generation=$epoch") }
+                }
+                if (session.value.connected) deadline = Long.MAX_VALUE
+                if (System.nanoTime() > deadline && generation == epoch) {
+                    sessionEvent(JSONObject().put("type","session").put("state","error").put("reasonCode","NETWORK_LOST").put("reason","Soulseek connection timed out"), pair.first, epoch)
                 }
                 delay(100)
             }
         }
+    }
+
+    private suspend fun deliver(event: JSONObject, owner: String) {
+        try { receive(event, owner) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { trace("event handler rejected generation=$generation") }
     }
 
     private suspend fun sessionEvent(event: JSONObject, owner: String, epoch: Long): Boolean {
@@ -162,7 +181,7 @@ internal class SoulseekConnectionManager(
                     if (!terminal) scheduleRetry()
                 }
             }
-            if (deliver) receive(event, owner)
+            if (deliver) deliver(event, owner)
         }
         return generation == epoch
     }

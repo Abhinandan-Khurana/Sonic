@@ -240,17 +240,44 @@ class SoulseekRepositoryTest {
         assertFalse(repo.searching.value)
     }
 
+    @Test fun `invalid incoming sender is not stored as a contact`() = runBlocking {
+        login()
+        transport.emit(incoming().put("username", " invalid "))
+        transport.emit(JSONObject().put("type", "presence").put("username", "sentinel").put("online", true))
+        // A later valid DM proves the earlier event was consumed.
+        transport.emit(incoming(8).put("username", "valid-peer"))
+        await("valid message processed") { runBlocking { db.soulseek().message(SoulseekPolicy.messageId("runout-test", 8)) != null } }
+        assertTrue(db.soulseek().contacts("runout-test").first().none { it.username == " invalid " })
+        assertNull(db.soulseek().message(SoulseekPolicy.messageId("runout-test", 7)))
+        assertTrue(repo.session.value.connected)
+    }
+
+    @Test fun `one failed contact watch does not skip following watches`() = runBlocking {
+        login()
+        db.soulseek().addContact(ContactRow("runout-test", "a-bad"))
+        db.soulseek().addContact(ContactRow("runout-test", "z-good"))
+        await("contacts observed") { repo.contacts.value.size == 2 }
+        transport.failContact = "a-bad"
+        transport.emit(JSONObject().put("type", "session").put("state", "connected"))
+        await("first watch attempted") { transport.commands.any { it.optString("op") == "contact" && it.optString("username") == "a-bad" } }
+        Thread.sleep(200)
+        assertTrue("remaining contacts must still be watched", transport.commands.any { it.optString("op") == "contact" && it.optString("username") == "z-good" })
+        assertTrue(repo.session.value.connected)
+    }
+
     private class FakeTransport : SoulseekTransport {
         val commands = CopyOnWriteArrayList<JSONObject>()
         private val events = ConcurrentLinkedQueue<JSONObject>()
         var onCommand: (JSONObject) -> Unit = {}
         var failMessage = false
+        var failContact: String? = null
         var closed = false
         fun emit(event: JSONObject) { events += event }
         override fun command(request: String): String {
             val command = JSONObject(request); commands += command
             if (command.optString("op") == "login") emit(JSONObject().put("type", "session").put("state", "connected"))
             if (command.optString("op") == "message" && failMessage) return """{"ok":false,"error":"Connection closed"}"""
+            if (command.optString("op") == "contact" && command.optString("username") == failContact) return """{"ok":false,"error":"Invalid contact fixture"}"""
             onCommand(command)
             return """{"ok":true}"""
         }
