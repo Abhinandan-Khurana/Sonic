@@ -9,13 +9,15 @@ You are continuing the Runout Android project (Kotlin/Compose, Media3 1.9.4, an 
 ## Read first, in order
 
 1. `Handsoff.md`: invariants, build and test commands, tool paths, credential rules.
-2. `docs/design/RUNOUT-REDESIGN-DRAFT-v2.md`: §0, §2, §13, and **§14 Slice 0**.
+2. `docs/design/RUNOUT-REDESIGN-DRAFT-v2.md`: §0, **§0.1** (the design decisions, so you know where the UI is heading), §2, §13, and **§14 Slice 0**.
 3. `docs/design/RUNOUT-REDESIGN-REVIEW.md`: §0 (evidence labels) and **§16.1** (the Tier 0 register).
 4. `docs/DEVELOPMENT.md` and `CONTRIBUTING.md`.
 
 ## Task
 
-Implement **Slice 0 only**, as listed in v2 §14. Do not start Slice 1 or any visual redesign. The findings, by area:
+Implement **Slice 0 only**, as listed in v2 §14. Do not start Slice 1 or any visual redesign. The deck-only interaction and the "inked owner's manual" visuals in `docs/design/mockups/` belong to later slices, in `docs/design/HERMES-UI-PROMPT.md`.
+
+UI touched by Slice 0 (confirmations, the cover-lookup setting row, notices) must use the existing components and stay minimal. Don't restyle anything. The findings, by area:
 
 - **Record lists:** L-01, L-02
 - **Crash:** L-16

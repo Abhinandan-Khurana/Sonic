@@ -11,6 +11,11 @@ The application code is still `64e1222`. Planning documents now exist under `doc
 - **`RUNOUT-REDESIGN-DRAFT-v2.md`** is the current plan. It enforces album-only playback with album-first discovery, replaces the DJ deck with a 1950s-style mechanism on a flat printed plate, and adds a reconciled deck state machine, lead-in and runout as deck phases, a signal-path view with Bluetooth and DAC guidance, and build slices 0–5.
 - **`RUNOUT-REDESIGN-REVIEW.md`** holds the source-checked findings. §16 is a second-pass register from six parallel audits, which includes data-loss, privacy, crash and retry-war bugs.
 - **`HERMES-NEXT-PROMPT.md`** is the next task: **Slice 0, "Stop the damage"**.
+- **`HERMES-UI-PROMPT.md`** holds the follow-on prompts for slices 1, 1b and 2–5, to use after Slice 0 is accepted.
+- **Design session (pass 3):**
+  - Decisions are in v2 §0.1: the vinyl is the controller (no play/pause/skip buttons); tap cover → disc pops up → drag to spindle; Home never scrolls; "inked owner's manual" look.
+  - Mockups are in `docs/design/mockups/` (gallery: `docs/design/mockups/README.md`).
+  - The editable pen.dev source is in `docs/design/pen/`.
 
 No build or test ran during planning. Every finding is labelled source-confirmed or hypothesis, and must be reproduced red-first before it is fixed.
 

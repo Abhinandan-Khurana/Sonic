@@ -5,6 +5,8 @@ Baseline: HEAD `126290c`; the application code is unchanged since `64e1222`.
 Keeps, for comparison: [draft v1](RUNOUT-REDESIGN-DRAFT-v1.md) and the [experience spec](RUNOUT-EXPERIENCE-SPEC.md).
 Evidence and corrections: [review](RUNOUT-REDESIGN-REVIEW.md). Finding IDs (`R-xx`, `G-xx`, `UX-xx`, and the second-pass `P/L/S/N/U-xx`) refer to that document.
 
+**Pass 3 (design session).** §0.1 records the interaction and visual decisions made with the user in pen.dev: deck-only controls, the tap-cover → pop → drag-to-spindle opening, a no-scroll Home, and the "inked owner's manual" look. Mockups are in `docs/design/mockups/`. Where §0.1 conflicts with a later section, §0.1 wins.
+
 **Pass 2.** This revision adds three things:
 
 - An adversarial Media3 1.9.4 review of this plan (the `V-xx` items, applied in place).
@@ -35,6 +37,65 @@ Evidence and corrections: [review](RUNOUT-REDESIGN-REVIEW.md). Finding IDs (`R-x
 
 ---
 
+## 0.1 Pass 3: design session decisions (authoritative where they conflict)
+
+These come from a pen.dev design session with the user on 2026-10-20.
+
+- **Mockups:** [`docs/design/mockups/`](mockups/), WebP exports.
+- **Editable source:** [`docs/design/pen/runout-listening-room.pen`](pen/runout-listening-room.pen), which opens in pen.dev. Its shaders (`pen/shaders/*.glsl`) and generated demo art (`pen/images/`) are beside it.
+- **Demo data:** "Night Drive — Vela Park" and the pixel-art covers are fictional demo art. Never ship them as real records.
+
+1. **The vinyl is the controller.** No play, pause, skip or flip buttons on Home. You play the deck by hand:
+
+   | # | You do | Mockup |
+   |---|---|---|
+   | 1 | **Tap a cover** in the crate | `gesture-01-tap-the-cover` |
+   | 2 | **The disc pops up** out of its sleeve | `gesture-02-disc-pops-up` |
+   | 3 | **Drag it onto the platter**; it snaps to the spindle and nothing plays yet | `gesture-03-drag-onto-deck` |
+   | 4 | **Flip the motor switch**; 33/45 and fine speed are on the deck | `gesture-04-start-motor` |
+   | 5 | **Drag the arm onto the record or push the cue lever down**; lead-in crackle, then A1 | `gesture-05-lower-needle` |
+   | 6 | **Move the arm across the bands to skip** (it snaps to gaps and never leaves the side) | `gesture-06-skip-ahead` |
+   | 7 | **Raise the cue to pause**, or hold the record to brake | `gesture-07-pause-or-brake` |
+   | 8 | **Swipe the record up to turn it over** at the side end | `gesture-08-turn-over` |
+   | 9 | **Drag it back to its sleeve** to put it away | `gesture-09-put-away` |
+
+   Accessibility: TalkBack custom actions on every part, plus an optional "Show deck controls" strip, off by default (§11).
+2. **Home never scrolls** (portrait 412×915 and landscape 915×412). Home is header, deck, one status twin, crate coverflow and nav. The landscape room follows the current app's layout: deck on the left, crate on the right, "Now spinning…" and "Flick to dig ⟷" (§6).
+3. **Visual direction: "Inked owner's manual"** (the user chose the "Concept D printed plate" render).
+   - **The deck:** cream enamel plate, ink linework, a cross-hatch engraving shader, a knurled platter rim, screws, and printed callouts (MOTOR SWITCH, SPEED SELECTOR, CUE LEVER, FINE SPEED, TONEARM REST, PLATTER).
+   - **The record:** glossy black, with the album cover as its label.
+   - **The rest:** one calm, integrated surface. Page and deck share a warm tone; actions are soft pills; status and album info are plain text; the readout is the only pixel element.
+   - **Type:** Inter for UI text, IBM Plex Mono for numbers and times, VT323 or Silkscreen only in the deck readout.
+   - **Pixel art:** acceptable as album art, but it is not a UI style.
+4. **Rejected in the session.** Don't reintroduce any of these:
+   - the punk/terminal styling: ticker, stickers, tape, hard offset shadows, glitch wordmark, halftone/CRT over the UI ("too funky", "looks pieced together");
+   - boxed button trays;
+   - the glass DJ deck;
+   - walnut furniture.
+5. **Final tokens** (Day / Night). Contrast was computed in this session.
+
+   | Token | Day | Night | Contrast |
+   |---|---|---|---|
+   | `paper` | `#F3EFE7` | `#12110F` | — |
+   | `surface` | `#FFFFFF` | `#1C1A17` | — |
+   | `chip` | `#FFFFFFD9` | `#FFFFFF14` | — |
+   | `ink` | `#1F1E1B` | `#EDE7DA` | 14.5:1 / 15.3:1 |
+   | `quiet` | `#6E685D` | `#A8A194` | 4.8:1 / 7.4:1 |
+   | `rule` | ink at 12% | ink at 13% | — |
+   | `primary` | = ink, with `on-primary` = paper | same | — |
+   | `signal` | `#D9481F` | `#FF7A4D` | 3.7:1 / 7.3:1 |
+   | `deck-plate` | `#EFE6D2` | `#E4DAC4` | — |
+   | `deck-ink` | `#2B2925` | `#2B2925` | 11.7:1 on plate |
+   | `deck-quiet` | `#5A5348` | `#5A5348` | 6.1:1 on plate |
+   | `window` | `#0F1713` | `#0F1713` | — |
+   | `lcd` | `#8DFFC4` | `#8DFFC4` | 15.0:1 on window |
+   | `vinyl` | `#121110` | `#121110` | — |
+
+   - `signal` is the single accent: the attention dot, gesture hints and the spindle target. In Day it is for non-text UI only (3.7:1); use it for text only at ≥18 sp bold.
+   - Shadows are soft: the deck uses `0 14 36 #00000026`, pills use `0 1 4 #0000001A`.
+6. **The Signal path screen** follows the same calm language (`signal-path-usb-dac-day`, `signal-path-bluetooth-night`). It has a spectrum card, a numbered Record → Runout → Android → Output chain, and tinted "how we know" chips: Measured from the file / Set by Runout / Reported by Android / Not reported by Android. On Bluetooth it shows a gentle "Bluetooth re-encodes your audio" note. Rules are in §9.5.
+7. **Not designed yet.** Build these from §9 copy and the Home language above: Downloads recovery, Settings, record detail (sleeve back with Bands), Discover, Messages, and the large-font and 320 dp checks.
+
 ## 1. What changed from v1 and the spec, and why
 
 | Topic | v1 / spec | v2 | Why |
@@ -45,7 +106,7 @@ Evidence and corrections: [review](RUNOUT-REDESIGN-REVIEW.md). Finding IDs (`R-x
 | First build slice | "Restore trust" (Downloads recovery and copy) | **Deck truth** before any art, with Downloads recovery as a parallel slice; pass 2 puts **Slice 0** in front of both (§14) | Source-confirmed deck defects (R-01–R-06) would make any new visuals lie. |
 | Lead-in | Timing targets of 2–4 s | Measured in **groove revolutions** at the effective RPM. Holds the program at sample 0 and **extends until the player is ready**. Volume ramp removed. | It becomes physically consistent, and stops attenuating the first transient (R-04). |
 | Runout | "Finite, 2–4 s" | **n locked-groove revolutions** at the effective RPM, then lift, arm return and motor stop | It follows 33/45 and fine speed (UX-07). |
-| Flip | "Explicit Flip to Side B" | Flip is a **visible tray action and a physical turnover**. The hidden tap-to-flip is removed. | R-05, R-06. |
+| Flip | "Explicit Flip to Side B" | Flip is a **physical turnover**: swipe the record up at the side end. The status line says "Turn the record over", and TalkBack has a "Turn record over" action. The hidden tap-to-flip is removed. *(Pass 3: no tray button.)* | R-05, R-06. |
 | Search | "View record" as the primary action | **Open record at A3** / **Place and cue A3**, with the needle up. "Play song" and "Play album" are removed. | Search may only locate a groove. |
 | Settings | v1: six sections plus an inventory. Spec: four groups plus About. | The spec's shape, behind **one header entrance**. The Home "Sound" and "Crackle" pills are removed. | One small entrance. |
 | ASCII / pixel | Accents | **Instruments and labels only**. Every pixel readout has a real-text twin. | The brief, plus accessibility. |
@@ -96,16 +157,17 @@ One labelled **Settings** entrance in the header. Its first page has five rows (
 
 Model: a 1950s-style transcription turntable. It has a heavy platter that takes a moment to reach speed, a damped cue lever, a straight or gently offset arm with an arm rest, a speed selector, and a fine-speed vernier read against a strobe. The deck is not modelled on any real brand or product, and carries no commercial branding.
 
-| Plate part | Gesture (optional) | Command | State effect | Equivalent in the ≥48 dp control tray / TalkBack |
+> **Pass 3:** the deck is the **only** visible control surface. There is no play/pause/skip button tray. The gestures below are primary. Accessibility comes from TalkBack custom actions on each part, plus an optional "Show deck controls" strip in Settings that is off by default. See §0.1.
+
+| Part | Primary gesture | Command | State effect | Accessible equivalent (TalkBack action / optional strip) |
 |---|---|---|---|---|
-| **Motor switch** (ON/OFF) | Tap | `motor(on)` | Spin-up or brake. In vinyl mode the brake slows playback rate while the needle is down; in Pure it pauses. | "Motor on/off" toggle, with state "Running · 33" or "Stopped" |
-| **Speed selector** 33 / 45 | Tap a position | `setSpeed(RPM33 \| RPM45)` | Rate change through the motor ramp. Locked to 33 in Pure. | Two-option segmented control |
-| **Fine speed vernier** with strobe window | Rotate (drag); double-tap returns to zero | `setFine(-8..+8 %)`, 0.1 steps, detent at 0 | Rate change. The strobe "locks" at 0. Disabled in Pure, with the reason shown. | Slider with `setProgress`, plus a "Zero" action |
-| **Cue lever** (UP/DOWN) | Tap or flick | `lowerCue()` / `raiseCue()` | Descent or rise. **Lowering with the motor off starts the motor first.** | The primary tray button: "Lower needle" / "Lift needle" |
-| **Tonearm** | Drag (optional) | `parkArm(fraction)`, snapping to bands; release over the record with the cue down drops there | With the cue up, it only moves the arm. With the cue down, a drag means lift, move and lower. | "Bands" sheet with **Cue A1…A5**; arm actions "Cue next band", "Cue previous band", "Lower here" |
-| **Record** | Long-press means finger brake (optional, vinyl mode only, never in Pure) | `hold()` / `release()` | **Momentary**: the program slows to a pause, then ramps back on release. At the end of the hold the rate is reset to the effective speed, so an external Play is never 0.25×. | **Motor off, then Motor on** (two steps, latched rather than momentary) |
-| (hand action, not on the plate) | — | `flip()` | Lift if needed, turn the record over, cue the next side with the needle up | Tray: "Flip to Side B" when awaiting a flip; otherwise inside the record menu |
-| (hand action) | — | `putAway()` | Lift and stop, then the record returns to its sleeve | Tray: "Put away" |
+| **Sleeve** (in the crate) | Tap the cover: the disc **pops up** out of the sleeve. Drag the disc onto the platter. It snaps to the spindle within 0.95 × the record radius. | `takeOut(album)` → `place(album)` | `PLACING` validates off the main thread and commits `CUED` only on success. On failure the disc returns to its sleeve. | "Take record out", "Place on platter" |
+| **Motor switch** (ON/OFF) | Tap or flick the switch | `motor(on)` | Spin-up or brake. In vinyl mode the brake slows the rate while the needle is down; in Pure it pauses. | Toggle "Motor, on/off", with state "Running · 33" or "Stopped" |
+| **Speed selector** 33 / 45 | Tap 33 or 45 on the plate | `setSpeed(RPM33 \| RPM45)` | Rate change through the motor ramp. Locked to 33 in Pure. | Two-option selector |
+| **Fine speed vernier** with strobe window | Rotate the knob; double-tap returns to zero | `setFine(-8..+8 %)`, 0.1 steps, detent at 0 | Rate change. The strobe "locks" at 0. Disabled in Pure, with the reason shown. | `setProgress` (31 steps), plus a "Zero" action |
+| **Cue lever** (UP/DOWN) | Flick down or up | `lowerCue()` / `raiseCue()` | Descent or rise. **Lowering with the motor off starts the motor first.** Raising pauses at the current spot. | "Lower needle" / "Lift needle" |
+| **Tonearm** | Drag the headshell onto the record to lower there (at the edge, that means the lead-in). Drag it across the bands to **skip ahead or back**; it snaps to band gaps and never leaves the side. | `parkArm(fraction)` / `lowerAt(fraction)` | With the cue up, it only moves the arm. With the needle down, a drag means lift, move and lower. | "Cue next band", "Cue previous band", "Lower here"; Bands list on the sleeve back |
+| **Record** | Long-press is a finger brake (vinyl mode only, never in Pure). **Swipe up** at the side end to turn it over. **Drag it off** the platter to its sleeve to put it away. | `hold()`/`release()`, `flip()`, `putAway()` | The brake is momentary, and the rate is reset to the effective speed after it. Flip cues the next side with the needle up. Put away lifts, stops and returns the record to its sleeve. | "Turn record over", "Put record away"; Motor off then on for the brake |
 
 Removed from the plate: Start/Stop key, prev/next keys, ±8% DJ fader, decorative power knob and lamp, anti-skate dial decoration, 45-adapter well.
 
@@ -305,7 +367,7 @@ The sleeve back, the same object as the record detail, lists the bands as **Cue 
 - Flip: `graphicsLayer { rotationY }` on the existing `drawRecord` canvas.
 - `Deck.load` becomes asynchronous. Today it is synchronous on the main thread (UX-15).
 
-**Without dexterity:** "Open record → Place on platter → Lower needle" are all labelled buttons. Flip and Put away are tray buttons. **Without motion:** crossfades of 150 ms or less with identical state steps. **Without sound:** nothing is lost.
+**Without dexterity:** "Take record out → Place on platter → Lower needle", "Turn record over" and "Put record away" are TalkBack custom actions on the sleeve, deck and record, and buttons in the optional "Show deck controls" strip. **Without motion:** crossfades of 150 ms or less with identical state steps. **Without sound:** nothing is lost.
 
 **Tests:**
 
@@ -317,39 +379,37 @@ The sleeve back, the same object as the record detail, lists the bands as **Cue 
 
 ---
 
-## 6. Home composition
+## 6. Home composition (pass 3, supersedes the earlier tray layout)
 
-Portrait, compact width (illustrative, not measured):
+Mockups: `docs/design/mockups/home-*.webp` (states, Day and Night) and `home-landscape-playing-day.webp`.
+
+Portrait, 412×915 dp. **Home never scrolls.** Everything fits in one screen:
 
 ```text
-RUNOUT                       [↓ 1 needs you]  [Settings]
-┌────────────────────────────────────────────────────┐
-│  printed plate · enamel token · ink legends         │
-│      ○ PURE        (( record + label ))   arm ╲     │
-│  MOTOR [ON]          spindle ·              rest ●  │
-│  33 ● 45 ○                                  CUE ▲▼  │
-│  FINE ◐ +0.0%   ┌──────────────┐                    │
-│                 │33⅓ ▪LOCK  A2 │  ← pixel window    │
-│                 │RUNOUT 2/4    │    (instrument)    │
-│                 └──────────────┘                    │
-└────────────────────────────────────────────────────┘
-Side A · A2 Paper Moon · 2:14 · 33 rpm      ← real text status
-[ Lift needle ] [ Motor ● ] [ 33 | 45 ] [ Bands ]   ← ≥48 dp tray
-NIGHT DRIVE — Vela Park       FLAC 24/96   [Sleeve]
-HOME      CRATE      DISCOVER      MESSAGES
+RUNOUT                      ( Downloads · 1 • ) ( Settings )   ← soft pills
+your room
+┌─────────── inked owner's-manual deck (the hero) ───────────┐
+│ RUNOUT  TRANSCRIPTION DECK · RT-1                       ⊙   │
+│   (( knurled platter · black record · cover label ))  arm ╲ │
+│                                                 CUE LEVER   │
+│                                                 FINE SPEED  │
+│ MOTOR SWITCH  SPEED 33|45   ┌ 33⅓ ▪LOCK A2 2:14 ┐  TONEARM  │
+│ [■■]          [33][45]      └ SIDE A · PLAYING   ┘  REST     │
+└──────────────────────────────────────────────────────────────┘
+SIDE A · NOW
+Side A · A2 Paper Moon · 2:14 · 33 rpm         ← real-text status twin
+2:14 / 4:51
+   ▢ ▢ [ NIGHT DRIVE cover ] ▢ ▢                ← crate coverflow
+   Night Drive · Vela Park · 2023 · FLAC 24/96 · 1/7
+Home     Crate     Discover     Messages
 ```
 
-- **The deck dominates.** The perspective crate moves off Home to the **Crate** tab, with a "Dig" view. Home shows only the **mounted sleeve rail**, or "Choose a record → Crate".
-- **No mini-player on Home.** Elsewhere, an "On the turntable" strip shows the same reconciled status sentence and a single context action: Lower, Lift or **Flip to Side B**. It never shows "Play" at side end.
-- **The tray changes with the phase:**
-  - `CUED`: **Lower needle**
-  - `PROGRAM`: **Lift needle**
-  - `AWAITING_FLIP`: **Flip to Side B** (primary), plus Put away
-  - `FINISHED`: **Play this side again**, **Put away**
-  - Motor, speed and Bands are always present.
-- **Landscape:** the deck is on the left, the sleeve and bands are on the right, and the tray runs under the deck.
-- **Large text** (font scale ≥1.3): the tray wraps into two rows, and the plate legends fade to decoration because the tray carries the labels. Status text never truncates. It wraps to two lines.
-- **Night theme:** the plate becomes a dark enamel token, the ink becomes cream, and the window stays amber or green on black (§10).
+- **No playback buttons.** The deck is played by hand (§3, §0.1). The only text actions on Home are global: Downloads and Settings.
+- **The crate lives on Home**, under the deck, as a coverflow with real sleeves, as in the current app. Covers show first. Tap a cover and the disc pops up; drag it to the spindle. The sleeve of the mounted record carries an "On the platter" tag. "Flick to dig ⟷" pages through the crate.
+- **No mini-player on Home.** On other tabs, an "On the turntable" strip shows the reconciled status sentence and one context action (Lower, Lift, or "Turn the record over"). It never shows "Play" at side end.
+- **Landscape (915×412, no scroll):** the deck is on the left. The crate coverflow is on the right, with title and format under it. "Now spinning — Side A · A2 Paper Moon" sits bottom-left and "Flick to dig ⟷" bottom-right. This follows the current app's landscape room.
+- **Large text** (font scale ≥1.3): the status twin wraps to two lines and the crate caption shrinks to one line. Deck legends are decorative, because accessible labels live in semantics. If content no longer fits without scrolling, the crate collapses to a single sleeve row before anything scrolls.
+- **Night theme:** the page goes near-black. The deck stays a lit cream object (a slightly dimmer plate), and the readout stays green.
 
 ---
 
@@ -544,6 +604,8 @@ Settings rules:
 
 ## 10. Visual system, Direction D: "Printed hi-fi"
 
+> **Pass 3 supersedes the tokens and type below.** Use the "Inked owner's manual" direction and the final tokens in §0.1 (items 3–5) and the mockups. The material principles below still hold (realism on the moving parts, plus a printed plate). The earlier palette, Inter/Silkscreen split, and "ASCII headers" guidance are replaced.
+
 Three material tiers, following the spec's hierarchy but moving realism onto the moving parts.
 
 1. **Moving parts, rendered.** The record (grooves, sheen, label art from the cover), the platter rim, the arm and headshell, the cue lever and the strobe. These get depth, contact shadows and controlled highlights.
@@ -587,7 +649,12 @@ No commercial deck branding and no scraped covers.
 
 ## 11. Accessibility contract
 
-- **Every deck command has a ≥48 dp labelled tray control** with the same command path. Plate art is a mirror and an optional gesture surface. **No gesture-only task remains:** the hidden tap-flip is removed (R-05).
+- **Every deck command has a non-gesture path** with the same command (pass 3):
+  - TalkBack custom actions on the sleeve, record, tonearm, cue lever, motor switch, speed selector and fine knob (§3).
+  - An optional **"Show deck controls"** strip in Settings › Display & access, off by default, with ≥48 dp labelled buttons for Take out/Place, Lower/Lift, Motor, 33/45, next/previous band, Turn over and Put away.
+  - Hit areas on the deck parts are at least 48 dp even when the drawn part is smaller.
+  - The hidden tap-flip is removed (R-05).
+  - Drag gestures have tap alternatives: tap the cue lever to toggle, and double-tap a band in the sleeve's Bands list to cue it.
 - **Semantics:**
   - record: "Night Drive, Side A, 5 bands, needle up at A2";
   - arm: custom actions for next band, previous band and lower here;
@@ -686,7 +753,7 @@ No new art. It fixes what would make any new art lie.
    - `Deck.load` keeps measured durations (`refreshMetadata = true`) and tracks `currentMediaItemIndex` (P-05).
    - One validation path is shared by the Deck and the service (P-08).
 5. **Side end.** `startStop` at `sideFinished` no longer replays. The strip and Home show **Flip to Side B**, or **Play this side again** / **Put away** on the last side (R-06).
-6. **Visible Flip and Put away** in a minimal Home tray with semantics. Remove the quick-tap flip (R-05).
+6. **Flip and Put away as deck gestures:** swipe the record up to turn it over; drag it off to its sleeve. Each gets a TalkBack action ("Turn record over", "Put record away") and appears in the optional deck-controls strip. Remove the quick-tap flip (R-05). Slice 1 needs **no** visible tray. Until the slice-4 art lands, the existing deck canvas just gains the gestures and semantics.
 7. **Off-main placement.** `PLACING` state, IO validation, a failure message, and confirmation before replacing a record whose needle is down (R-09, R-10, UX-15).
 8. **One notice owner.** Remove the `RoomScreen` toast (UX-12).
 
@@ -711,7 +778,7 @@ Also update the tests that encode the rejected policy: `TurntableDeckTest` "sear
 
 | Removed or renamed | Replacement |
 |---|---|
-| `deck:startstop`, `deck:prev`, `deck:next` | Tray: `deck:lower` / `deck:lift`, `deck:motor`, `deck:bands` |
+| `deck:startstop`, `deck:prev`, `deck:next` | Deck-part semantics nodes: `deck:cue`, `deck:arm`, `deck:motor`, `deck:record`, `crate:sleeve:*`. Optional strip: `deck-strip:lower`, `deck-strip:lift`, `deck-strip:next-band`, `deck-strip:prev-band`, `deck-strip:flip`, `deck-strip:put-away` |
 | `deck:pitch` | `deck:fine` |
 | `deck:33`, `deck:45` | Keep, on the segmented control |
 | `deck:screen` | Keep, on the **real-text status twin** |
@@ -781,7 +848,14 @@ Tests:
 
 ### Slice 4, Mechanism and plate (Direction D)
 
-New plate drawing, control tray, band-snapping arm (B2), sleeve, place and turnover (B3), night theme, reduced motion, cached drawing (§12).
+The inked owner's-manual plate (pass 3 mockups), drawn in Compose `Canvas` with a hatch `RuntimeShader` on API 33+ and a flat-plate fallback below it. Also in this slice:
+
+- Band-snapping arm (B2).
+- Tap-cover → disc pops up → drag-to-spindle, plus turnover and put-away (B3, gesture storyboard).
+- The crate coverflow on Home.
+- The no-scroll Home in portrait and landscape.
+- Night theme, reduced motion, cached drawing (§12).
+- The optional deck-controls strip.
 
 ### Slice 5, Supporting screens and settings
 
@@ -810,7 +884,7 @@ These add to v1 §10.
 
 ## 16. Open decisions for the user
 
-1. **Direction D (printed plate, realism on the moving parts) or v1's B (walnut and enamel furniture).** Recommendation: D.
+1. ~~Direction D or v1's B walnut~~ **Decided (pass 3): the "inked owner's manual" version of D** (§0.1). Also decided: deck-only controls, the tap → pop → drag opening, and a no-scroll Home.
 2. **Ritual default for new installs: Full or Short.** Recommendation: Full for new installs, Short for upgrades.
 3. **Runout length: 2 or 4 revolutions, and whether the motor stops automatically after the lift.** Recommendation: 4 revolutions on Full, 2 on Short; the motor stops.
 4. **Keep the finger-brake long-press on the record?** Recommendation: yes, as an optional gesture; Motor off is the accessible equivalent.
