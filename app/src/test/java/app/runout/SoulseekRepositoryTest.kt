@@ -289,6 +289,26 @@ class SoulseekRepositoryTest {
         assertTrue(repo.session.value.connected)
     }
 
+    @Test fun `turtle pause frees the slot and resume all continues an interrupted download`() = runBlocking {
+        login(); destination()
+        repo.setTurtle(true)
+        val started = mutableListOf<String>()
+        transport.onCommand = { command -> if (command.optString("op") == "download") started += command.getString("id") }
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01.flac", 1000)).join()
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\02.flac", 1000)).join()
+        await("only the first download starts in turtle mode") { started.size == 1 }
+        val first = started.single()
+        repo.pause(first).join()
+        await("the next queued download starts after the slot is free") { started.size == 2 }
+        val interrupted = db.soulseek().transfer(first)!!
+        db.soulseek().putTransfer(interrupted.copy(state = "PAUSED", error = "Interrupted. Sign in and resume to continue."))
+        repo.setTurtle(false)
+        repo.resumeAll().join()
+        await("interrupted download is resumed") { transport.commands.count { it.optString("op") == "download" && it.optString("id") == first } >= 2 }
+        assertNull(db.soulseek().transfer(first)!!.error)
+        repo.setTurtle(false)
+    }
+
     private class FakeTransport : SoulseekTransport {
         val commands = CopyOnWriteArrayList<JSONObject>()
         private val events = ConcurrentLinkedQueue<JSONObject>()

@@ -250,23 +250,27 @@ class SoulseekRepository(
     }
     fun pauseAll(): Job = work {
         requireSignedIn()
-        _transfers.value.filter { it.state in setOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING) }.forEach { pause(it.id).join() }
+        val ids = _transfers.value.filter { it.state in setOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING) }.map { it.id }
+        ids.forEach { pauseOne(it) }
     }
     fun resumeAll(): Job = work {
         requireSignedIn()
-        dao.resumable(session.value.username!!).filter { it.error == null }.forEach { resume(it.id).join() }
+        dao.resumable(session.value.username!!).filter { it.provider == "Soulseek" }.forEach { resumeOne(it.id) }
     }
     fun setTurtle(enabled: Boolean) { preferences.setTurtle(enabled) }
-    fun pause(id: String): Job = work {
+    fun pause(id: String): Job = work { pauseOne(id); pumpQueue() }
+    private suspend fun pauseOne(id: String) {
         val row = ownTransfer(id)
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()
         if (activeTransfers.contains(id)) command("pause") { put("id", id) }
+        activeTransfers.remove(id)
         dao.putTransfer(row.copy(state = "PAUSED", speed = 0.0, error = null))
     }
-    fun resume(id: String): Job = work {
+    fun resume(id: String): Job = work { resumeOne(id) }
+    private suspend fun resumeOne(id: String) {
         requireSignedIn(); storage.requireDestination(); val row = ownTransfer(id)
-        if (row.state == "COMPLETED") return@work
+        if (row.state == "COMPLETED") return
         check(row.provider == "Soulseek") { "Retry this album from Friday Drops to continue an Internet Archive download." }
         startService(SoulseekTransferService::class.java)
         if (row.stagePath?.let { File(it).exists() && File(it).length() == row.size } == true) publishAsync(row)
@@ -480,8 +484,8 @@ class SoulseekRepository(
                 if (runCatching { SoulseekTransferState.valueOf(updated.state) }.isFailure) return
                 dao.putTransfer(updated)
                 if (state == "COMPLETED") { activeTransfers.remove(id); publishAsync(updated) }
-                if (state == "FAILED" || state == "CANCELLED") activeTransfers.remove(id)
-                if (state == "COMPLETED" || state == "FAILED" || state == "CANCELLED") pumpQueue()
+                if (state == "FAILED" || state == "CANCELLED" || state == "PAUSED") activeTransfers.remove(id)
+                if (state == "COMPLETED" || state == "FAILED" || state == "CANCELLED" || state == "PAUSED") pumpQueue()
             }
             "message" -> {
                 val serverId = event.getLong("id"); val username = event.getString("username")
