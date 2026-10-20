@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.6] - 2026-10-21 (development)
+
+### Changed
+- The original glass listening room is back. The deck is the only player.
+- 33/45, pitch and power controls are removed. Records play at the recorded speed.
+- Search cues a song on the platter with the needle up. START/STOP plays it.
+
+---
+
 ## [0.4.5] - 2026-10-20 (development)
 
 ### Changed
