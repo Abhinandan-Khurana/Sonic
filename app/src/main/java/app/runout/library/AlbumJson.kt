@@ -91,32 +91,39 @@ object AlbumJson {
         )
     }
 
-    /** Keep the original index once before removing unsupported legacy music from the shelf. */
-    fun readValidatedList(context: Context, file: File): List<Album> {
-        val original = readList(file)
-        val valid = original.mapNotNull { FlacPolicy.filterAlbum(context, it) }
-        if (valid != original && file.exists()) {
-            val backup = File(file.parentFile, file.name + ".before-flac")
-            // A full disk must not prevent offline playback or discard the old index.
-            runCatching {
-                if (!backup.exists()) {
-                    val pending = File(backup.parentFile, backup.name + ".tmp")
-                    file.copyTo(pending, overwrite = true)
-                    check(pending.renameTo(backup)) { "Could not preserve the previous library index" }
-                }
-                writeList(file, valid)
-            }
-        }
-        return valid
+    /** Validation is a view, never a migration: losing a grant must not erase a pressing. */
+    fun readValidatedList(context: Context, file: File): List<Album> = readList(file).map { album ->
+        val available = album.tracks.isNotEmpty() && album.tracks.all { FlacPolicy.read(context, it) != null }
+        album.copy(unavailableReason = if (available) null else "Unavailable · repair access")
     }
 
+    @Synchronized
     fun writeList(file: File, albums: List<Album>) {
+        // Do not replace a list whose previous contents could not be fully decoded.
+        if (file.exists()) readStrictList(file)
         val arr = JSONArray()
         albums.forEach { arr.put(toJson(it)) }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".tmp")
-        tmp.outputStream().use { output -> output.write(arr.toString().toByteArray(Charsets.UTF_8)); output.fd.sync() }
-        check(tmp.renameTo(file)) { "Could not save the music library index" }
+        try {
+            tmp.outputStream().use { output -> output.write(arr.toString().toByteArray(Charsets.UTF_8)); output.fd.sync() }
+            if (file.exists()) {
+                val stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS'Z'")
+                    .withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.now())
+                val backup = File(file.parentFile, file.name + ".backup-$stamp-${java.util.UUID.randomUUID()}")
+                file.inputStream().use { input ->
+                    backup.outputStream().use { output -> input.copyTo(output); output.fd.sync() }
+                }
+            }
+            check(tmp.renameTo(file)) { "Could not save the music library index" }
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    private fun readStrictList(file: File): List<Album> {
+        val arr = JSONArray(file.readText())
+        return (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
     }
 
     fun readList(file: File): List<Album> = runCatching {

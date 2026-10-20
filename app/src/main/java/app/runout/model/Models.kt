@@ -95,6 +95,8 @@ data class Album(
     val notes: String? = null,
     /** Who sent it, for records received from friends. */
     val from: String? = null,
+    /** Local validation state; metadata remains on the shelf so access can be repaired. */
+    val unavailableReason: String? = null,
 ) {
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
 
