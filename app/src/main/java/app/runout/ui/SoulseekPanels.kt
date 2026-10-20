@@ -237,8 +237,13 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
                 }
             }
             var text by rememberSaveable(peer) { mutableStateOf("") }
-            Field(text, { text = it.take(4000) }, "Private message", singleLine = false)
-            Pill("Send message", { actions.sendSoulseekMessage(peer, text); text = "" }, active = true, enabled = state.soulseekSession.signedIn && text.isNotBlank())
+            val bytes = text.trim().toByteArray(Charsets.UTF_8).size
+            Field(text, { text = it }, "Private message", singleLine = false)
+            if (bytes > 4096) BasicText("Messages must contain 1–4,096 bytes of text.", style = Room.LabelQuiet)
+            Pill("Send message", {
+                val submitted = text
+                actions.sendSoulseekMessage(peer, submitted) { if (text == submitted) text = "" }
+            }, active = true, enabled = state.soulseekSession.signedIn && text.isNotBlank() && bytes <= 4096)
             BasicText("Soulseek can deliver stored messages when a contact reconnects. Messages are not end-to-end encrypted.", style = Room.LabelQuiet, modifier = Modifier.padding(top = 10.dp))
         }
         Spacer(Modifier.height(12.dp))

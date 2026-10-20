@@ -196,6 +196,8 @@ interface RoomActions : DeckActions {
     fun openSoulseekConversation(username: String) {}
     fun closeSoulseekConversation() {}
     fun sendSoulseekMessage(username: String, text: String) {}
+    /** Only an actual durable insert may acknowledge the draft. Legacy actions do not. */
+    fun sendSoulseekMessage(username: String, text: String, onPersisted: () -> Unit) { sendSoulseekMessage(username, text) }
     fun markSoulseekRead(username: String) {}
     fun clearSoulseekError() {}
     fun reconnectSoulseek() {}

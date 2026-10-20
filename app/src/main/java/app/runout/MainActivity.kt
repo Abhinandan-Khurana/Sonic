@@ -205,6 +205,9 @@ class MainActivity : ComponentActivity() {
                     override fun openSoulseekConversation(username: String) { activeConversation.value = username; graph.soulseek.openConversation(username) }
                     override fun closeSoulseekConversation() { activeConversation.value = null }
                     override fun sendSoulseekMessage(username: String, text: String) { graph.soulseek.sendMessage(username, text) }
+                    override fun sendSoulseekMessage(username: String, text: String, onPersisted: () -> Unit) {
+                        graph.soulseek.sendMessage(username, text) { graph.scope.launch(Dispatchers.Main.immediate) { onPersisted() } }
+                    }
                     override fun markSoulseekRead(username: String) { graph.soulseek.markRead(username) }
                     override fun clearSoulseekError() { graph.soulseek.clearError() }
                     override fun reconnectSoulseek() { graph.soulseek.reconnect() }
