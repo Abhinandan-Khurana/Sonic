@@ -3,6 +3,7 @@
 Current Runout 0.4.1 development documentation:
 
 - [Getting started and features](../README.md)
+- [Hermes / coding-agent handoff](../Handsoff.md)
 - [Building and testing](BUILDING.md)
 - [Architecture](ARCHITECTURE.md)
 - [Developer notes](DEVELOPMENT.md)
