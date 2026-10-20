@@ -71,7 +71,10 @@ class LibraryScanner(private val context: Context) {
         while (queue.isNotEmpty()) {
             coroutineContext.ensureActive()
             val (docId, depth) = queue.removeFirst()
-            val children = list(treeUri, docId) ?: continue
+            val children = list(treeUri, docId) ?: return@withContext ScanReport(
+                folders, audioFiles, unreadable, albums, other,
+                error = "Android didn't let the app list this folder. Try choosing it again.",
+            )
             listedAnything = true
             folders++
             children.filter { it.isDir && depth < MAX_DEPTH && !it.name.startsWith(".") }

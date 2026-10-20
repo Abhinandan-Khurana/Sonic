@@ -60,8 +60,7 @@ class LibraryRepository(
         }
         prefs.edit().putString(KEY_FOLDER, uri.toString()).apply()
         _folder.value = uri
-        // A different folder: start from an empty shelf so old records don't linger.
-        _albums.value = emptyList()
+        // Keep the previous shelf until the selected root has actually been listed.
         return rescan()
     }
 
@@ -71,6 +70,7 @@ class LibraryRepository(
         val job = scope.launch {
             _scan.value = ScanState.Scanning(ScanProgress(0, 0))
             _report.value = null
+            val previous = _albums.value
             val found = mutableListOf<Album>()
             val report = try {
                 scanner.scan(
@@ -93,9 +93,14 @@ class LibraryRepository(
             } catch (e: Throwable) {
                 ScanReport(0, 0, 0, found.size, emptyMap(), error = e.message ?: e.javaClass.simpleName)
             }
-            // The scan is the truth: drop records whose folders are gone.
-            _albums.value = sortShelf(found)
             _report.value = report
+            if (report.error != null || report.unreadable > 0) {
+                // Partial scans cannot prove that absent records/tracks were intentionally removed.
+                _albums.value = previous
+                _scan.value = null
+                return@launch
+            }
+            _albums.value = sortShelf(found)
             withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
 
             if (lookupCoversOnline) {
