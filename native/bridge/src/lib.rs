@@ -99,7 +99,14 @@ impl Runtime {
         if let Some(cancel) = lock(&self.connecting).take() { cancel.cancel(); }
         for search in lock(&self.searches).values() { search.store(true, Ordering::Relaxed); }
         lock(&self.searches).clear();
-        if let Some(client) = lock(&self.client).take() { client.shutdown(); }
+        if let Some(client) = lock(&self.client).take() {
+            // Removing the token makes active/paused download workers exit on
+            // their next status check. Do not cancel: Cancelled discards .part.
+            for transfer in lock(&self.transfers).values() {
+                let _ = client.remove_download(&transfer.username, &transfer.path);
+            }
+            client.shutdown();
+        }
         lock(&self.transfers).clear();
         lock(&self.uploads).clear();
         lock(&self.contacts).clear();

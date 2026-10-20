@@ -48,6 +48,8 @@ Events use `type`: session, search_batch, search_done, browse_result, transfer, 
 
 The adapter adds strict remote FLAC selection, local header checks, bounded discovery events, typed errors, storage descriptors and session/transfer tracking. Kotlin applies the complete application admission policy and durable publication.
 
+Adapter shutdown removes each tracked download from the core before shutting the client down. Active and paused workers observe the missing token and exit; this is removal, not cancellation, so resumable `.part` bytes remain. The loopback shutdown regression checks a paused peer socket closes within one 200 ms wait cycle plus scheduling allowance and that its partial bytes are unchanged. No vendor change is needed.
+
 ## Verification
 
 Core unit tests and an adapter loopback login/DM test run on the host. `SoulseekNativeIntegrationTest` uses the packaged Android library, local central-server broker and two actual peers to verify search, folder listing, download bytes, upload descriptors and message acknowledgements. Ordinary tests perform no public server login, account creation or third-party messaging. The separately opt-in `SoulseekLiveNetworkTest` uses private provisioned credentials, searches public FLAC and observes a session without downloads or messages; see the build guide.

@@ -47,6 +47,95 @@ fn commands_reject_unauthed_actions_and_invalid_accounts(){
 }
 
 #[test]
+fn stop_removes_tracked_downloads_and_keeps_partial_files() {
+    let r = Runtime::new(Arc::new(|_| Err(io::ErrorKind::PermissionDenied.into())));
+    let client = Arc::new(Client::with_settings(ClientSettings {
+        username: "fixture".into(), password: "fixture".into(),
+        server_address: PeerAddress::new("127.0.0.1".into(), 1),
+        enable_listen: false, listen_port: 0, accept_children: false,
+        shared_directories: Vec::new(), version: ClientVersion { major: 177, minor: 1 },
+    }));
+    let dir = std::env::temp_dir().join(format!("runout-stop-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let partial = dir.join("track.flac.part");
+    std::fs::write(&partial, b"kept partial bytes").unwrap();
+    let (download, receiver) = client.download("track.flac".into(), "peer".into(), 1000,
+        dir.to_string_lossy().into_owned()).unwrap();
+    lock(&r.transfers).insert("tracked".into(), Transfer {
+        username: "peer".into(), path: "track.flac".into(), total: 1000,
+        directory: dir.clone(), receiver, state: DownloadStatus::Queued,
+        last: String::new(), verified: false, token: download.token,
+    });
+    *lock(&r.client) = Some(client.clone());
+    assert_eq!(client.get_all_downloads().len(), 1);
+    r.stop();
+    assert!(client.get_all_downloads().is_empty(), "core download token must be removed so a worker cannot keep writing or sleeping");
+    assert_eq!(std::fs::read(&partial).unwrap(), b"kept partial bytes");
+    assert!(lock(&r.transfers).is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+fn peer_init(name: &str, kind: &str, token: u32) -> Vec<u8> {
+    let mut payload = vec![1]; payload.extend(string(name)); payload.extend(string(kind)); payload.extend(token.to_le_bytes());
+    let mut bytes = (payload.len() as u32).to_le_bytes().to_vec(); bytes.extend(payload); bytes
+}
+
+#[test]
+fn stop_closes_a_paused_real_peer_worker_without_discarding_partial() {
+    let server = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let mut client = Client::with_settings(ClientSettings {
+        username: "stop-subject".into(), password: "fixture".into(),
+        server_address: PeerAddress::new("127.0.0.1".into(), server.local_addr().unwrap().port()),
+        enable_listen: true, listen_port: 0, accept_children: false,
+        shared_directories: Vec::new(), version: ClientVersion { major: 177, minor: 1 },
+    });
+    client.connect().unwrap();
+    let address = ("127.0.0.1", client.listen_port().unwrap());
+    let client = Arc::new(client);
+    let r = Runtime::new(Arc::new(|_| Err(io::ErrorKind::PermissionDenied.into())));
+    *lock(&r.client) = Some(client.clone());
+    let dir = std::env::temp_dir().join(format!("runout-stop-live-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir); std::fs::create_dir_all(&dir).unwrap();
+    let mut control = TcpStream::connect(address).unwrap();
+    control.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    control.write_all(&peer_init("stop-peer", "P", 0)).unwrap();
+    frame(&mut control, 15, &[]);
+    assert_eq!(read_frame(&mut control).unwrap().0, 16);
+    r.execute(json!({"op":"download","id":"live","username":"stop-peer","path":"track.flac","size":524288,"localDirectory":dir})).unwrap();
+    assert_eq!(read_frame(&mut control).unwrap().0, 43);
+    let token = 700_001u32;
+    let mut offer = 1u32.to_le_bytes().to_vec(); offer.extend(token.to_le_bytes()); offer.extend(string("track.flac")); offer.extend(524288u64.to_le_bytes());
+    frame(&mut control, 40, &offer);
+    assert_eq!(read_frame(&mut control).unwrap().0, 41);
+    let mut peer = TcpStream::connect(address).unwrap();
+    peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    peer.write_all(&peer_init("stop-peer", "F", token)).unwrap(); peer.write_all(&token.to_le_bytes()).unwrap();
+    let mut offset = [0;8]; peer.read_exact(&mut offset).unwrap(); assert_eq!(u64::from_le_bytes(offset), 0);
+    peer.write_all(&vec![7;131072]).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !client.get_all_downloads().iter().any(|d| matches!(d.status, DownloadStatus::InProgress{bytes_downloaded,..} if bytes_downloaded >= 131072)) {
+        assert!(Instant::now() < deadline, "initial progress"); thread::sleep(Duration::from_millis(10));
+    }
+    assert!(client.pause_download("stop-peer", "track.flac"));
+    // Let any in-flight read finish, then the worker enters its 200ms pause wait.
+    peer.write_all(&vec![8;65536]).unwrap();
+    thread::sleep(Duration::from_millis(250));
+    let partial = dir.join("track.flac.part");
+    let before = std::fs::read(&partial).unwrap();
+    let start = Instant::now(); r.stop();
+    let mut byte = [0];
+    let closed = match peer.read(&mut byte) {
+        Ok(0) => true,
+        Err(e) if matches!(e.kind(), io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionAborted) => true,
+        _ => false,
+    };
+    assert!(closed, "paused worker closes its socket after its token is removed");
+    assert!(start.elapsed() < Duration::from_millis(700), "worker exits within one pause cycle plus scheduling allowance");
+    assert_eq!(std::fs::read(&partial).unwrap(), before);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn loopback_login_private_message_is_not_acked_until_host_commits(){
     let listener=TcpListener::bind(("127.0.0.1",0)).unwrap();let port=listener.local_addr().unwrap().port();
     let (acked_tx,acked_rx)=std::sync::mpsc::channel();
