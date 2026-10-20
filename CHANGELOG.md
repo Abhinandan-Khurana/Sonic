@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.5] - 2026-10-20 (development)
+
+### Changed
+- Home is the glass listening room again: crate, picture disc, and glass turntable. The inked deck and idle disc rack are not the home screen.
+- Soulseek search keeps a result only when the file is FLAC and every search word matches.
+- The download list stays in the order downloads were added. Pause all, Resume all, and Turtle mode are on the download screen.
+- Pure mode passes the decoder's PCM through without converting it. A saved download is refused if its bytes do not match the source.
+
+---
+
 ## [0.4.4] - 2026-10-21 (development)
 
 ### Added
