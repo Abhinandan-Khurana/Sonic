@@ -1,24 +1,20 @@
-Runout 0.4.1 development fixes public Soulseek search and connection handling, with Seeker-informed discovery and a guided retro interface.
+Runout 0.4.2 development stops data loss and privacy leaks found in the Slice 0 audit. It keeps the vinyl player, FLAC-only policy, offline playback, Soulseek, and Friday Drops.
 
 ## What changed
 
-- Stream FLAC search results as peers respond. Protect new peer connections from search-burst eviction, consume native result deltas, cache identities/path components and reduce repeated ranking work.
-- Keep your account through temporary network loss. Reconnect automatically when policy permits; distinguish app background pause, rejected credentials and another client using the same ID.
-- Search local songs/albums/artists without an account. Combine them with Soulseek results, filter quality/availability and sort by match, availability or quality. Preview a peer's full FLAC folder before confirming an album download.
-- Guided offline/Soulseek setup explains download storage, optional sharing and app-only/background connection tradeoffs. Consent and sharing folders are remembered per account. Folder pickers preserve the connection.
-- Cancel pending needle playback when changing records; start a searched local song on its correct record side.
-- Keep the vinyl player home, with Home/Library/Discover/Messages navigation, a mini player and global account/download access.
-- Retain Internet Archive Friday Drops and FLAC validation throughout. Both download providers still require a connected Soulseek account; offline playback remains free of login.
-- Update architecture, developer/contributor notes, Android flow tooling and performance/live-check instructions.
+- A failed record read or folder scan no longer erases the shelf. Unavailable records remain visible, and every index rewrite gets a dated backup.
+- Imported `.vinyl` files have bounded metadata, required audio checksums, no inherited ownership, and no exported Soulseek identity or private notes.
+- Soulseek event failures no longer cause reconnect loops. Another client using the same ID remains a terminal displacement, and stopping the client keeps partial downloads.
+- Friday Drops claims stay bound to the week that admitted them.
+- First-run Back, Pressing drafts, message drafts, and received-record removal now require their explicit successful or confirmed action.
+- Finding missing covers online is off unless enabled in Collection & storage. Existing users see a one-time notice. Device-bound folder and setup choices are excluded from backup.
 
 ## Install
 
-Download **Runout-0.4.1-development.apk** and verify it with the attached SHA-256 file. It supports Android 9+ and ARM64, ARMv7, x86-64 and x86. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app, or updates the preceding development build when signed with the same certificate.
-
-Start with **Listen offline** or **Set up Soulseek**. Another client using the same Soulseek ID will be disconnected when you connect. An unused username creates an account, including a typo; Soulseek has no password reset and does not encrypt credentials or messages in transit.
+Download **Runout-0.4.2-development.apk** and verify it with the attached SHA-256 file. It supports Android 9+ and ARM64, ARMv7, x86-64 and x86. It installs as **Runout Dev** (`app.runout.dev`) and updates the 0.4.1 development build when signed with the same certificate.
 
 ## Verification and limits
 
-The attached verification report records JVM/Compose tests, native tests, Android integration/performance checks and explicit public-network observations. Device benchmarks measure warm metadata processing; they do not measure network latency or establish a speed comparison with Seeker. Public search and transfer success still depend on peers and reachability.
+The attached verification report records the Gradle, Rust 1.91.0, Android, ABI, and signature checks. No new public Soulseek login or third-party message was performed for this build. The previous 0.4.1 public-network observation is not repeated as a result for this APK.
 
-This is a **development pre-release**, debug-signed and using experimental client version 177/1. Production signing and a suitable production client identifier remain. GitHub source archives correspond to the tagged source commit. Original Runout and third-party notices remain in the repository and APK. No pull request is opened for this release.
+This is a **development pre-release**, debug-signed and using experimental client version 177/1. It is not a production-signed release. GitHub source archives correspond to the tagged source commit. No pull request is opened.

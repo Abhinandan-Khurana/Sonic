@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.2] - 2026-10-21 (development)
+
+### Fixed
+- Retain unavailable records and shelves through failed reads or folder scans, and create a dated backup before every index rewrite.
+- Bound `.vinyl` metadata reads, clean abandoned imports, require checksums, strip private provenance, and prevent imported records from inheriting sender ownership.
+- Isolate Soulseek event failures, preserve another-client displacement, and stop native downloads without discarding partial files.
+- Bind Friday Drops claims to the admitted week.
+- Keep onboarding, Pressing drafts, message drafts, and received-record removal from being lost or completed accidentally.
+- Make online cover lookup opt-in for new and existing installs, and exclude device-bound setup choices from Android backup.
+
+---
+
 ## [0.4.1] - 2026-10-20 (development)
 
 ### Fixed
