@@ -17,6 +17,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -85,7 +86,6 @@ import app.runout.library.ScanState
 import app.runout.model.Album
 import app.runout.model.Source
 import app.runout.playback.DeckState
-import app.runout.pressing.PressingDraft
 import app.runout.social.Friend
 import app.runout.social.Profile
 import app.runout.sound.OutputStatus
@@ -154,6 +154,8 @@ interface RoomActions : DeckActions {
     fun setCoverLookupEnabled(enabled: Boolean) {}
     fun dismissCoverLookupNotice() {}
     fun load(album: Album)
+    /** The disc has just been set down on the spindle: the soft thud of it seating. */
+    fun discLanded() {}
     /** Puts the record on the platter cued at [trackId], needle up. Only the deck starts the music. */
     fun cueTrack(album: Album, trackId: String?) { load(album) }
     fun toggleCrackle()
@@ -172,11 +174,6 @@ interface RoomActions : DeckActions {
     fun refreshDrops() {}
     fun claim(item: DropItem) {}
     suspend fun dropCover(item: DropItem): String? = null
-
-    fun pickImage(onPicked: (Uri?) -> Unit) {}
-    fun press(draft: PressingDraft) {}
-    /** Completion means the pressing was durably saved, not merely requested. */
-    fun press(draft: PressingDraft, onResult: (Boolean) -> Unit) { press(draft) }
 
     fun dismissMessage() {}
 
@@ -256,13 +253,10 @@ fun RoomScreen(
     var platterRadius by remember { mutableStateOf(0f) }
     var slot by remember { mutableStateOf<SleeveSlot?>(null) }
     var pulledId by remember { mutableStateOf(initialPulledId) }
-    var peek by remember { mutableStateOf(false) }
     var removeId by remember { mutableStateOf<String?>(null) }
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
     var settings by remember { mutableStateOf(initialSettings) }
-    var pressingChanged by remember { mutableStateOf(false) }
-    var discardPressing by remember { mutableStateOf(false) }
     // First launch opens setup as a glass sheet over the room; it can be reviewed later from Settings.
     var setupOpen by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
     var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
@@ -271,17 +265,21 @@ fun RoomScreen(
         if (state.soulseekSession.hasAccount) { settings = SettingsSection.ACCOUNT; panel = Panel.SETTINGS; pulledId = null } else openSetup()
     }
     fun closePanel() {
-        if (panel == Panel.PRESSING && pressingChanged) discardPressing = true
-        else {
-            if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
-            panel = null; pressingChanged = false
-        }
+        if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
+        panel = null
     }
     // A folder preview always opens inside the Dig sheet, wherever it was asked for.
     LaunchedEffect(state.folderPreview != null) {
         if (state.folderPreview != null && panel == null) panel = Panel.DIG
     }
     val disc = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    // How high the disc is held (its scale), and how far it has turned since it left the sleeve.
+    val lift = remember { Animatable(1f) }
+    val spin = remember { Animatable(0f) }
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    var detailsFor by remember { mutableStateOf<String?>(null) }
+    val pickUp = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate)
+    val landed = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
     val pulled = state.albums.firstOrNull { it.id == pulledId }
 
     BackHandler(enabled = panel != null || pulledId != null) {
@@ -304,12 +302,17 @@ fun RoomScreen(
             if (portrait) Offset(0f, -s.rect.height * 0.58f) else Offset(-s.rect.width * 0.56f, 0f)
         }
 
+        // Pulling a record: it slides up out of the sleeve, overshoots a touch and settles, turning a
+        // little as it comes, the way a real disc does when you draw it out by the edge.
         LaunchedEffect(pulledId, slot != null, portrait) {
             val s = slot ?: return@LaunchedEffect
             if (pulledId == null) return@LaunchedEffect
             val start = s.rect.center - rootOrigin
             disc.snapTo(start)
-            disc.animateTo(start + pullOut(s), tween(620, easing = FastOutSlowInEasing))
+            lift.snapTo(1f)
+            spin.snapTo(0f)
+            launch { spin.animateTo(42f, tween(760, easing = FastOutSlowInEasing)) }
+            disc.animateTo(start + pullOut(s), spring(dampingRatio = 0.58f, stiffness = 260f))
         }
 
         Box(Modifier.fillMaxSize().layerBackdrop(roomBackdrop)) {
@@ -337,6 +340,7 @@ fun RoomScreen(
                     onPull = { pulledId = it.id },
                     onPutBack = { pulledId = null },
                     onFrontSlot = { slot = it },
+                    onMenu = { menuFor = it.id },
                     modifier = m,
                     initialIndex = initialCrateIndex,
                     emptyTitle = emptyTitle(state),
@@ -349,7 +353,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 16.dp, end = 16.dp, top = 70.dp, bottom = 86.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 70.dp, bottom = 110.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     turntable(Modifier.fillMaxWidth().weight(0.42f), Alignment.Center)
@@ -403,10 +407,24 @@ fun RoomScreen(
                     .offset { IntOffset((disc.value.x - d / 2f).roundToInt(), (disc.value.y - d / 2f).roundToInt()) }
                     .size(dDp)
                     .testTag("pulled-disc")
-                    .graphicsLayer { shadowElevation = if (dragging) 24f else 8f; shape = androidx.compose.foundation.shape.CircleShape; clip = false }
+                    .graphicsLayer {
+                        // Held up off the crate: a deeper shadow and a touch larger; squashed for a beat on landing.
+                        shadowElevation = if (dragging) 34f else 8f
+                        scaleX = lift.value
+                        scaleY = lift.value
+                        shape = androidx.compose.foundation.shape.CircleShape
+                        clip = false
+                    }
+                    .pointerInput(pulled.id) {
+                        detectTapGestures(onLongPress = { menuFor = pulled.id })
+                    }
                     .pointerInput(pulled.id) {
                         detectDragGestures(
-                            onDragStart = { dragging = true },
+                            onDragStart = {
+                                dragging = true
+                                pickUp()
+                                scope.launch { lift.animateTo(1.06f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
+                            },
                             onDrag = { change, amount ->
                                 change.consume()
                                 scope.launch { disc.snapTo(disc.value + amount) }
@@ -417,16 +435,24 @@ fun RoomScreen(
                                 val onPlatter = target != null && (disc.value + rootOrigin - target).getDistance() < platterRadius * 0.95f
                                 scope.launch {
                                     if (onPlatter && target != null) {
-                                        disc.animateTo(target - rootOrigin, tween(240, easing = FastOutSlowInEasing))
+                                        launch { lift.animateTo(1f, tween(180)) }
+                                        disc.animateTo(target - rootOrigin, tween(200, easing = FastOutSlowInEasing))
+                                        // The thud: a short squash as it seats on the spindle.
+                                        landed()
+                                        actions.discLanded()
+                                        lift.animateTo(0.95f, tween(70))
+                                        lift.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 700f))
                                         actions.load(pulled)
                                         pulledId = null
                                     } else {
+                                        launch { lift.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 400f)) }
                                         disc.animateTo(restPos, spring(dampingRatio = 0.8f, stiffness = 300f))
                                     }
                                 }
                             },
                             onDragCancel = {
                                 dragging = false
+                                scope.launch { lift.animateTo(1f) }
                                 scope.launch { disc.animateTo(restPos, spring(dampingRatio = 0.8f, stiffness = 300f)) }
                             },
                         )
@@ -435,7 +461,7 @@ fun RoomScreen(
                 drawRecord(
                     center = Offset(size.width / 2f, size.height / 2f),
                     radius = size.minDimension / 2f,
-                    rotation = 0f,
+                    rotation = spin.value,
                     look = look,
                     label = cover,
                     labelFallback = fallback,
@@ -452,38 +478,30 @@ fun RoomScreen(
                     .zIndex(if (dragging || proximity > 0.05f) 4f else 6f)
                     .offset { IntOffset((s.rect.left - rootOrigin.x).roundToInt(), (s.rect.top - rootOrigin.y).roundToInt()) }
                     .size(s.size)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { pulledId = null },
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onLongClick = { menuFor = pulled.id },
+                        onClick = { pulledId = null },
+                    ),
             )
+        }
 
-            // Send it to a friend, or take a received record off the shelf. Sits beside the sleeve,
-            // pulled back inside the screen when the sleeve is near the edge.
-            Layout(
-                content = {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.End) {
-                        GlassPill("Sleeve back", backdrop, onClick = { peek = !peek }, modifier = Modifier.testTag("sleeve-back"))
-                        if (peek) pulled.tracks.take(12).forEach { track ->
-                            BasicText("Side ${'A' + (track.discNumber - 1).coerceAtLeast(0)} ${track.trackNumber}  ${track.title}", style = Room.LabelQuiet)
-                        }
-                        GlassPill(
-                            if (pulled.audioShareable) "Send with audio" else "Send as a card",
-                            backdrop, active = true, onClick = { actions.share(pulled) }, modifier = Modifier.testTag("send"),
-                        )
-                        if (pulled.source != Source.FOLDER) {
-                            GlassPill("Remove", backdrop, onClick = { removeId = pulled.id })
-                        }
-                        pulled.unavailableReason?.let { BasicText(it, style = Room.LabelQuiet.copy(color = Color(0xFF9A3429))) }
-                    }
-                },
-                modifier = Modifier.zIndex(7f).fillMaxSize(),
-            ) { measurables, constraints ->
-                val p = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
-                layout(constraints.maxWidth, constraints.maxHeight) {
-                    val margin = 12.dp.roundToPx()
-                    val want = (s.rect.right - rootOrigin.x).roundToInt() + 10.dp.roundToPx()
-                    val x = want.coerceAtMost(constraints.maxWidth - p.width - margin).coerceAtLeast(0)
-                    p.place(x, (s.rect.top - rootOrigin.y).roundToInt())
-                }
-            }
+        // Long-press a sleeve or a disc: what you can do with that record.
+        state.albums.firstOrNull { it.id == menuFor }?.let { record ->
+            RecordMenu(
+                record = record,
+                pulled = record.id == pulledId,
+                backdrop = roomBackdrop,
+                onPutBack = { pulledId = null; menuFor = null },
+                onSend = { actions.share(record); menuFor = null },
+                onRemove = { removeId = record.id; menuFor = null },
+                onDetails = { detailsFor = record.id; menuFor = null },
+                onDismiss = { menuFor = null },
+            )
+        }
+        state.albums.firstOrNull { it.id == detailsFor }?.let { record ->
+            RecordDetails(record, roomBackdrop, onDismiss = { detailsFor = null })
         }
 
         // Panels
@@ -530,7 +548,6 @@ fun RoomScreen(
                             if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
                             SoulseekMessagesPanel(state, actions, onAccount = openAccount)
                         }
-                        Panel.PRESSING -> PressingPanel(state.albums, state.profile, actions) { pressingChanged = it }
                         Panel.SETTINGS -> SettingsPanel(
                             state, actions, settings, { settings = it },
                             onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
@@ -582,13 +599,6 @@ fun RoomScreen(
                 onDismiss = { removeId = null },
             )
         }
-
-        if (discardPressing) GlassConfirm(
-            "Discard pressing draft?", "Your selected tracks, sleeve and record details will be lost.",
-            "Discard draft", "Keep editing", roomBackdrop,
-            onConfirm = { discardPressing = false; pressingChanged = false; panel = null },
-            onDismiss = { discardPressing = false },
-        )
 
         // Notes: one small glass note at a time. The cover notice waits for OK; a Soulseek problem
         // stays until it's tapped away; anything else fades after a few seconds.
@@ -645,14 +655,14 @@ private fun GlassConfirm(
     onDismiss: () -> Unit,
 ) {
     BackHandler(onBack = onDismiss)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .zIndex(30f)
-            .background(Color.Black.copy(alpha = 0.12f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(Modifier.fillMaxSize().zIndex(30f), contentAlignment = Alignment.Center) {
+        // A sibling scrim, so the question and its answers stay separate nodes for TalkBack.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.12f))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+        )
         Column(
             Modifier
                 .padding(24.dp)
@@ -785,46 +795,28 @@ private fun CornerLabels(
         is ScanState.FindingCovers -> "Finding covers · ${s.done + 1} of ${s.total}"
         null -> null
     }
-    val status = listOfNotNull(state.clock, "${state.albums.size} records", scanText).joinToString("   ")
+    val status = listOfNotNull(recordCount(state.albums.size), scanText).joinToString("   ")
     val newDrop = state.drops is DropState.Ready && state.claimed.size < DropsRepository.CLAIMS_PER_WEEK
     // Downloads still in the queue or waiting for attention; finished and cancelled ones don't count.
-    val waiting = state.soulseekTransfers.count { it.state != SoulseekTransferState.COMPLETED && it.state != SoulseekTransferState.CANCELLED }
-
-    // One row of glass pills that scrolls sideways rather than wrapping when it doesn't fit.
-    val nav = @Composable {
-        Row(
-            Modifier
-                .widthIn(max = if (portrait) screenW - 36.dp else screenW * 0.58f)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Panel.entries.filter { it.inStrip }.forEach { p ->
-                GlassPill(
-                    text = p.nav + when {
-                        p == Panel.DROPS && newDrop -> " •"
-                        p == Panel.FRIENDS && state.soulseekConversations.any { it.unread > 0 } -> " •"
-                        else -> ""
-                    },
-                    backdrop = backdrop,
-                    onClick = { onOpen(p) },
-                    modifier = Modifier.testTag("nav:${p.name}"),
-                )
-            }
-        }
+    val transfers = state.soulseekTransfers.filter { it.state != SoulseekTransferState.COMPLETED && it.state != SoulseekTransferState.CANCELLED }
+    val badges = buildSet {
+        if (newDrop) add(Panel.DROPS)
+        if (state.soulseekConversations.any { it.unread > 0 }) add(Panel.FRIENDS)
     }
-    // Downloads and the Soulseek connection, as quiet text beside the clock.
+
+    val nav = @Composable { m: Modifier -> TabBar(backdrop, badges, onOpen, m) }
+    // Downloads and the Soulseek connection, as coloured dots beside the record count.
     val links = @Composable {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextAction("↓ $waiting", onDownloads, tag = "open-downloads", color = if (waiting > 0) Room.Ink else Room.Quiet)
-            TextAction(connectionLabel(state.soulseekSession), onAccount, tag = "open-account")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            StatusDot("↓ ${transfers.size}", downloadsColor(transfers), "open-downloads", onDownloads)
+            StatusDot(connectionLabel(state.soulseekSession), connectionColor(state.soulseekSession), "open-account", onAccount)
         }
     }
 
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout).padding(start = if (portrait) 18.dp else 28.dp, end = if (portrait) 18.dp else 28.dp, top = 4.dp, bottom = 16.dp)) {
-        Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextAction(if (state.hasFolder) "Change folder" else "Choose folder", actions::pickFolder)
-            if (state.hasFolder) TextAction("Rescan", actions::rescan)
+        Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextAction(if (state.crackleOn) "Crackle on" else "Crackle off", actions::toggleCrackle)
+            if (state.hasFolder) RefreshKey(actions::rescan)
         }
 
         if (portrait) {
@@ -834,11 +826,11 @@ private fun CornerLabels(
             }
             Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 BasicText(nowSpinning, style = Room.Label, maxLines = 1)
-                nav()
+                nav(Modifier)
             }
         } else {
             Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                nav()
+                nav(Modifier.widthIn(max = screenW * 0.42f))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     BasicText(status, style = Room.Label)
                     links()
@@ -854,6 +846,8 @@ private fun CornerLabels(
         }
     }
 }
+
+internal fun recordCount(n: Int) = if (n == 1) "1 record" else "$n records"
 
 @Composable
 internal fun TextAction(text: String, onClick: () -> Unit, tag: String = "action:$text", color: Color = Room.Quiet) {

@@ -218,7 +218,6 @@ open class RecordingActions : RoomActions {
     override fun shareMyCard() { log += "shareCard" }
     override fun refreshDrops() { log += "refreshDrops" }
     override fun claim(item: app.runout.drops.DropItem) { log += "claim:${item.identifier}" }
-    override fun press(draft: app.runout.pressing.PressingDraft) { log += "press:${draft.title}:${draft.tracks.size}" }
     override fun applyPreset(name: String) { log += "preset:$name" }
     override fun importAutoEq() { log += "autoeq" }
     override fun rename(name: String) { log += "rename:$name" }

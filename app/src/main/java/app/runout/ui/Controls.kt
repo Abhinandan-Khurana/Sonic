@@ -76,6 +76,7 @@ fun Pill(
     enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(50)
+    val tick = rememberTick()
     Box(
         modifier
             .alpha(if (enabled) 1f else 0.4f)
@@ -84,8 +85,7 @@ fun Pill(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Button,
-                onClick = onClick,
-            )
+            ) { tick(); onClick() }
             .touchHeight()
             .height(30.dp)
             .widthIn(min = 48.dp)
@@ -108,6 +108,7 @@ fun ToggleRow(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val toggled = rememberTick(if (checked) androidx.compose.ui.hapticfeedback.HapticFeedbackType.ToggleOff else androidx.compose.ui.hapticfeedback.HapticFeedbackType.ToggleOn)
     Row(
         modifier
             .fillMaxWidth()
@@ -117,7 +118,7 @@ fun ToggleRow(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 role = Role.Switch,
-            ) { onChange(!checked) }
+            ) { toggled(); onChange(!checked) }
             .semantics { stateDescription = if (checked) "On" else "Off" }
             .testTag("toggle:$title")
             .heightIn(min = 48.dp)

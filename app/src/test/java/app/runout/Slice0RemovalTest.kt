@@ -28,8 +28,14 @@ class Slice0RemovalTest {
             override fun removeRecord(album: Album) { removed += album.id }
         }
         compose.setContent { RoomScreen(RoomState(listOf(album), true, null, DeckState(), false, "12:00"), actions, initialPulledId = album.id) }
-        compose.onNodeWithText("Remove").performClick()
+        askToRemove()
         return removed
+    }
+
+    /** Remove lives in the record's long-press menu. */
+    private fun askToRemove() {
+        compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
+        compose.onNodeWithTag("menu:Remove").performClick()
     }
 
     @Test fun `received record is not removed until confirmed`() {
@@ -39,7 +45,7 @@ class Slice0RemovalTest {
         compose.onNodeWithText("“Keep record” and its received audio will be deleted from this device.").assertIsDisplayed()
         compose.onNodeWithText("Keep it").performClick()
         assertEquals(emptyList<String>(), removed)
-        compose.onNodeWithText("Remove").performClick()
+        askToRemove()
         compose.onNodeWithText("Remove record").performClick()
         assertEquals(listOf("record"), removed)
     }

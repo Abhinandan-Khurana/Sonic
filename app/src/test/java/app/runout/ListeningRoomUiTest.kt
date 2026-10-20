@@ -27,6 +27,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.longClick
 import app.runout.drops.DropItem
 import app.runout.drops.DropState
 import app.runout.drops.DropWeek
@@ -182,16 +183,30 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `pulling a record offers to send it, with or without audio`() {
+    fun `pulling a record, then a long press offers to send it with audio`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }
         compose.onNodeWithTag("sleeve:Night Drive").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("pulled-disc").assertIsDisplayed()
+        // No buttons beside the disc any more: what you can do lives behind a long press.
+        compose.onNodeWithText("Send with audio").assertDoesNotExist()
+        compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
         compose.onNodeWithText("Send with audio").assertIsDisplayed() // Creative Commons
-        compose.onNodeWithTag("send").performClick()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_menu.png")
+        compose.onNodeWithTag("menu:Send with audio").performClick()
         assertEquals(listOf("share:Night Drive"), actions.log.filter { it.startsWith("share") })
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_pulled_send.png")
+    }
+
+    @Test
+    fun `a record's details hold the licence the short caption leaves out`() {
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithText("Vela Park").assertIsDisplayed()
+        compose.onNodeWithText("CC BY 4.0").assertDoesNotExist()
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        compose.onNodeWithTag("menu:Details").performClick()
+        compose.onNodeWithTag("record-details").assertIsDisplayed()
+        compose.onNodeWithText("CC BY 4.0", substring = true).assertExists()
     }
 
     @Test
@@ -214,7 +229,7 @@ class ListeningRoomUiTest {
             override fun updateSound(transform: (SoundSettings) -> SoundSettings) { sound = transform(sound) }
         }
         compose.setContent { RoomScreen(state(sound = actions.sound), actions) }
-        compose.onNodeWithTag("nav:SETTINGS").performScrollTo().performClick()
+        compose.onNodeWithTag("nav:SETTINGS").performClick()
         compose.onNodeWithTag("panel-title").assertTextContains("Settings")
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()
         compose.onNodeWithText("24-bit · 96 kHz → 32-bit float").assertIsDisplayed()
@@ -322,17 +337,16 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `the Pressing Plant presses a record from tracks on your shelf`() {
-        val actions = RecordingActions()
-        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.PRESSING) }
-        compose.onNodeWithTag("field:Title").performTextInput("Late Summer")
-        compose.onNodeWithText("Splatter").performScrollTo().performClick()
-        compose.onNodeWithTag("pick-album:Night Drive").performScrollTo().performClick()
-        compose.onNodeWithTag("pick-track:Opening").performScrollTo().performClick()
-        compose.onNodeWithTag("pick-track:Lowlight").performScrollTo().performClick()
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/07_pressing_plant.png")
-        compose.onNodeWithText("Press it").performScrollTo().performClick()
-        assertTrue(actions.log.toString(), actions.log.contains("press:Late Summer:2"))
+    fun `the footer is four icon tabs and the Pressing Plant is gone`() {
+        compose.setContent { RoomScreen(state(), RecordingActions()) }
+        listOf("DIG", "DROPS", "FRIENDS", "SETTINGS").forEach { compose.onNodeWithTag("nav:$it").assertIsDisplayed() }
+        compose.onNodeWithTag("nav:PRESSING").assertDoesNotExist()
+        compose.onNodeWithText("Pressing Plant").assertDoesNotExist()
+        // The top bar: no clock, no Change folder; the record count stays.
+        compose.onNodeWithText("3:21 PM", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Change folder").assertDoesNotExist()
+        compose.onNodeWithTag("action:Rescan").assertIsDisplayed()
+        compose.onNodeWithText("5 records").assertIsDisplayed()
     }
 
     @Test

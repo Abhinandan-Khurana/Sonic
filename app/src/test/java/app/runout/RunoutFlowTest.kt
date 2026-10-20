@@ -49,9 +49,9 @@ class RunoutFlowTest {
         compose.onNodeWithTag("destination:HOME").assertDoesNotExist()
         compose.onNodeWithTag("mini-play").assertDoesNotExist()
         compose.onAllNodesWithText("RUNOUT").assertCountEquals(0)
-        val sheets=listOf(Panel.DIG to "screen:search",Panel.DROPS to "panel:drops",Panel.FRIENDS to "panel:messages",Panel.PRESSING to "panel:pressing",Panel.SETTINGS to "panel:sound")
+        val sheets=listOf(Panel.DIG to "screen:search",Panel.DROPS to "panel:drops",Panel.FRIENDS to "panel:messages",Panel.SETTINGS to "panel:sound")
         for((panel,content) in sheets) {
-            compose.onNodeWithTag("nav:${panel.name}").performScrollTo().performClick()
+            compose.onNodeWithTag("nav:${panel.name}").performClick()
             compose.onNodeWithTag(content).assertExists()
             if(panel==Panel.DIG) compose.onRoot().captureRoboImage("build/outputs/roborazzi/11_dig_sheet.png")
             compose.onNodeWithTag("action:Close").performClick()

@@ -10,7 +10,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,7 +26,6 @@ import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
 import app.runout.model.Album
 import app.runout.model.Source
-import app.runout.pressing.PressingDraft
 import app.runout.sharing.ImportResult
 import app.runout.sharing.VinylPackage
 import app.runout.sound.SoundSettings
@@ -136,12 +134,6 @@ class MainActivity : ComponentActivity() {
             val autoEqPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) importAutoEq(uri)
             }
-            var onImage by remember { mutableStateOf<((Uri?) -> Unit)?>(null) }
-            val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-                onImage?.invoke(uri)
-                onImage = null
-            }
-
             val actions = remember {
                 object : RoomActions {
                     override fun pickFolder() { graph.soulseek.onExternalFlow(true); folderPicker.launch(null) }
@@ -149,6 +141,7 @@ class MainActivity : ComponentActivity() {
                     override fun setCoverLookupEnabled(enabled: Boolean) { graph.library.setCoverLookupEnabled(enabled) }
                     override fun dismissCoverLookupNotice() { graph.library.dismissCoverLookupNotice() }
                     override fun load(album: Album) = graph.deck.load(album)
+                    override fun discLanded() = graph.deck.discLanded()
                     override fun cueTrack(album: Album, trackId: String?) = graph.deck.cueTrack(album, trackId)
                     override fun toggleCrackle() = graph.deck.toggleCrackle()
                     override fun needleDrop(fraction: Float) = graph.deck.needleDrop(fraction)
@@ -176,12 +169,6 @@ class MainActivity : ComponentActivity() {
                     override fun claim(item: DropItem) = claimDrop(item)
                     override suspend fun dropCover(item: DropItem): String? = graph.drops.thumbnail(item)?.absolutePath
 
-                    override fun pickImage(onPicked: (Uri?) -> Unit) {
-                        onImage = onPicked
-                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-                    override fun press(draft: PressingDraft) = pressRecord(draft)
-                    override fun press(draft: PressingDraft, onResult: (Boolean) -> Unit) = pressRecord(draft, onResult)
                     override fun dismissMessage() { message.value = null }
 
                     override fun signInSoulseek(username: String, password: String, remember: Boolean) { graph.soulseek.signIn(username, password, remember) }
@@ -398,18 +385,6 @@ class MainActivity : ComponentActivity() {
             val item = week?.items?.firstOrNull { app.runout.soulseek.SoulseekPolicy.accountKey(owner.orEmpty(), "archive:${it.identifier}") == id }
             if (item != null) claimDrop(item)
             else message.value = "This album is outside the current Friday Drop. Completed FLAC files are still in your music folder."
-        }
-    }
-
-    private fun pressRecord(draft: PressingDraft, onResult: (Boolean) -> Unit = {}) {
-        message.value = "Pressing “${draft.title}”…"
-        graph.scope.launch {
-            val result = runCatching { graph.pressing.press(draft) }
-            message.value = result.fold(
-                { "Pressed “${it.title}”. It's in your crate." },
-                { "Couldn't press it: ${it.message}" },
-            )
-            onResult(result.isSuccess)
         }
     }
 

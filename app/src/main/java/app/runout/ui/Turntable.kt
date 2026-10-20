@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -162,6 +163,26 @@ class DeckGeometry(val size: Size) {
     }
 }
 
+/** 33⅓ rpm, in degrees a second: one turn every 1.8 s. Records always play at the speed they were cut. */
+const val RPM_33_DEG = 200f
+
+/** 180 dots to a row: the spacing at which a 100 Hz mains flash freezes them at 33⅓. */
+private const val STROBE_DOTS = 180
+private const val STROBE_SPACING = 360f / STROBE_DOTS
+private const val FLASH_PERIOD_S = 0.01f
+
+/**
+ * How fast the strobe dots appear to move at platter speed [omega], in degrees a second. Between
+ * flashes a dot travels omega × T; you only see where it lands relative to the dot ahead, so at
+ * exactly 33⅓ the pattern stands still, and a little off speed it crawls forwards or backwards.
+ */
+internal fun strobeDrift(omega: Float): Float {
+    val perFlash = omega * FLASH_PERIOD_S
+    var wrapped = perFlash % STROBE_SPACING
+    if (wrapped > STROBE_SPACING / 2f) wrapped -= STROBE_SPACING
+    return wrapped / FLASH_PERIOD_S
+}
+
 /** The two lines on the deck's little pixel screen. */
 fun screenLines(deck: DeckState): Pair<String, String> {
     val album = deck.album ?: return "RUNOUT · DROP A RECORD ON THE PLATTER" to "NO RECORD"
@@ -199,10 +220,15 @@ fun Turntable(
     val sideText = remember(deck.side) { deck.side?.let { textMeasurer.measure("SIDE ${it.letter}", labelStyle) } }
     val qualityText = remember(deck.album) { deck.album?.let { textMeasurer.measure(it.quality.shortLabel.uppercase(), labelStyle) } }
 
-    // Platter: spins up when the needle goes down, winds down when stopped or lifted.
+    // Platter: spins up when the needle goes down, winds down when stopped or lifted. A heavy
+    // platter takes its time: about a second and a half to reach speed, longer to coast to a stop.
     var rotation by remember { mutableFloatStateOf(0f) }
     var omega by remember { mutableFloatStateOf(0f) }
-    val target = if (deck.album != null && deck.needleDown && !deck.held) 200f else 0f // 33⅓ rpm, in degrees a second
+    // The strobe dots as you'd see them under mains light: frozen at exactly 33⅓, drifting while
+    // the platter is off speed. Drawing them at the platter's true angle instead makes them shimmer
+    // at screen refresh rates and the whole deck looks like it's racing.
+    var strobe by remember { mutableFloatStateOf(0f) }
+    val target = if (deck.album != null && deck.needleDown && !deck.held) RPM_33_DEG else 0f
     val held = deck.held
     LaunchedEffect(target) {
         var last = withFrameNanos { it }
@@ -211,12 +237,13 @@ fun Turntable(
             val dt = ((now - last) / 1e9f).coerceIn(0f, 0.05f)
             last = now
             val tau = when {
-                target > omega -> 0.45f
+                target > omega -> 0.5f
                 held -> 0.16f
-                else -> 0.9f
+                else -> 1.3f
             }
             omega += (target - omega) * (1f - exp(-dt / tau))
             rotation = (rotation + omega * dt) % 360f
+            strobe = (strobe + strobeDrift(omega) * dt) % 360f
             if (target == 0f && omega < 0.4f) {
                 omega = 0f
                 break
@@ -255,6 +282,13 @@ fun Turntable(
         label = "tonearm",
     )
     val armAlpha = dragAlpha ?: animAlpha
+    // The keys travel down while held, like real switches.
+    val ssSource = remember { MutableInteractionSource() }
+    val prevSource = remember { MutableInteractionSource() }
+    val nextSource = remember { MutableInteractionSource() }
+    val ssDown by ssSource.collectIsPressedAsState()
+    val prevDown by prevSource.collectIsPressedAsState()
+    val nextDown by nextSource.collectIsPressedAsState()
     val currentDeck by rememberUpdatedState(deck)
     val currentArm by rememberUpdatedState(armAlpha)
 
@@ -343,9 +377,19 @@ fun Turntable(
                         }
                     },
             ) {
+                // The base layer: plinth, platter body, keys. It only redraws when a key moves or
+                // the deck's lights change, never per frame.
                 val gx = DeckGeometry(size)
                 drawPlinth(gx, textMeasurer)
-                drawPlatter(gx, rotation, hasRecord = deck.album != null)
+                drawPlatter(gx, hasRecord = deck.album != null)
+                drawButtons(gx, textMeasurer, deck, ssDown, prevDown, nextDown)
+                drawArmBase(gx, textMeasurer)
+            }
+            // The strobe ring: redrawn only while the platter is off speed and the dots drift.
+            Canvas(Modifier.fillMaxSize()) { drawStrobe(DeckGeometry(size), strobe) }
+            // The record (or the bare mat): the only thing that turns every frame.
+            Canvas(Modifier.fillMaxSize()) {
+                val gx = DeckGeometry(size)
                 if (deck.album != null) {
                     drawRecord(
                         center = gx.center,
@@ -358,26 +402,24 @@ fun Turntable(
                         sideText = sideText,
                         qualityText = qualityText,
                     )
-                }
+                } else drawMat(gx, rotation)
                 if (dropTargetActive) {
                     drawCircle(
-                        Room.Accent.copy(alpha = 0.75f),
+                        Room.Signal.copy(alpha = 0.85f),
                         gx.recordR * 1.03f,
                         gx.center,
                         style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))),
                     )
                 }
-                drawButtons(gx, textMeasurer, deck)
-                drawPixelScreen(gx.screen, pixels1, pixels2, scrollStep)
-                drawArmBase(gx)
-                drawTonearm(gx, armAlpha)
             }
+            Canvas(Modifier.fillMaxSize()) { drawPixelScreen(DeckGeometry(size).screen, pixels1, pixels2, scrollStep) }
+            Canvas(Modifier.fillMaxSize()) { drawTonearm(DeckGeometry(size), armAlpha) }
 
             // Touch targets for the controls, with names for TalkBack.
             val (l1, l2) = screenLines(deck)
-            ControlArea(gm.startStop, "Start or stop", "deck:startstop", stateText = if (deck.needleDown && !deck.held) "Playing" else "Stopped") { actions.startStop() }
-            ControlArea(gm.prev, "Previous track", "deck:prev") { actions.previousTrack() }
-            ControlArea(gm.next, "Next track", "deck:next") { actions.nextTrack() }
+            ControlArea(gm.startStop, "Start or stop", "deck:startstop", ssSource, stateText = if (deck.needleDown && !deck.held) "Playing" else "Stopped") { actions.startStop() }
+            ControlArea(gm.prev, "Previous track", "deck:prev", prevSource) { actions.previousTrack() }
+            ControlArea(gm.next, "Next track", "deck:next", nextSource) { actions.nextTrack() }
             Box(
                 Modifier
                     .rectOffset(gm.screen)
@@ -398,13 +440,14 @@ private fun Modifier.rectOffset(r: Rect): Modifier {
 }
 
 @Composable
-private fun BoxScope.ControlArea(r: Rect, label: String, tag: String, stateText: String? = null, onClick: () -> Unit) {
+private fun BoxScope.ControlArea(r: Rect, label: String, tag: String, source: MutableInteractionSource, stateText: String? = null, onClick: () -> Unit) {
+    val tick = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.VirtualKey)
     Box(
         Modifier
             .rectOffset(r)
             .testTag(tag)
             .semantics { contentDescription = label; if (stateText != null) stateDescription = stateText }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick),
+            .clickable(interactionSource = source, indication = null, role = Role.Button) { tick(); onClick() },
     )
 }
 
@@ -415,9 +458,13 @@ private val Chrome = Brush.linearGradient(listOf(Color(0xFFF7F8FA), Color(0xFFB9
 private val SmokedGlass = Color(0xFF16171C)
 
 /** Draws small printed text on the plinth; returns its width. */
-private fun DrawScope.label(tm: TextMeasurer, text: String, at: Offset, size: Float, color: Color = Room.Ink.copy(alpha = 0.55f), weight: FontWeight = FontWeight.Medium, centered: Boolean = false): Float {
+private fun DrawScope.label(tm: TextMeasurer, text: String, at: Offset, size: Float, color: Color = Room.Ink.copy(alpha = 0.55f), weight: FontWeight = FontWeight.Medium, centered: Boolean = false, alignEnd: Boolean = false): Float {
     val r = tm.measure(text, TextStyle(fontFamily = Room.Inter, fontSize = (size / density).sp, fontWeight = weight, color = color, letterSpacing = (size * 0.08f / density).sp))
-    val x = if (centered) at.x - r.size.width / 2f else at.x
+    val x = when {
+        centered -> at.x - r.size.width / 2f
+        alignEnd -> at.x - r.size.width
+        else -> at.x
+    }
     drawText(r, topLeft = Offset(x, at.y))
     return r.size.width.toFloat()
 }
@@ -426,18 +473,34 @@ private fun DrawScope.drawPlinth(g: DeckGeometry, tm: TextMeasurer) {
     val h = g.h
     // A hairline inset, like the edge of a cast top plate.
     drawRoundRect(Color.White.copy(alpha = 0.55f), topLeft = Offset(h * 0.012f, h * 0.012f), size = Size(size.width - h * 0.024f, size.height - h * 0.024f), cornerRadius = CornerRadius(h * 0.06f), style = Stroke(1.2f))
+    // Four tiny screws in the corners of the top plate.
+    listOf(Offset(h * 0.045f, h * 0.045f), Offset(size.width - h * 0.045f, h * 0.045f), Offset(h * 0.045f, size.height - h * 0.045f), Offset(size.width - h * 0.045f, size.height - h * 0.045f))
+        .forEach { c ->
+            drawCircle(Color.Black.copy(alpha = 0.10f), h * 0.009f, c)
+            drawLine(Color.Black.copy(alpha = 0.22f), c - Offset(h * 0.006f, 0f), c + Offset(h * 0.006f, 0f), strokeWidth = 1f)
+        }
 
-    // 45 adapter well, top left.
+    // 45 adapter well, top left, with its printed speed beside it.
     drawCircle(SmokedGlass.copy(alpha = 0.10f), h * 0.052f, g.adapterWell)
     drawCircle(Color.White.copy(alpha = 0.7f), h * 0.052f, g.adapterWell, style = Stroke(1.2f))
     drawLine(Color.Black.copy(alpha = 0.12f), g.adapterWell - Offset(h * 0.03f, 0f), g.adapterWell + Offset(h * 0.03f, 0f), strokeWidth = h * 0.012f, cap = StrokeCap.Round)
 
-    // Name plate above the screen.
-    val nameW = label(tm, "RUNOUT", Offset(g.screen.left, g.screen.top - h * 0.056f), h * 0.032f, Room.Ink.copy(alpha = 0.85f), FontWeight.SemiBold)
-    label(tm, "GLASS DRIVE  RG-1", Offset(g.screen.left + nameW + h * 0.02f, g.screen.top - h * 0.046f), h * 0.018f)
+    // Model plate above the screen: the name, the model, and a fine engraved rule with ticks.
+    val plateY = g.screen.top - h * 0.06f
+    val nameW = label(tm, "RUNOUT", Offset(g.screen.left, plateY), h * 0.03f, Room.Ink.copy(alpha = 0.85f), FontWeight.SemiBold)
+    label(tm, "RG-1", Offset(g.screen.left + nameW + h * 0.018f, plateY + h * 0.004f), h * 0.022f, Room.Signal, FontWeight.SemiBold)
+    label(tm, "GLASS DRIVE · 33⅓ RPM", Offset(g.screen.right, plateY + h * 0.009f), h * 0.014f, Room.Ink.copy(alpha = 0.5f), centered = false, alignEnd = true)
+    val ruleY = g.screen.top - h * 0.016f
+    drawLine(Room.Ink.copy(alpha = 0.22f), Offset(g.screen.left, ruleY), Offset(g.screen.right, ruleY), strokeWidth = 1f)
+    val ticks = 24
+    for (i in 0..ticks) {
+        val x = g.screen.left + (g.screen.right - g.screen.left) * i / ticks
+        val long = i % 6 == 0
+        drawLine(Room.Ink.copy(alpha = if (long) 0.35f else 0.2f), Offset(x, ruleY), Offset(x, ruleY - h * (if (long) 0.014f else 0.007f)), strokeWidth = 1f)
+    }
 }
 
-private fun DrawScope.drawPlatter(g: DeckGeometry, rotation: Float, hasRecord: Boolean) {
+private fun DrawScope.drawPlatter(g: DeckGeometry, hasRecord: Boolean) {
     val h = g.h
     // Shadow under the platter.
     drawCircle(
@@ -453,32 +516,8 @@ private fun DrawScope.drawPlatter(g: DeckGeometry, rotation: Float, hasRecord: B
         radius = g.ringR, center = g.center,
     )
     drawCircle(Color.Black.copy(alpha = 0.16f), g.ringR, g.center, style = Stroke(1.2f))
-    // Four rows of strobe dots on the rim: they appear to stand still at exactly 33⅓ rpm.
-    rotate(rotation, g.center) {
-        val rows = 4
-        val band = g.ringR - g.platterR
-        for (row in 0 until rows) {
-            val r = g.platterR + band * (0.2f + row * 0.2f)
-            val count = 180
-            val pts = List(count) { i ->
-                val a = i * (2 * PI / count).toFloat() + row * 0.008f
-                g.center + Offset(cos(a), sin(a)) * r
-            }
-            drawPoints(pts, PointMode.Points, Color(0xFF6E717A).copy(alpha = 0.85f), strokeWidth = h * 0.0072f, cap = StrokeCap.Round)
-        }
-    }
     drawCircle(Color.Black.copy(alpha = 0.10f), g.platterR, g.center, style = Stroke(1f))
-    if (!hasRecord) {
-        // A smoked, see-through rubber mat with its concentric ribs.
-        drawCircle(SmokedGlass.copy(alpha = 0.50f), g.platterR * 0.985f, g.center)
-        for (i in 1..9) {
-            drawCircle(Color.White.copy(alpha = 0.06f), g.platterR * (0.16f + i * 0.09f), g.center, style = Stroke(h * 0.004f))
-        }
-        rotate(rotation, g.center) {
-            drawLine(Color.White.copy(alpha = 0.12f), g.center, g.center + Offset(g.platterR * 0.9f, 0f), strokeWidth = 1.5f)
-        }
-        drawCircle(Color.White.copy(alpha = 0.9f), g.platterR * 0.022f, g.center)
-    } else {
+    if (hasRecord) {
         drawCircle(
             brush = Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent), center = g.center + Offset(0f, h * 0.008f), radius = g.recordR * 1.04f),
             radius = g.recordR * 1.04f, center = g.center + Offset(0f, h * 0.008f),
@@ -486,7 +525,36 @@ private fun DrawScope.drawPlatter(g: DeckGeometry, rotation: Float, hasRecord: B
     }
 }
 
-private fun DrawScope.drawArmBase(g: DeckGeometry) {
+/** Four rows of strobe dots on the rim, drawn where the eye sees them (see [strobeDrift]). */
+private fun DrawScope.drawStrobe(g: DeckGeometry, angle: Float) {
+    val h = g.h
+    rotate(angle, g.center) {
+        val band = g.ringR - g.platterR
+        for (row in 0 until 4) {
+            val r = g.platterR + band * (0.2f + row * 0.2f)
+            val pts = List(STROBE_DOTS) { i ->
+                val a = i * (2 * PI / STROBE_DOTS).toFloat() + row * 0.008f
+                g.center + Offset(cos(a), sin(a)) * r
+            }
+            drawPoints(pts, PointMode.Points, Color(0xFF5E6168).copy(alpha = 0.8f), strokeWidth = h * 0.0062f, cap = StrokeCap.Round)
+        }
+    }
+}
+
+/** The bare platter: a smoked, see-through rubber mat with its concentric ribs. */
+private fun DrawScope.drawMat(g: DeckGeometry, rotation: Float) {
+    val h = g.h
+    drawCircle(SmokedGlass.copy(alpha = 0.50f), g.platterR * 0.985f, g.center)
+    for (i in 1..9) {
+        drawCircle(Color.White.copy(alpha = 0.06f), g.platterR * (0.16f + i * 0.09f), g.center, style = Stroke(h * 0.004f))
+    }
+    rotate(rotation, g.center) {
+        drawLine(Color.White.copy(alpha = 0.12f), g.center, g.center + Offset(g.platterR * 0.9f, 0f), strokeWidth = 1.5f)
+    }
+    drawCircle(Color.White.copy(alpha = 0.9f), g.platterR * 0.022f, g.center)
+}
+
+private fun DrawScope.drawArmBase(g: DeckGeometry, tm: TextMeasurer) {
     val h = g.h
     // Smoked-glass base disc under the arm, with a chrome trim ring.
     drawCircle(Color.Black.copy(alpha = 0.10f), g.armBaseR * 1.02f, g.armBase + Offset(0f, h * 0.012f))
@@ -499,10 +567,22 @@ private fun DrawScope.drawArmBase(g: DeckGeometry) {
         val a = i * (2 * PI / 24).toFloat()
         drawLine(Color.Black.copy(alpha = 0.18f), g.pivot + Offset(cos(a), sin(a)) * (h * 0.050f), g.pivot + Offset(cos(a), sin(a)) * (h * 0.060f), strokeWidth = 1f)
     }
-    // Anti-skate dial.
+    // Anti-skate dial with its engraved 0–3 scale.
+    val scaleR = h * 0.036f
+    for (i in 0..12) {
+        val a = (PI * (0.85 + i * 0.1)).toFloat()
+        val long = i % 4 == 0
+        drawLine(
+            Room.Ink.copy(alpha = if (long) 0.45f else 0.25f),
+            g.antiSkate + Offset(cos(a), sin(a)) * scaleR,
+            g.antiSkate + Offset(cos(a), sin(a)) * (scaleR + h * (if (long) 0.012f else 0.006f)),
+            strokeWidth = 1f,
+        )
+    }
     drawCircle(Chrome, h * 0.024f, g.antiSkate)
     drawCircle(SmokedGlass.copy(alpha = 0.8f), h * 0.016f, g.antiSkate)
-    drawLine(Color.White, g.antiSkate, g.antiSkate + Offset(h * 0.010f, -h * 0.010f), strokeWidth = h * 0.004f)
+    drawLine(Room.Signal, g.antiSkate, g.antiSkate + Offset(h * 0.010f, -h * 0.010f), strokeWidth = h * 0.004f)
+    label(tm, "ANTI-SKATE", Offset(g.antiSkate.x, g.antiSkate.y + h * 0.05f), h * 0.012f, Room.Ink.copy(alpha = 0.45f), centered = true)
     // Arm rest post.
     val rest = g.stylus(g.alphaRest) - g.direction(g.alphaRest) * (h * 0.13f)
     drawCircle(Color.Black.copy(alpha = 0.12f), h * 0.02f, rest + Offset(0f, h * 0.006f))
@@ -517,20 +597,21 @@ private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
     val stylus = g.stylus(alpha)
     val angleDeg = Math.toDegrees(atan2(dir.y, dir.x).toDouble()).toFloat()
 
-    // Counterweight behind the pivot: a ribbed chrome drum.
+    // Counterweight behind the pivot: a ribbed drum in signal orange.
     val cwStart = g.pivot - dir * (h * 0.055f)
     val cwEnd = g.pivot - dir * (h * 0.15f)
     drawLine(Color(0xFF9EA2AA), g.pivot, cwEnd, strokeWidth = h * 0.012f)
     rotate(angleDeg, (cwStart + cwEnd) / 2f) {
         val c = (cwStart + cwEnd) / 2f
         val len = (cwStart - cwEnd).getDistance()
+        drawRoundRect(Color.Black.copy(alpha = 0.14f), topLeft = c - Offset(len / 2f, h * 0.036f), size = Size(len, h * 0.08f), cornerRadius = CornerRadius(h * 0.012f))
         drawRoundRect(
-            brush = Brush.verticalGradient(listOf(Color(0xFFF2F3F6), Color(0xFF8E929B), Color(0xFFDCDEE3)), startY = c.y - h * 0.04f, endY = c.y + h * 0.04f),
+            brush = Brush.verticalGradient(listOf(Color(0xFFFF8A5C), Room.Signal, Color(0xFFC9461A)), startY = c.y - h * 0.04f, endY = c.y + h * 0.04f),
             topLeft = c - Offset(len / 2f, h * 0.04f), size = Size(len, h * 0.08f), cornerRadius = CornerRadius(h * 0.012f),
         )
         for (i in 1..5) {
             val x = c.x - len / 2f + len * i / 6f
-            drawLine(Color.Black.copy(alpha = 0.18f), Offset(x, c.y - h * 0.04f), Offset(x, c.y + h * 0.04f), strokeWidth = 1f)
+            drawLine(Color.Black.copy(alpha = 0.16f), Offset(x, c.y - h * 0.04f), Offset(x, c.y + h * 0.04f), strokeWidth = 1f)
         }
     }
 
@@ -547,11 +628,11 @@ private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
     drawPath(path, Brush.linearGradient(listOf(Color(0xFFF7F8FA), Color(0xFFB2B6BE), Color(0xFFEFF1F4)), start = g.pivot, end = headStart), style = Stroke(h * 0.013f, cap = StrokeCap.Round))
     drawPath(path, Color.White.copy(alpha = 0.7f), style = Stroke(h * 0.003f, cap = StrokeCap.Round))
 
-    // Headshell, angled like a real offset head, with its finger lift.
+    // Headshell, angled like a real offset head, with its orange finger lift.
     rotate(angleDeg + 22f, headStart) {
         drawRoundRect(SmokedGlass.copy(alpha = 0.92f), topLeft = headStart - Offset(h * 0.004f, h * 0.022f), size = Size(h * 0.12f, h * 0.044f), cornerRadius = CornerRadius(h * 0.008f))
         drawRoundRect(Color.White.copy(alpha = 0.18f), topLeft = headStart + Offset(h * 0.01f, -h * 0.015f), size = Size(h * 0.085f, h * 0.006f), cornerRadius = CornerRadius(h * 0.003f))
-        drawLine(Chrome, headStart + Offset(h * 0.08f, h * 0.02f), headStart + Offset(h * 0.12f, h * 0.06f), strokeWidth = h * 0.007f, cap = StrokeCap.Round)
+        drawLine(Room.Signal, headStart + Offset(h * 0.08f, h * 0.02f), headStart + Offset(h * 0.12f, h * 0.06f), strokeWidth = h * 0.009f, cap = StrokeCap.Round)
     }
 
     // Gimbal on top of the pivot.
@@ -560,40 +641,57 @@ private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
     drawCircle(SmokedGlass, h * 0.012f, g.pivot)
 }
 
-private fun DrawScope.flatKey(r: Rect, lit: Boolean) {
+/**
+ * A hardware key, Teenage Engineering style: a cap sitting on a darker skirt, with real travel.
+ * Pressed, the cap sinks onto the skirt and its shadow tightens.
+ */
+private fun DrawScope.teKey(r: Rect, cap: Color, skirt: Color, pressed: Boolean): Rect {
     val h = r.height
-    drawRoundRect(Color.Black.copy(alpha = 0.12f), topLeft = r.topLeft + Offset(0f, h * 0.12f), size = r.size, cornerRadius = CornerRadius(h * 0.18f))
-    drawRoundRect(Chrome, topLeft = r.topLeft, size = r.size, cornerRadius = CornerRadius(h * 0.18f))
-    drawRoundRect(Color.White.copy(alpha = 0.5f), topLeft = r.topLeft, size = r.size, cornerRadius = CornerRadius(h * 0.18f), style = Stroke(1f))
-    if (lit) drawRoundRect(Color(0xFFFF8A3D), topLeft = Offset(r.left + r.width * 0.12f, r.center.y - h * 0.08f), size = Size(r.width * 0.22f, h * 0.16f), cornerRadius = CornerRadius(h * 0.08f))
+    val travel = h * 0.09f
+    val radius = CornerRadius(h * 0.16f)
+    drawRoundRect(Color.Black.copy(alpha = if (pressed) 0.10f else 0.16f), topLeft = r.topLeft + Offset(0f, travel * (if (pressed) 1.2f else 1.8f)), size = r.size, cornerRadius = radius)
+    drawRoundRect(skirt, topLeft = r.topLeft + Offset(0f, travel), size = r.size, cornerRadius = radius)
+    val face = Rect(r.topLeft + Offset(0f, if (pressed) travel * 0.8f else 0f), r.size)
+    drawRoundRect(cap, topLeft = face.topLeft, size = face.size, cornerRadius = radius)
+    drawRoundRect(Color.White.copy(alpha = 0.45f), topLeft = face.topLeft, size = Size(face.width, face.height * 0.5f), cornerRadius = radius, style = Stroke(1f))
+    return face
 }
 
-private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckState) {
-    val h = g.h
-    // Start / stop: the big square key.
-    val ss = g.startStop
-    drawRoundRect(Color.Black.copy(alpha = 0.14f), topLeft = ss.topLeft + Offset(0f, h * 0.006f), size = ss.size, cornerRadius = CornerRadius(h * 0.012f))
-    drawRoundRect(Chrome, topLeft = ss.topLeft, size = ss.size, cornerRadius = CornerRadius(h * 0.012f))
-    drawRoundRect(Color.White.copy(alpha = 0.6f), topLeft = ss.topLeft + Offset(h * 0.008f, h * 0.008f), size = Size(ss.width - h * 0.016f, ss.height - h * 0.016f), cornerRadius = CornerRadius(h * 0.008f), style = Stroke(1f))
-    label(tm, "START", Offset(ss.center.x, ss.center.y - h * 0.026f), h * 0.019f, Room.Ink.copy(alpha = 0.7f), centered = true)
-    label(tm, "STOP", Offset(ss.center.x, ss.center.y + h * 0.002f), h * 0.019f, Room.Ink.copy(alpha = 0.7f), centered = true)
-    val playing = deck.needleDown && !deck.held
-    drawCircle(if (playing) Color(0xFF39E07A) else Color.Black.copy(alpha = 0.18f), h * 0.006f, Offset(ss.left + h * 0.018f, ss.top + h * 0.018f))
+private val KeyGrey = Color(0xFFEDEEF1)
+private val KeyGreySkirt = Color(0xFFB4B7BF)
+private val SignalSkirt = Color(0xFFB83E15)
 
-    // Previous / next, in the same style.
-    flatKey(g.prev, false)
-    flatKey(g.next, false)
+private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckState, ssDown: Boolean, prevDown: Boolean, nextDown: Boolean) {
+    val h = g.h
+    val playing = deck.needleDown && !deck.held
+    // Start / stop: the big orange key, with its engraved label and a status light above it.
+    val ss = g.startStop
+    val led = Offset(ss.left + h * 0.012f, ss.top - h * 0.028f)
+    if (playing) drawCircle(Brush.radialGradient(listOf(Room.Signal.copy(alpha = 0.55f), Color.Transparent), center = led, radius = h * 0.03f), h * 0.03f, led)
+    drawCircle(if (playing) Room.Signal else Color.Black.copy(alpha = 0.16f), h * 0.0075f, led)
+    label(tm, "START · STOP", Offset(led.x + h * 0.018f, led.y - h * 0.01f), h * 0.0145f, Room.Ink.copy(alpha = 0.55f))
+    val face = teKey(ss, Room.Signal, SignalSkirt, ssDown)
+    // Printed on the cap: play and stop symbols.
+    val c = face.center
+    val s = face.height * 0.18f
+    drawPath(Path().apply { moveTo(c.x - s * 1.5f, c.y - s); lineTo(c.x - s * 0.1f, c.y); lineTo(c.x - s * 1.5f, c.y + s); close() }, Color.White)
+    drawRect(Color.White, topLeft = Offset(c.x + s * 0.4f, c.y - s * 0.85f), size = Size(s * 1.7f, s * 1.7f))
+
+    // Previous / next: grey keys under one engraved label.
+    label(tm, "TRACK", Offset((g.prev.left + g.next.right) / 2f, g.prev.top - h * 0.032f), h * 0.0145f, Room.Ink.copy(alpha = 0.55f), centered = true)
+    val pf = teKey(g.prev, KeyGrey, KeyGreySkirt, prevDown)
+    val nf = teKey(g.next, KeyGrey, KeyGreySkirt, nextDown)
     fun tri(c: Offset, s: Float, left: Boolean) {
         val p = Path().apply {
             if (left) { moveTo(c.x + s / 2, c.y - s / 2); lineTo(c.x - s / 2, c.y); lineTo(c.x + s / 2, c.y + s / 2) }
             else { moveTo(c.x - s / 2, c.y - s / 2); lineTo(c.x + s / 2, c.y); lineTo(c.x - s / 2, c.y + s / 2) }
             close()
         }
-        drawPath(p, Room.Ink.copy(alpha = 0.75f))
+        drawPath(p, Room.Ink.copy(alpha = 0.78f))
     }
-    val s = g.prev.height * 0.42f
-    tri(g.prev.center - Offset(s * 0.5f, 0f), s, true); tri(g.prev.center + Offset(s * 0.5f, 0f), s, true)
-    tri(g.next.center - Offset(s * 0.5f, 0f), s, false); tri(g.next.center + Offset(s * 0.5f, 0f), s, false)
+    val t = g.prev.height * 0.36f
+    tri(pf.center - Offset(t * 0.5f, 0f), t, true); tri(pf.center + Offset(t * 0.5f, 0f), t, true)
+    tri(nf.center - Offset(t * 0.5f, 0f), t, false); tri(nf.center + Offset(t * 0.5f, 0f), t, false)
 }
 
 private val LcdLit = Color(0xFF8DFFC4)
@@ -607,7 +705,8 @@ private fun DrawScope.drawPixelScreen(r: Rect, top: PixelLine, bottom: PixelLine
     val inner = Rect(r.left + h * 0.08f, r.top + h * 0.08f, r.right - h * 0.08f, r.bottom - h * 0.08f)
     drawRoundRect(Color(0xFF0B1410).copy(alpha = 0.86f), topLeft = inner.topLeft, size = inner.size, cornerRadius = CornerRadius(h * 0.08f))
 
-    val rows = PixelLine.ROWS * 2 + 2
+    // A finer matrix than the glyphs need: smaller dots, with a dark margin round the two lines.
+    val rows = PixelLine.ROWS * 2 + 6
     val pitch = (inner.height - h * 0.12f) / rows
     val cols = ((inner.width - h * 0.12f) / pitch).toInt()
     val x0 = inner.left + (inner.width - cols * pitch) / 2f
@@ -626,8 +725,8 @@ private fun DrawScope.drawPixelScreen(r: Rect, top: PixelLine, bottom: PixelLine
             }
         }
     }
-    line(top, 0, scroll = true)
-    line(bottom, PixelLine.ROWS + 2, scroll = false)
+    line(top, 2, scroll = true)
+    line(bottom, PixelLine.ROWS + 4, scroll = false)
     // Glass sheen over the screen.
     drawRoundRect(
         Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), startY = inner.top, endY = inner.center.y),

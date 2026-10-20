@@ -37,7 +37,7 @@ import java.util.Date
 import java.util.Locale
 
 internal fun connectionLabel(session: SoulseekSession) = when(session.state) {
-    SoulseekConnection.CONNECTED -> "● Online"
+    SoulseekConnection.CONNECTED -> "Online"
     SoulseekConnection.CONNECTING -> "Connecting"
     SoulseekConnection.RECONNECTING -> "Reconnecting"
     SoulseekConnection.PAUSED -> "Paused"

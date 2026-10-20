@@ -54,9 +54,6 @@ import app.runout.model.DiscStyle
 import app.runout.model.Licences
 import app.runout.model.Source
 import app.runout.model.Track
-import app.runout.pressing.PressingDraft
-import app.runout.pressing.PressingRepository
-import app.runout.pressing.SleeveArtist
 import app.runout.social.Friend
 import app.runout.social.Profile
 import app.runout.social.ShelfItem
@@ -70,12 +67,11 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** The room's glass sheets. Those [inStrip] get a pill in the room; Downloads opens from the ↓ count. */
+/** The room's glass sheets. Those [inStrip] get a tab in the room; Downloads opens from the ↓ count. */
 enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true) {
     DIG("Dig", "Dig"),
     DROPS("Friday Drops", "Drops"),
     FRIENDS("Friends", "Friends"),
-    PRESSING("Pressing Plant", "Pressing Plant"),
     SETTINGS("Settings", "Settings"),
     DOWNLOADS("Downloads", "Downloads", inStrip = false),
 }
@@ -247,178 +243,7 @@ private fun fallbackColorFor(title: String): Color {
     return Color(palette[abs(title.hashCode()) % palette.size])
 }
 
-// ---------------------------------------------------------------------------------------------
-// Pressing Plant
 
-private val LABEL_COLOURS = Profile.ACCENTS + listOf(0xFFFFD166.toInt(), 0xFF9AD7FF.toInt())
-
-@Composable
-fun PressingPanel(shelf: List<Album>, profile: Profile, actions: RoomActions, onDraftChanged: (Boolean) -> Unit = {}) {
-    val context = LocalContext.current
-    var title by rememberSaveable { mutableStateOf("") }
-    var artist by rememberSaveable { mutableStateOf("") }
-    var notes by rememberSaveable { mutableStateOf("") }
-    var pattern by rememberSaveable { mutableStateOf(0) }
-    var disc by rememberSaveable { mutableStateOf(DiscStyle.COLOUR) }
-    var labelColour by rememberSaveable { mutableStateOf(profile.accent) }
-    var owned by rememberSaveable { mutableStateOf(false) }
-    var picture by remember { mutableStateOf<Uri?>(null) }
-    var search by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf<String?>(null) }
-    val picked = remember { mutableStateListOf<Pair<Album, Track>>() }
-    var pressing by remember { mutableStateOf(false) }
-    val changed = title.isNotEmpty() || artist.isNotEmpty() || notes.isNotEmpty() || picked.isNotEmpty() ||
-        picture != null || pattern != 0 || disc != DiscStyle.COLOUR || labelColour != profile.accent || owned
-    LaunchedEffect(changed) { onDraftChanged(changed) }
-
-    val pictureBitmap by produceState<ImageBitmap?>(null, picture) {
-        value = picture?.let { uri ->
-            withContext(Dispatchers.IO) {
-                runCatching { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }?.asImageBitmap() }.getOrNull()
-            }
-        }
-    }
-    val generated = remember(pattern, title, artist, labelColour) {
-        SleeveArtist.render(pattern, title.ifBlank { "Untitled" }, artist.ifBlank { profile.name }, labelColour, size = 320).asImageBitmap()
-    }
-    val sleeve = pictureBitmap ?: generated
-    val totalMs = picked.sumOf { it.second.durationMs }
-
-    Column(Modifier.fillMaxWidth().testTag("panel:pressing")) {
-        // Preview: the sleeve and the record it'll press.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(sleeve, "Sleeve preview", Modifier.size(104.dp).clip(RoundedCornerShape(3.dp)), contentScale = ContentScale.Crop)
-            Spacer(Modifier.width(12.dp))
-            val preview = Album(
-                id = "preview-$title", title = title, artist = artist, year = null, folderUri = "", tracks = emptyList(),
-                quality = PressingRepository.qualityFor(picked.map { it.first }.distinctBy { it.id }),
-                disc = disc, labelColor = labelColour,
-            )
-            val look = discLookFor(preview)
-            val bounds = remember(picked.size, totalMs) {
-                var acc = 0L
-                picked.dropLast(1).map { acc += it.second.durationMs; acc.toFloat() / totalMs.coerceAtLeast(1) }
-            }
-            Canvas(Modifier.size(104.dp)) {
-                drawRecord(
-                    center = Offset(size.width / 2, size.height / 2), radius = size.minDimension / 2, rotation = 0f,
-                    look = look, label = sleeve, labelFallback = Color(labelColour), trackBoundaries = bounds,
-                    sideText = null, qualityText = null,
-                )
-            }
-        }
-
-        SectionTitle("Record")
-        Field(title, { title = it }, "Title")
-        Field(artist, { artist = it }, "Artist (you, a band, a mixtape name)")
-        Field(notes, { notes = it }, "Liner notes (optional)", singleLine = false)
-
-        SectionTitle("Sleeve")
-        Chips(SleeveArtist.PATTERN_NAMES.indices.toList(), if (picture == null) pattern else null, { SleeveArtist.PATTERN_NAMES[it] }, { pattern = it; picture = null })
-        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pill(if (picture == null) "Use a picture…" else "Change picture", { actions.pickImage { uri -> if (uri != null) picture = uri } })
-            if (picture != null) Pill("Remove picture", { picture = null })
-        }
-
-        SectionTitle("Vinyl")
-        Chips(DiscStyle.entries.toList(), disc, { it.label }, { disc = it })
-        ColourDots(LABEL_COLOURS, labelColour, { labelColour = it }, Modifier.padding(top = 8.dp))
-
-        SectionTitle("Tracks · ${picked.size}" + if (totalMs > 0) " · ${formatLength(totalMs)}" else "")
-        picked.forEachIndexed { i, (album, t) ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                BasicText("${i + 1}", style = Room.LabelQuiet, modifier = Modifier.width(20.dp))
-                Column(Modifier.weight(1f)) {
-                    BasicText(t.title, style = Room.Label, maxLines = 1)
-                    BasicText(album.artist, style = Room.LabelQuiet.copy(fontSize = 9.sp), maxLines = 1)
-                }
-                BasicText("Remove", style = Room.LabelQuiet, modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { picked.removeAt(i) })
-            }
-        }
-        Field(search, { search = it }, "Find tracks on your shelf")
-        val playable = remember(shelf) { shelf.filter { a -> a.tracks.any { it.uri.isNotBlank() } } }
-        val matches = playable.filter { a ->
-            search.isBlank() || a.title.contains(search, true) || a.artist.contains(search, true) || a.tracks.any { it.title.contains(search, true) }
-        }.take(24)
-        if (playable.isEmpty()) BasicText("Your crate is empty. Choose a music folder first, then pick tracks here.", style = Room.LabelQuiet)
-        matches.forEach { a ->
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { expanded = if (expanded == a.id) null else a.id }
-                        .padding(vertical = 5.dp)
-                        .testTag("pick-album:${a.title}"),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SleeveArt(a, Modifier.size(30.dp), showSticker = false)
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        BasicText(a.title, style = Room.Label, maxLines = 1)
-                        BasicText("${a.artist} · ${a.tracks.size} tracks", style = Room.LabelQuiet.copy(fontSize = 9.sp), maxLines = 1)
-                    }
-                    BasicText(if (expanded == a.id) "–" else "+", style = Room.Title)
-                }
-                if (expanded == a.id || (search.isNotBlank() && a.tracks.any { it.title.contains(search, true) })) {
-                    a.tracks.filter { it.uri.isNotBlank() }.forEach { t ->
-                        val on = picked.any { it.second.id == t.id }
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                    val at = picked.indexOfFirst { it.second.id == t.id }
-                                    if (at >= 0) picked.removeAt(at) else if (picked.size < MAX_PRESSING_TRACKS) picked.add(a to t)
-                                }
-                                .padding(start = 38.dp, top = 4.dp, bottom = 4.dp)
-                                .testTag("pick-track:${t.title}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(Modifier.size(14.dp).border(1.dp, if (on) Room.Accent else Room.Faint, CircleShape).padding(3.dp).background(if (on) Room.Accent else Color.Transparent, CircleShape))
-                            Spacer(Modifier.width(8.dp))
-                            BasicText(t.title, style = Room.Label, maxLines = 1, modifier = Modifier.weight(1f))
-                            BasicText(formatLength(t.durationMs), style = Room.LabelQuiet)
-                        }
-                    }
-                }
-            }
-        }
-
-        SectionTitle("Sharing")
-        ToggleRow(
-            "I made this music",
-            "Then its audio travels when you send the record. Leave it off for mixtapes of other people's music: friends get the sleeve, the vinyl and the track list.",
-            owned, { owned = it },
-        )
-        Spacer(Modifier.height(10.dp))
-        val ready = title.isNotBlank() && picked.isNotEmpty() && !pressing
-        Pill(
-            if (ready) "Press it" else if (title.isBlank()) "Give it a title" else "Add some tracks",
-            {
-                val submitted = PressingDraft(
-                        title = title, artist = artist.ifBlank { profile.name }, tracks = picked.map { it.second },
-                        quality = PressingRepository.qualityFor(picked.map { it.first }.distinctBy { it.id }),
-                        disc = disc, labelColor = labelColour, coverImage = picture, pattern = pattern, owned = owned, notes = notes,
-                    )
-                val originalArtist = artist
-                pressing = true
-                actions.press(submitted) { saved ->
-                    pressing = false
-                    // A late result must not erase edits made while this press was in flight.
-                    if (saved && title == submitted.title && artist == originalArtist && notes == submitted.notes &&
-                        picked.map { it.second } == submitted.tracks && picture == submitted.coverImage &&
-                        pattern == submitted.pattern && disc == submitted.disc && labelColour == submitted.labelColor && owned == submitted.owned) {
-                        title = ""; artist = ""; notes = ""; picked.clear(); picture = null
-                        pattern = 0; disc = DiscStyle.COLOUR; labelColour = profile.accent; owned = false
-                    }
-                }
-            },
-            active = ready, enabled = ready,
-        )
-        Spacer(Modifier.height(14.dp))
-    }
-}
-
-private const val MAX_PRESSING_TRACKS = 40
 
 fun formatLength(ms: Long): String {
     val s = ms / 1000

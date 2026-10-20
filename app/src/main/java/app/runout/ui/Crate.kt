@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +71,8 @@ fun Crate(
     onPutBack: () -> Unit,
     onFrontSlot: (SleeveSlot) -> Unit,
     modifier: Modifier = Modifier,
+    /** Long-press on a sleeve: the record's menu. */
+    onMenu: (Album) -> Unit = {},
     initialIndex: Int = 0,
     emptyTitle: String = if (hasFolder) "No albums found" else "Choose your\nmusic folder",
     emptyDetail: String = if (hasFolder) "Tap to pick another folder" else "Each album folder becomes\na record on your shelf",
@@ -156,16 +159,27 @@ fun Crate(
                             .testTag("sleeve:${album.title}")
                             .graphicsLayer {
                                 translationX = x
-                                translationY = -10.dp.toPx() * (1f - near)
-                                rotationY = -dx.coerceIn(-1f, 1f) * 58f
-                                val s = 1f - 0.14f * near
+                                translationY = -12.dp.toPx() * (1f - near)
+                                // A slightly tighter turn than before, so the side sleeves read as standing in a crate.
+                                rotationY = -dx.coerceIn(-1f, 1f) * 52f
+                                val s = 1f - 0.16f * near
                                 scaleX = s
                                 scaleY = s
-                                cameraDistance = 14f * density.density
+                                cameraDistance = 16f * density.density
                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                // The front sleeve lifts off the others: a soft shadow under it only.
+                                // (Tilted sleeves would cast distorted shadows, so they get none.)
+                                shadowElevation = if (adx < 0.6f) (1f - adx / 0.6f) * 16.dp.toPx() else 0f
+                                ambientShadowColor = Color.Black.copy(alpha = 0.25f)
+                                spotShadowColor = Color.Black.copy(alpha = 0.35f)
+                                shape = RoundedCornerShape(2.dp)
                                 alpha = if (hidden) 0f else (1f - (adx - 2.4f).coerceAtLeast(0f)).coerceIn(0f, 1f)
                             }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onLongClick = { onMenu(album) },
+                            ) {
                                 if (isFront) {
                                     if (pulledId == album.id) onPutBack() else onPull(album)
                                 } else {
@@ -192,22 +206,13 @@ fun Crate(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
+                    // Short: title and artist, the format as a tiny printed tag. The licence and the
+                    // rest live in the record's details (long-press).
                     BasicText(front.title, style = Room.Title.copy(textAlign = TextAlign.Center), maxLines = 1)
-                    BasicText(
-                        listOfNotNull(front.artist, front.year?.toString()).joinToString(" · "),
-                        style = Room.LabelQuiet.copy(textAlign = TextAlign.Center),
-                        maxLines = 1,
-                    )
-                    BasicText(
-                        "${front.quality.label}   ${center.roundToInt() + 1} / ${albums.size}",
-                        style = Room.LabelQuiet.copy(textAlign = TextAlign.Center),
-                        maxLines = 1,
-                    )
-                    val unavailable = front.unavailableReason
-                    if (unavailable != null) {
-                        BasicText(unavailable, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Color(0xFF9A3429)), maxLines = 2)
-                    } else provenance(front)?.let {
-                        BasicText(it, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Room.Accent), maxLines = 1)
+                    BasicText(front.artist, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center), maxLines = 1)
+                    SpecTag(front.quality.label, Modifier.padding(top = 4.dp))
+                    front.unavailableReason?.let {
+                        BasicText(it, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Room.Danger), maxLines = 2)
                     }
                 }
             }

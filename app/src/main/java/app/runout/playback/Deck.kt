@@ -156,6 +156,11 @@ class Deck(
         }
     }
 
+    /** The soft thud of a disc seating on the platter. Pure mode stays silent, as with every deck sound. */
+    fun discLanded() {
+        if (!pure) sfx.platterDrop()
+    }
+
     /** A record has been dropped on the platter. Nothing plays until the needle goes down. */
     fun load(album: Album) {
         val verified = FlacPolicy.filterAlbum(context, album, refreshMetadata = false) ?: return

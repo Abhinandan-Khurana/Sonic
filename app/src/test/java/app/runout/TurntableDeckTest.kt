@@ -163,6 +163,17 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `the strobe stands still at 33 and a third and drifts when the platter is off speed`() {
+        assertEquals(0f, app.runout.ui.strobeDrift(app.runout.ui.RPM_33_DEG), 0.001f)
+        assertEquals(0f, app.runout.ui.strobeDrift(0f), 0.001f)
+        // Slightly slow: the pattern creeps backwards; slightly fast: forwards.
+        assertTrue(app.runout.ui.strobeDrift(app.runout.ui.RPM_33_DEG - 4f) < 0f)
+        assertTrue(app.runout.ui.strobeDrift(app.runout.ui.RPM_33_DEG + 4f) > 0f)
+        assertEquals("1 record", app.runout.ui.recordCount(1))
+        assertEquals("5 records", app.runout.ui.recordCount(5))
+    }
+
+    @Test
     fun `the screen says what's playing`() {
         assertEquals("NO RECORD", screenLines(DeckState()).second)
         deck.load(album())

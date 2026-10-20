@@ -16,6 +16,10 @@ object Room {
     val Faint = Color(0xFFC9C9C4)
     val Accent = Color(0xFF2B6BFF)
     val Chrome = Color(0xFFD7D8DC)
+    /** Teenage Engineering signal orange: the deck's keys, lights and small hardware highlights. */
+    val Signal = Color(0xFFFF5A1F)
+    val Online = Color(0xFF2E9E5B)
+    val Danger = Color(0xFFD0342C)
 
     val Inter = FontFamily(
         Font(R.font.inter_regular, FontWeight.Normal),

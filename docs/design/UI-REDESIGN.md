@@ -95,16 +95,22 @@ Answers:
 - platter and arm: **"Keep strobe dots, Orange details on arm, Keep tonearm as is"**;
 - keys: **"Keep layout"**.
 
-- [ ] **DK-1** TE orange (about `#FF5A1F`) is the deck's accent for keys, lights and highlights.
-- [ ] **DK-2** Keep the frosted-glass plinth and add TE details on top. It does NOT become a solid aluminium body.
-- [ ] **DK-3** Physical keys: visible depth, a shadow, a pressed state that travels down, and a small light.
-- [ ] **DK-4** Engraved labels and ticks: tiny printed labels by the keys, scale ticks, and model-plate details.
-- [ ] **DK-5** The pixel screen keeps its role, with a smaller font and a smaller dot matrix that is still readable.
-- [ ] **DK-6** Keep the strobe dots (restyle only).
-- [ ] **DK-7** Keep the S-shaped tonearm as is, and make the counterweight and/or headshell TE orange.
-- [ ] **DK-8** Key positions stay as today (START/STOP left, ◀◀ ▶▶ middle, LCD right).
-- [ ] **DK-9** Performance: cache the static deck layers, and spin the platter and record as their own layer instead of redrawing the whole deck every frame.
+- [x] **DK-1** TE orange (about `#FF5A1F`) is the deck's accent for keys, lights and highlights.
+- [x] **DK-2** Keep the frosted-glass plinth and add TE details on top. It does NOT become a solid aluminium body.
+- [x] **DK-3** Physical keys: visible depth, a shadow, a pressed state that travels down, and a small light.
+- [x] **DK-4** Engraved labels and ticks: tiny printed labels by the keys, scale ticks, and model-plate details.
+- [x] **DK-5** The pixel screen keeps its role, with a smaller font and a smaller dot matrix that is still readable.
+- [x] **DK-6** Keep the strobe dots (restyle only).
+- [x] **DK-7** Keep the S-shaped tonearm as is, and make the counterweight and/or headshell TE orange.
+- [x] **DK-8** Key positions stay as today (START/STOP left, ◀◀ ▶▶ middle, LCD right).
+- [x] **DK-9** Performance: cache the static deck layers, and spin the platter and record as their own layer instead of redrawing the whole deck every frame.
   - This was agreed in discussion: the deck stays code-drawn vector. Figma is used as the design reference, and Rive or Lottie only for the intro and transitions.
+
+- [~] **DK-10** *(added after the interview)* "the disk spins way to fast keep it slow and real".
+  - The platter already ran at true 33⅓ rpm. The racing look came from the strobe dots redrawn rotating every frame.
+  - Now the strobe follows real mains-strobe physics: it stands still at speed and drifts during spin-up and coast-down.
+  - The heavy-platter spin-up is slower (about 1.5 s).
+  - Waiting for the owner to confirm the feel on the device.
 
 ### 2.2 Crate, caption and footer
 Answers:
@@ -116,22 +122,22 @@ Answers:
 - drag: **"Shadow lift, Drop thud, Haptics"**;
 - buttons beside a pulled disc: **"Long-press menu"**.
 
-- [ ] **HM-1** Keep the coverflow. Refine its perspective, depth and shadows.
-- [ ] **HM-2** Caption: title and artist only, with format/hi-res as a tiny tag. The licence moves into the record's details.
-- [ ] **HM-3** Replace the scrolling pill strip with an icon tab bar (icons and tiny labels) that always fits: Dig, Drops, Friends, Settings.
-- [ ] **HM-4** Pull-out: the disc slides up out of the sleeve with a slight overshoot and spins up a little.
-- [ ] **HM-5** Drag: the shadow lifts while the disc is held. The landing has a "thud" (a small squash, the shadow settling and a soft thud sound), and haptics fire on pickup and on landing.
-- [ ] **HM-6** Remove "Sleeve back" / "Send with audio" / "Remove" beside the pulled disc. Use a long-press menu on the sleeve or disc instead, with Put back, Send, Remove and Details.
+- [x] **HM-1** Keep the coverflow. Refine its perspective, depth and shadows.
+- [x] **HM-2** Caption: title and artist only, with format/hi-res as a tiny tag. The licence moves into the record's details.
+- [x] **HM-3** Replace the scrolling pill strip with an icon tab bar (icons and tiny labels) that always fits: Dig, Drops, Friends, Settings.
+- [x] **HM-4** Pull-out: the disc slides up out of the sleeve with a slight overshoot and spins up a little.
+- [x] **HM-5** Drag: the shadow lifts while the disc is held. The landing has a "thud" (a small squash, the shadow settling and a soft thud sound), and haptics fire on pickup and on landing.
+- [x] **HM-6** Remove "Sleeve back" / "Send with audio" / "Remove" beside the pulled disc. Use a long-press menu on the sleeve or disc instead, with Put back, Send, Remove and Details.
 
 ### 2.3 Top bar
 > "Move change folder to settings, Keep rescan but icon of refresh matching TE color, Keep crackle and keep online as in green and red dot and download number (grey if paused, green downlaoding, red if error) remove time, keep number of records"
 
-- [ ] **HM-7** "Change folder" moves to Settings › Library.
-- [ ] **HM-8** Rescan becomes a refresh icon in TE orange.
-- [ ] **HM-9** Keep the Crackle toggle.
-- [ ] **HM-10** Online status: a green dot when online, red when offline or on error.
-- [ ] **HM-11** Download count colour: grey when idle or paused, green while downloading, red on error.
-- [ ] **HM-12** Remove the clock. Keep the record count.
+- [x] **HM-7** "Change folder" moves to Settings › Library.
+- [x] **HM-8** Rescan becomes a refresh icon in TE orange.
+- [x] **HM-9** Keep the Crackle toggle.
+- [x] **HM-10** Online status: a green dot when online, red when offline or on error.
+- [x] **HM-11** Download count colour: grey when idle or paused, green while downloading, red on error.
+- [x] **HM-12** Remove the clock. Keep the record count.
 
 ---
 
@@ -174,8 +180,8 @@ Answers: **"Full screen like Dig, Chat list first, Share records in chat, Friend
 ## 6. Pressing Plant
 > "remove this whole module."
 
-- [ ] **PP-1** Remove the tab, the screen, pressing creation, and their tests and docs.
-- [ ] **PP-2** Do not delete user data: records that were already pressed stay playable and removable.
+- [~] **PP-1** *(code and tests removed; docs still to update)* Remove the tab, the screen, pressing creation, and their tests and docs.
+- [x] **PP-2** Do not delete user data: records that were already pressed stay playable and removable.
 
 ## 7. Settings
 Answers: **"TE hardware EQ, Shorter copy, Simple list layout"**. Settings stays a sheet.
@@ -194,12 +200,12 @@ Answers: **"Controls as icons, Shorter copy"**. Downloads stays a sheet.
 ## 9. Global
 Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE look everywhere".
 
-- [ ] **GL-1** Haptics on keys, toggles, tab switches, and disc pickup/landing.
+- [~] **GL-1** *(done: deck keys, tabs, pills, toggles, menu rows, disc pickup/landing; still to do: the new onboarding and Dig screens)* Haptics on keys, toggles, tab switches, and disc pickup/landing.
 - [ ] **GL-2** Portrait first. Landscape must keep working but is not redesigned now.
 - [ ] **GL-3** TE styling stays limited to what is listed: the deck, the EQ, spec tags, claim tokens and the refresh icon. Do not restyle the rest of the app into TE hardware.
 
 ## 10. Bugs found during the interview
-- [ ] **BG-1** The record count says "1 records". It should say "1 record".
+- [x] **BG-1** The record count says "1 records". It should say "1 record".
 - [ ] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
 - [ ] **BG-3** With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.
 - [ ] **BG-4** During setup, the accessibility tree (uiautomator/TalkBack) kept the previous step's content after moving on. Verify, then fix.
