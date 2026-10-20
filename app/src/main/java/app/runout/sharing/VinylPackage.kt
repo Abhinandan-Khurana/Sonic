@@ -188,6 +188,9 @@ object VinylPackage {
             val missing = album.tracks.filter { it.fileName !in audio }
             if (missing.isNotEmpty()) throw Invalid("Record is missing ${missing.size} audio files")
         }
+        // Every extracted audio entry needs its own checksum, not just those a sender lists.
+        if (audio.isNotEmpty() && (checksums == null || audio.keys.any { !checksums.has(it) }))
+            throw Invalid("Record is missing audio checksums")
         // Every file must match the checksum it was sent with: the audio arrives bit for bit.
         checksums?.let { sums ->
             for (name in sums.keys()) {
