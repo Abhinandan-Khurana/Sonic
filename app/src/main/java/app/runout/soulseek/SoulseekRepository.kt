@@ -8,11 +8,14 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import androidx.room.withTransaction
 import app.runout.library.AlbumJson
+import app.runout.library.ArtworkRepository
 import app.runout.library.FlacPolicy
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.Source
 import app.runout.model.Track
+import app.runout.sharing.VinylPackage
+import app.runout.social.Profile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +47,7 @@ class SoulseekRepository(
     private val scope: CoroutineScope,
     private val transportFactory: ((String) -> Int) -> SoulseekTransport = { NativeTransport(it) },
     database: SoulseekDatabase? = null,
+    private val artwork: ArtworkRepository? = null,
 ) {
     private val db = database ?: Room.databaseBuilder(context.applicationContext, SoulseekDatabase::class.java, "soulseek.db").build()
     private val dao = db.soulseek()
@@ -99,6 +103,7 @@ class SoulseekRepository(
     val error = _error.asStateFlow()
     private val initialized = scope.async(Dispatchers.IO) {
         dao.pauseInterrupted("Interrupted. Sign in and resume to continue.")
+        cleanupBrokenDownloads()
         dao.offlineContacts()
         dao.failInterruptedMessages()
         connection.initialize()
@@ -256,6 +261,7 @@ class SoulseekRepository(
         if (activeTransfers.contains(id)) command("cancel") { put("id", id) }
         activeTransfers.remove(id)
         dao.putTransfer(row.copy(state = "CANCELLED", speed = 0.0, error = null))
+        storage.stagingDirectory(id).deleteRecursively()
         // Cancellation never removes music already published to the user's folder.
     }
     private suspend fun ownTransfer(id: String): TransferRow {
@@ -528,10 +534,11 @@ class SoulseekRepository(
         val existing = dao.album(albumId)?.let { AlbumJson.fromJson(JSONObject(it.json)) }
         val quality = AudioQuality("FLAC", listOfNotNull(existing?.quality?.bitsPerSample, info.bits).minOrNull(), listOfNotNull(existing?.quality?.sampleRateHz, info.sampleRate).minOrNull())
         val cover = info.picture?.let { bytes -> File(context.filesDir, "soulseek-art/$albumId.jpg").apply { parentFile?.mkdirs(); writeBytes(bytes) }.absolutePath } ?: existing?.coverPath
-        val album = Album(albumId, albumTitle, info.albumArtist ?: info.artist ?: existing?.artist ?: "Unknown artist", info.year ?: existing?.year, folder.uri.toString(),
+        val album = rememberCover(Album(albumId, albumTitle, info.albumArtist ?: info.artist ?: existing?.artist ?: "Unknown artist", info.year ?: existing?.year, folder.uri.toString(),
             (existing?.tracks.orEmpty().filterNot { it.id == track.id } + track).sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.fileName })), quality, coverPath = cover,
-            source = Source.SOULSEEK, albumGainDb = info.albumGainDb, owned = false, from = initial.username)
+            source = Source.SOULSEEK, albumGainDb = info.albumGainDb, owned = false, from = initial.username))
         db.withTransaction { dao.putAlbum(DownloadAlbumRow(albumId, AlbumJson.toJson(album).toString())); dao.putTransfer(row.copy(state = "COMPLETED", bytes = row.size, speed = 0.0, error = null)) }
+        writeDownloadRecord(folder, album, listOf("slsk://${initial.username}/${initial.path}"))
         stage.delete()
     }
     /** Internet Archive stays an independent HTTPS source; only publication uses this account gate. */
@@ -553,7 +560,10 @@ class SoulseekRepository(
             if (target.name != name) check(target.renameTo(name)) { "This folder cannot publish a completed FLAC file. Choose another download folder and retry." }
             track.copy(uri = target.uri.toString(), fileName = target.name ?: name)
         }
-        album.copy(folderUri = folder.uri.toString(), tracks = tracks)
+        val published = rememberCover(album.copy(folderUri = folder.uri.toString(), tracks = tracks))
+        val identifier = album.id.removePrefix("drop-")
+        writeDownloadRecord(folder, published, published.tracks.map { "https://archive.org/download/$identifier/${it.fileName}" } + listOf("https://archive.org/details/$identifier"))
+        published
     }
     /** Tracks Archive's existing HTTPS downloader without sending it Soulseek credentials. */
     suspend fun withArchiveDownload(
@@ -599,6 +609,30 @@ class SoulseekRepository(
         } catch (e: CancellationException) { throw e }
         catch (e: Throwable) { Result.failure(e) }
     }
+    private suspend fun rememberCover(album: Album): Album {
+        if (album.coverPath != null || album.artist.isBlank() || album.title.isBlank()) return album
+        val file = runCatching { artwork?.lookupOnline(album.id, album.artist, album.title) }.getOrNull() ?: return album
+        return album.copy(coverPath = file.absolutePath)
+    }
+
+    private fun writeDownloadRecord(folder: DocumentFile, album: Album, links: List<String>) {
+        runCatching {
+            val bytes = java.io.ByteArrayOutputStream().use { out ->
+                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("runout", "Runout", 0), album, sleeve = album.coverPath?.let(::File), sources = links)
+                out.toByteArray()
+            }
+            storage.writeDocument(folder, "record.vinyl", bytes)
+        }
+    }
+
+    private suspend fun cleanupBrokenDownloads() {
+        val root = File(context.noBackupFilesDir, "soulseek-staging")
+        root.listFiles()?.forEach { dir ->
+            val row = dao.transfer(dir.name)
+            if (row == null || row.state == "CANCELLED" || row.state == "COMPLETED") dir.deleteRecursively()
+        }
+    }
+
     private fun friendly(e: Throwable): String = when (e) {
         is SecurityException -> "Folder access was lost. Choose the folder again and retry."
         else -> e.message?.takeIf { it.isNotBlank() } ?: "This action could not be completed. Please retry."

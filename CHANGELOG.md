@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.4] - 2026-10-21 (development)
+
+### Added
+- The printed deck is now played by hand: drag the arm to a band, use the cue and motor, swipe a finished record up to turn it over, and drag it down to put it away.
+- Settings can show labelled deck controls. They stay off unless enabled.
+- Each completed download writes `record.vinyl` beside the music, with cover art, album metadata, and the source download links.
+
+### Changed
+- Covers sit in the centre label of a black record. They are no longer printed across the disc like a CD.
+- Next and previous stay on the current side. Flip is the only way to the other side.
+- Lowering the needle no longer fades the first moments in from silence.
+- Internet Archive downloads resume a partial file. Cancel removes unfinished staging, and a corrupt partial is deleted instead of being reused.
+
+---
+
 ## [0.4.3] - 2026-10-21 (development)
 
 ### Added

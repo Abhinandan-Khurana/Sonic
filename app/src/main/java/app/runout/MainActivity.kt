@@ -152,6 +152,7 @@ class MainActivity : ComponentActivity() {
                     override fun releasePlatter() = graph.deck.releasePlatter()
                     override fun toggleSpeed() = graph.deck.toggleSpeed()
                     override fun flip() = graph.deck.flip()
+                    override fun eject() = graph.deck.eject()
                     override fun startStop() = graph.deck.startStop()
                     override fun nextTrack() = graph.deck.nextTrack()
                     override fun previousTrack() = graph.deck.previousTrack()

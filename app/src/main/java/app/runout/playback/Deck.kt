@@ -213,17 +213,13 @@ class Deck(
         rampJob?.cancel()
         rampJob = scope.launch {
             withController { c ->
-                c.volume = 0f
+                c.volume = 1f
                 c.seekTo(index, offset)
                 val f = effectiveSpeed()
                 c.playbackParameters = PlaybackParameters(f, f)
             }
-            delay(420) // the needle settles into the groove before the music starts
+            delay(420) // the needle settles; the program stays at full volume
             withController { c -> c.play() }
-            for (step in 1..8) {
-                delay(25)
-                withController { c -> c.volume = step / 8f }
-            }
         }
     }
 
@@ -232,7 +228,7 @@ class Deck(
         rampJob?.cancel()
         sfx.lift()
         sfx.stopCrackle()
-        withController { c -> c.pause() }
+        withController { c -> c.pause(); c.volume = 1f }
         _state.update { it.copy(needleDown = false, held = false) }
     }
 
@@ -299,7 +295,6 @@ class Deck(
         val s = _state.value
         val side = s.side ?: return
         if (s.trackIndex < side.tracks.lastIndex) jumpTo(s.sideIndex, s.trackIndex + 1)
-        else jumpTo((s.sideIndex + 1) % s.sides.size, 0)
     }
 
     /** Back to the start of this track, or to the one before if it has only just begun. */
@@ -309,8 +304,7 @@ class Deck(
         when {
             s.needleDown && s.trackPositionMs > RESTART_WINDOW_MS -> jumpTo(s.sideIndex, s.trackIndex)
             s.trackIndex > 0 -> jumpTo(s.sideIndex, s.trackIndex - 1)
-            s.sideIndex > 0 -> jumpTo(s.sideIndex - 1, s.sides[s.sideIndex - 1].tracks.lastIndex)
-            else -> jumpTo(0, 0)
+            else -> jumpTo(s.sideIndex, 0)
         }
     }
 

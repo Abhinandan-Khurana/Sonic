@@ -186,8 +186,10 @@ class SoulseekRepositoryTest {
         assertFalse(album.owned)
         assertNull(repo.transfers.value.single().queuePosition)
         assertNull(repo.transfers.value.single().error)
-        val saved = folder.walkTopDown().filter { it.isFile }.single()
+        val files = folder.walkTopDown().filter { it.isFile }.toList()
+        val saved = files.single { it.name.endsWith(".flac") }
         assertArrayEquals(flac, saved.readBytes())
+        assertTrue(files.any { it.name == "record.vinyl" })
         repo.logout().join()
         assertTrue(saved.exists())
         assertEquals(1, repo.downloadAlbums.value.size)

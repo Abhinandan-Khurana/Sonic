@@ -75,6 +75,7 @@ object VinylPackage {
         shelf: List<ShelfItem> = emptyList(),
         sleeve: File? = null,
         audio: List<Pair<String, () -> InputStream?>> = emptyList(),
+        sources: List<String> = emptyList(),
     ) {
         if (kind != Kind.ALBUM && audio.isNotEmpty()) throw Invalid("Only album records may contain audio")
         if (kind == Kind.ALBUM && (album == null || album.tracks.isEmpty())) throw Invalid("Record has no FLAC tracks")
@@ -100,6 +101,7 @@ object VinylPackage {
                     })
                 }
                 if (shelf.isNotEmpty()) put("shelf", JSONArray().apply { shelf.forEach { put(it.toJson()) } })
+                if (sources.isNotEmpty()) put("sources", JSONArray().apply { sources.forEach { put(it) } })
             }
             zip.putNextEntry(ZipEntry(MANIFEST))
             zip.write(manifest.toString().toByteArray())

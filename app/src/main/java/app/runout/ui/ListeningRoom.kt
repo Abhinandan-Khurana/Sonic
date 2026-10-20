@@ -232,6 +232,7 @@ fun RoomScreen(
     showChrome: Boolean = true,
     idleRack: Boolean = false,
     inked: Boolean = false,
+    showDeckControls: Boolean = false,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -286,7 +287,7 @@ fun RoomScreen(
 
             val nearPlatter = dragging && platterCenter?.let { (disc.value + rootOrigin - it).getDistance() < platterRadius * 0.95f } == true
             val turntable = @Composable { m: Modifier, alignment: Alignment ->
-                if (inked) InkedDeck(state.deck, nearPlatter, { c, r -> platterCenter = c; platterRadius = r }, actions, m)
+                if (inked) InkedDeck(state.deck, nearPlatter, { c, r -> platterCenter = c; platterRadius = r }, actions, m, showControls = showDeckControls)
                 else Turntable(
                     deck = state.deck,
                     backdrop = backdrop,

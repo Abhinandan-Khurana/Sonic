@@ -68,11 +68,11 @@ fun discLookFor(album: Album?): DiscLook {
         DiscStyle.SPLATTER -> DiscLook(Color(0xFFF1F1EE), 1f, 0.55f, DiscStyle.SPLATTER, chosen, seed)
         DiscStyle.MARBLE -> DiscLook(lerp(chosen, Color.White, 0.6f), 1f, 0.6f, DiscStyle.MARBLE, chosen, seed)
         DiscStyle.PICTURE -> DiscLook(Color(0xFF1A1A1E), 1f, 0.45f, DiscStyle.PICTURE, chosen, seed)
-        // Every record with a cover is pressed as a picture disc: the cover turns with the platter.
-        null -> if (album?.coverPath != null) DiscLook(lerp(tint, Color.Black, 0.5f), 1f, 0.5f, DiscStyle.PICTURE, tint, seed)
-        else when (album?.pressing) {
-            Pressing.CLEAR -> DiscLook(lerp(tint, Color.White, 0.1f), 0.58f, 0.75f)
-            Pressing.COLOUR -> DiscLook(lerp(tint, Color.Black, 0.3f), 1f, 0.85f)
+        // A cover is the centre label of a black record, not a printed CD.
+        null -> when {
+            album?.coverPath != null -> DiscLook(Color(0xFF111114), 1f, 1f, DiscStyle.BLACK)
+            album?.pressing == Pressing.CLEAR -> DiscLook(lerp(tint, Color.White, 0.1f), 0.58f, 0.75f)
+            album?.pressing == Pressing.COLOUR -> DiscLook(lerp(tint, Color.Black, 0.3f), 1f, 0.85f)
             else -> DiscLook(Color(0xFF111114), 1f, 1f)
         }
     }

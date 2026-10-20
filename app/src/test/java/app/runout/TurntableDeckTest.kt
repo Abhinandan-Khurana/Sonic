@@ -117,7 +117,7 @@ class TurntableDeckTest {
     }
 
     @Test
-    fun `next and previous move through the side and turn the record over`() {
+    fun `next and previous stay on the side and flip is the only turnover`() {
         deck.load(album())
         settle()
         deck.nextTrack()
@@ -125,22 +125,17 @@ class TurntableDeckTest {
         assertEquals("A2", s.trackCode)
         assertEquals(1, player.currentMediaItemIndex)
         assertTrue(player.playWhenReady)
-        deck.nextTrack() // end of side A: over to side B
+        deck.nextTrack()
+        settle()
+        assertEquals("A2", s.trackCode)
+        assertEquals(0, s.sideIndex)
+        deck.flip()
         settle()
         assertEquals("B1", s.trackCode)
         assertEquals(1, s.sideIndex)
-        assertEquals("t3", player.getMediaItemAt(0).mediaId)
-        assertEquals(0, player.currentMediaItemIndex)
-        deck.previousTrack() // back across to the last track of side A
-        settle()
-        assertEquals("A2", s.trackCode)
-        assertEquals("t1", player.getMediaItemAt(0).mediaId)
         deck.previousTrack()
         settle()
-        assertEquals("A1", s.trackCode)
-        deck.previousTrack() // at the very start it stays put
-        settle()
-        assertEquals("A1", s.trackCode)
+        assertEquals("B1", s.trackCode)
     }
 
     @Test

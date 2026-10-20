@@ -95,6 +95,8 @@ interface DeckActions {
     fun nextTrack() {}
     fun previousTrack() {}
     fun setPitch(percent: Float) {}
+    /** Lift the record off the platter and clear the deck. */
+    fun eject() {}
 }
 
 /**

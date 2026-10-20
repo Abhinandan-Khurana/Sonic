@@ -213,6 +213,7 @@ open class RecordingActions : RoomActions {
     override fun releasePlatter() { log += "release" }
     override fun toggleSpeed() { log += "speed" }
     override fun flip() { log += "flip" }
+    override fun eject() { log += "eject" }
     override fun share(album: Album) { log += "share:${album.title}" }
     override fun shareMyCard() { log += "shareCard" }
     override fun refreshDrops() { log += "refreshDrops" }

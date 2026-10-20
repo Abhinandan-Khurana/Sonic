@@ -51,6 +51,7 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
     var setup by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
     var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
     var drops by rememberSaveable { mutableStateOf(false) }
+    var showDeckControls by rememberSaveable { mutableStateOf(false) }
     var pressingChanged by remember { mutableStateOf(false) }
     var discardPressing by remember { mutableStateOf(false) }
     fun closeOverlay() {
@@ -83,7 +84,7 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when(destination) {
-                        Destination.HOME -> RoomScreen(state,actions,modifier = Modifier.fillMaxSize().testTag("screen:home"),showChrome = false,idleRack = state.deck.album == null,inked = true)
+                        Destination.HOME -> RoomScreen(state,actions,modifier = Modifier.fillMaxSize().testTag("screen:home"),showChrome = false,idleRack = state.deck.album == null,inked = true,showDeckControls = showDeckControls)
                         Destination.LIBRARY -> LibraryScreen(state,actions) { destination = Destination.HOME }
                         Destination.DISCOVER -> Column(Modifier.fillMaxSize().testTag("screen:discover")) {
                             Chips(listOf(false,true),drops,{ if(it) "Friday Drops" else "Find music" },{ drops = it },Modifier.padding(horizontal = 16.dp,vertical = 4.dp))
@@ -116,7 +117,10 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
                         Pill("Review Soulseek setup",{ overlay = null; openSetup() },Modifier.padding(top = 12.dp))
                     }
                     Panel.TRANSFERS -> SoulseekTransfersPanel(state,actions)
-                    Panel.SOUND -> SoundPanel(state.sound,state.output,actions)
+                    Panel.SOUND -> {
+                        ToggleRow("Show deck controls", "Labelled buttons for the same hand gestures. Off unless you need them.", showDeckControls, { value -> showDeckControls = value })
+                        SoundPanel(state.sound,state.output,actions)
+                    }
                     Panel.PRESSING -> PressingPanel(state.albums,state.profile,actions) { pressingChanged = it }
                     else -> Unit
                 }

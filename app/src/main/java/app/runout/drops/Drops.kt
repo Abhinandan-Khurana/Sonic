@@ -138,7 +138,7 @@ class DropsRepository(
                     val ok = http.download(fileUrl(item.identifier, f.name), partial) { b -> onProgress(((doneBytes + b).toFloat() / totalBytes).coerceAtMost(0.99f)) }
                     check(ok) { "Download failed for ${f.title}" }
                     val valid = partial.inputStream().use { FlacPolicy.read(it, partial.length()) } != null
-                    check(valid) { "${f.title ?: target.name} is not valid FLAC audio. No claim was used." }
+                    check(valid) { partial.delete(); "${f.title ?: target.name} is not valid FLAC audio. The broken download was removed. No claim was used." }
                     check(f.size <= 0 || partial.length() == f.size) { "${f.title ?: target.name} did not download completely. No claim was used." }
                     check(partial.renameTo(target)) { "Couldn't save ${target.name}" }
                 }
