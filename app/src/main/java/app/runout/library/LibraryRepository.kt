@@ -26,10 +26,33 @@ class LibraryRepository(
     private val scanner: LibraryScanner,
     private val artwork: ArtworkRepository,
     private val scope: CoroutineScope,
-    private val lookupCoversOnline: Boolean = true,
+    private val lookupCoversOnline: Boolean = false,
 ) {
     private val prefs = context.getSharedPreferences("library", Context.MODE_PRIVATE)
     private val cacheFile = File(context.filesDir, "library.json")
+    private val coverPrefs = context.getSharedPreferences("cover-lookup", Context.MODE_PRIVATE)
+    private val _coverLookupEnabled = MutableStateFlow(coverPrefs.getBoolean("enabled", lookupCoversOnline))
+    val coverLookupEnabled: StateFlow<Boolean> = _coverLookupEnabled.asStateFlow()
+    private val _coverLookupNoticePending = MutableStateFlow(run {
+        if (!coverPrefs.contains("policy-initialized")) {
+            val existing = prefs.contains(KEY_FOLDER) || listOf("library.json", "pressings.json", "received.json", "drops.json")
+                .any { File(context.filesDir, it).exists() } ||
+                context.getSharedPreferences("soulseek-setup", Context.MODE_PRIVATE).getBoolean("onboarded", false)
+            coverPrefs.edit().putBoolean("policy-initialized", true).putBoolean("notice-pending", existing).commit()
+        }
+        coverPrefs.getBoolean("notice-pending", false)
+    })
+    val coverLookupNoticePending: StateFlow<Boolean> = _coverLookupNoticePending.asStateFlow()
+
+    fun setCoverLookupEnabled(enabled: Boolean) {
+        coverPrefs.edit().putBoolean("enabled", enabled).apply()
+        _coverLookupEnabled.value = enabled
+    }
+
+    fun dismissCoverLookupNotice() {
+        coverPrefs.edit().putBoolean("notice-pending", false).apply()
+        _coverLookupNoticePending.value = false
+    }
 
     private val _albums = MutableStateFlow<List<Album>>(emptyList())
     val albums: StateFlow<List<Album>> = _albums.asStateFlow()
@@ -103,9 +126,10 @@ class LibraryRepository(
             _albums.value = sortShelf(found)
             withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
 
-            if (lookupCoversOnline) {
+            if (coverLookupEnabled.value) {
                 val missing = _albums.value.filter { it.coverPath == null }
                 missing.forEachIndexed { i, album ->
+                    if (!coverLookupEnabled.value) return@forEachIndexed
                     _scan.value = ScanState.FindingCovers(i, missing.size)
                     val file = artwork.lookupOnline(album.id, album.artist, album.title)
                     if (file != null) {
