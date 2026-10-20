@@ -84,13 +84,8 @@ class AppGraph(app: Application) {
         scope.launch {
             sound.settings.map { it.pure }.distinctUntilChanged().drop(1).collect { deck.onPureChanged(it) }
         }
-        // Soulseek is the online identity. Legacy Nostr keys and friend cards stay on disk;
-        // no relay connections or automatic shelf publication are started.
-        scope.launch {
-            soulseek.session.collect { session ->
-                if (session.signedIn) social.rename(session.username!!)
-            }
-        }
+        // Keep portable display identity independent of Soulseek login credentials.
+        // Legacy Nostr keys and friend cards stay on disk; no relays are started.
     }
 
     companion object {

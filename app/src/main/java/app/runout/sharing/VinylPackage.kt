@@ -90,8 +90,15 @@ object VinylPackage {
                 put("format", FORMAT)
                 put("app", "Runout")
                 put("kind", kind.name)
-                put("from", from.toJson())
-                album?.let { put("album", AlbumJson.toJson(it, includeLocalPaths = false)) }
+                // Legacy profile usernames may be login identities, not public display names.
+                put("from", from.copy(username = null).toJson())
+                album?.let {
+                    put("album", AlbumJson.toJson(it, includeLocalPaths = false).apply {
+                        remove("source")
+                        remove("from")
+                        remove("notes")
+                    })
+                }
                 if (shelf.isNotEmpty()) put("shelf", JSONArray().apply { shelf.forEach { put(it.toJson()) } })
             }
             zip.putNextEntry(ZipEntry(MANIFEST))
