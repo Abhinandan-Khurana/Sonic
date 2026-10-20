@@ -82,7 +82,7 @@ fun discLookFor(album: Album?): DiscLook {
 /** A colour for albums with no cover, picked from the title so it stays the same every time. */
 fun fallbackColor(album: Album?): Color {
     val palette = listOf(0xFFE8E4FF, 0xFFDDEBFF, 0xFFFFE3EC, 0xFFE2F6EC, 0xFFFFF1D6, 0xFFE9E9EE)
-    val i = abs((album?.title ?: "").hashCode()) % palette.size
+    val i = Math.floorMod((album?.title ?: "").hashCode(), palette.size)
     return Color(palette[i])
 }
 
