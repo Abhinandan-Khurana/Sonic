@@ -213,6 +213,37 @@ class FridayDropsTest {
     }
 
     @Test
+    fun `stale Friday selection is refreshed and refused before downloading`() = runBlocking {
+        var now = at("2026-10-16")
+        val h = http()
+        val r = DropsRepository(context, h, clock = { now }, zone = utc,
+            canDownload = { true }, publishDownload = { album, _ -> album })
+        val item = (r.refresh() as DropState.Ready).week.items.first()
+        val oldIndex = r.currentIndex()
+        now = at("2026-10-23")
+        val beforeMetadata = h.calls.count { "/metadata/" in it }
+        val result = r.claim(item)
+        assertTrue("stale selection must be refused", result.isFailure)
+        assertEquals(beforeMetadata, h.calls.count { "/metadata/" in it })
+        assertEquals(r.currentIndex(), (r.state.value as DropState.Ready).week.index)
+        assertTrue(context.getSharedPreferences("drops", 0).getStringSet("claims-$oldIndex", emptySet())!!.isEmpty())
+    }
+
+    @Test
+    fun `claim finishing after Friday is charged only to its admitted week`() = runBlocking {
+        var now = at("2026-10-16")
+        val r = DropsRepository(context, http(), clock = { now }, zone = utc,
+            canDownload = { true }, publishDownload = { album, _ -> now = at("2026-10-23"); album })
+        val week = (r.refresh() as DropState.Ready).week
+        val item = week.items.first()
+        r.claim(item).getOrThrow()
+        val prefs = context.getSharedPreferences("drops", 0)
+        assertEquals(setOf(item.identifier), prefs.getStringSet("claims-${week.index}", emptySet()))
+        assertTrue(prefs.getStringSet("claims-${r.currentIndex()}", emptySet())!!.isEmpty())
+        assertTrue("visible allowance belongs to current week", r.claimed.value.isEmpty())
+    }
+
+    @Test
     fun `claimed drops can be taken off the shelf`() = runBlocking {
         val r = repo(http())
         val item = (r.refresh() as DropState.Ready).week.items.first()

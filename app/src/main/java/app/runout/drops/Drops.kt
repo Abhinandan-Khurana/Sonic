@@ -111,10 +111,16 @@ class DropsRepository(
         claimLock.withLock { runCatching {
             check(canDownload()) { "Sign in to Soulseek to download and keep music from Internet Archive" }
             require(item.identifier.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid Internet Archive identifier" }
-            _claimed.value = claimedThisWeek()
+            val index = currentIndex()
             val week = (state.value as? DropState.Ready)?.week ?: error("This week's drop hasn't loaded yet")
+            if (week.index != index) {
+                refresh()
+                error("A new Friday Drop has opened. Choose an album from this week's selection.")
+            }
+            val admittedClaims = claimsFor(index)
+            _claimed.value = admittedClaims
             require(week.items.any { it.identifier == item.identifier }) { "That album isn't in this week's drop" }
-            if (item.identifier !in _claimed.value) check(claimsLeft > 0) { "You've claimed all $CLAIMS_PER_WEEK records this week" }
+            if (item.identifier !in admittedClaims) check(admittedClaims.size < CLAIMS_PER_WEEK) { "You've claimed all $CLAIMS_PER_WEEK records this week" }
 
             val meta = http.get("https://archive.org/metadata/${item.identifier}")?.toString(Charsets.UTF_8)
                 ?: error("Couldn't load the album from Internet Archive")
@@ -174,9 +180,9 @@ class DropsRepository(
             check(album.tracks.isNotEmpty() && album.tracks.all { FlacPolicy.read(context, it) != null }) { "Couldn't verify the saved FLAC album" }
             _albums.value = _albums.value.filterNot { it.id == album.id } + album
             AlbumJson.writeList(listFile, _albums.value)
-            val claimed = _claimed.value + item.identifier
-            _claimed.value = claimed
-            prefs.edit().putStringSet("claims-${week.index}", claimed).apply()
+            val claimed = admittedClaims + item.identifier
+            prefs.edit().putStringSet("claims-$index", claimed).apply()
+            _claimed.value = if (currentIndex() == index) claimed else claimedThisWeek()
             onProgress(1f)
             album
         }.onFailure { if (it is CancellationException) throw it } }
@@ -198,7 +204,8 @@ class DropsRepository(
         if (http.download(item.coverUrl, f)) f else null
     }
 
-    private fun claimedThisWeek(): Set<String> = prefs.getStringSet("claims-${currentIndex()}", emptySet())?.toSet() ?: emptySet()
+    private fun claimedThisWeek(): Set<String> = claimsFor(currentIndex())
+    private fun claimsFor(index: Long): Set<String> = prefs.getStringSet("claims-$index", emptySet())?.toSet() ?: emptySet()
 
     private fun parseCached(index: Long, json: String): DropWeek {
         val arr = JSONArray(json)
