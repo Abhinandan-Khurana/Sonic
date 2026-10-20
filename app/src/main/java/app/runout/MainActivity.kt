@@ -99,6 +99,8 @@ class MainActivity : ComponentActivity() {
             val backgroundConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::background) ?: false }
             val discovery by graph.discovery.state.collectAsStateWithLifecycle()
             val discoveryQuery by graph.discovery.query.collectAsStateWithLifecycle()
+            val coverLookupEnabled by graph.library.coverLookupEnabled.collectAsStateWithLifecycle()
+            val coverLookupNoticePending by graph.library.coverLookupNoticePending.collectAsStateWithLifecycle()
             var pendingDownload by remember { mutableStateOf<SoulseekSearchResult?>(null) }
 
 
@@ -139,6 +141,8 @@ class MainActivity : ComponentActivity() {
                 object : RoomActions {
                     override fun pickFolder() { graph.soulseek.onExternalFlow(true); folderPicker.launch(null) }
                     override fun rescan() { graph.library.rescan() }
+                    override fun setCoverLookupEnabled(enabled: Boolean) { graph.library.setCoverLookupEnabled(enabled) }
+                    override fun dismissCoverLookupNotice() { graph.library.dismissCoverLookupNotice() }
                     override fun load(album: Album) = graph.deck.load(album)
                     override fun playLocalTrack(album: Album, index: Int) = graph.deck.playTrack(album,album.tracks.getOrNull(index)?.id)
                     override fun toggleCrackle() = graph.deck.toggleCrackle()
@@ -265,6 +269,8 @@ class MainActivity : ComponentActivity() {
                     folderPreview = folderPreview,
                     onboardingComplete = onboardingComplete,
                     onboardingStep = onboardingStep,
+                    coverLookupEnabled = coverLookupEnabled,
+                    coverLookupNoticePending = coverLookupNoticePending,
                 ),
                 actions = actions,
             )

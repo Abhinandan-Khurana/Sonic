@@ -87,6 +87,8 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
         SectionTitle("Keep your downloads")
         BasicText(state.downloadFolder ?: "Choose a music folder before downloading. FLAC files in this folder stay accessible to other players and remain after uninstalling Runout.", style = Room.LabelQuiet)
         Pill(if (state.downloadFolder == null) "Choose download folder" else "Change download folder", actions::pickDownloadFolder, modifier = Modifier.padding(vertical = 8.dp))
+        SectionTitle("Collection & storage")
+        ToggleRow("Find missing covers online", "Send artist and album title to MusicBrainz, the Cover Art Archive and the Internet Archive to find missing covers. Off unless you opt in.", state.coverLookupEnabled, actions::setCoverLookupEnabled)
         SectionTitle("Share FLAC on Soulseek")
         BasicText(state.sharedFolder ?: "Choose a folder to share. Only validated FLAC files in that folder will be visible to other users.", style = Room.LabelQuiet)
         Pill(if (state.sharedFolder == null) "Choose sharing folder" else "Change sharing folder", actions::pickSharedFolder, modifier = Modifier.padding(vertical = 8.dp))

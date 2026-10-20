@@ -135,12 +135,16 @@ data class RoomState(
     val folderPreview: SoulseekFolderPreview? = null,
     val onboardingComplete: Boolean = true,
     val onboardingStep: Int = 0,
+    val coverLookupEnabled: Boolean = false,
+    val coverLookupNoticePending: Boolean = false,
 
 )
 
 interface RoomActions : DeckActions {
     fun pickFolder()
     fun rescan()
+    fun setCoverLookupEnabled(enabled: Boolean) {}
+    fun dismissCoverLookupNotice() {}
     fun load(album: Album)
     fun playLocalTrack(album: Album, index: Int) { load(album); needleDrop(0f) }
     fun toggleCrackle()

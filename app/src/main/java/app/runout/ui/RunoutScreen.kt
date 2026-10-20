@@ -136,7 +136,12 @@ fun RunoutScreen(state: RoomState, actions: RoomActions) {
         state.folderPreview?.let { FolderPreviewScreen(it,state,actions) { peer ->
             actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); destination = Destination.MESSAGES; overlay = null
         } }
-        if(state.message != null && !setup) Box(Modifier.align(Alignment.BottomCenter).padding(start = 16.dp,end = 16.dp,bottom = 90.dp).background(Room.Ink,RoundedCornerShape(8.dp)).padding(12.dp)) {
+        if(state.coverLookupNoticePending && !setup) Box(Modifier.align(Alignment.BottomCenter).padding(start = 16.dp,end = 16.dp,bottom = 90.dp).background(Room.Ink,RoundedCornerShape(8.dp)).padding(12.dp).testTag("cover-lookup-notice")) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BasicText("Finding missing covers online is now opt-in. It is off unless you enable it in Collection & storage. Lookups send artist and album title to MusicBrainz, the Cover Art Archive and the Internet Archive.",style = Room.Label.copy(color = Color.White))
+                Pill("OK",actions::dismissCoverLookupNotice)
+            }
+        } else if(state.message != null && !setup) Box(Modifier.align(Alignment.BottomCenter).padding(start = 16.dp,end = 16.dp,bottom = 90.dp).background(Room.Ink,RoundedCornerShape(8.dp)).padding(12.dp)) {
             BasicText(state.message,style = Room.Label.copy(color = Color.White),modifier = Modifier.clickable { actions.dismissMessage() })
             LaunchedEffect(state.message) { kotlinx.coroutines.delay(7000); actions.dismissMessage() }
         }
@@ -229,6 +234,7 @@ private fun LibraryScreen(state: RoomState, actions: RoomActions, onPlay: () -> 
             ConsoleCard {
                 BasicText(album.title,style = Room.Title)
                 BasicText("${album.artist} · ${album.tracks.size} tracks · ${album.quality.label}",style = Room.LabelQuiet)
+                album.unavailableReason?.let { BasicText(it,style = Room.LabelQuiet.copy(color = Color(0xFF9A3429))) }
                 Pill("Put on the platter",{ actions.load(album); onPlay() },active = true)
             }
         }

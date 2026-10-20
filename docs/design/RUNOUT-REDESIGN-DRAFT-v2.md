@@ -703,6 +703,10 @@ These are targets to measure, not claims.
 
 ## 14. Build slices
 
+### Slice 0, Stop the damage — implemented on `slice-0-stop-the-damage`
+
+All 18 assigned findings were reproduced and fixed. The evidence, exact commands, and results are in [SLICE-0-VERIFICATION.md](SLICE-0-VERIFICATION.md).
+
 ### Slice 0, Stop the damage (pass 2: first build)
 
 Small, local, red-first fixes. Each one prevents data loss, a crash, a privacy or licence leak, or a retry war. No UI redesign. The IDs are in review §16.1.
@@ -890,6 +894,6 @@ These add to v1 §10.
 4. **Keep the finger-brake long-press on the record?** Recommendation: yes, as an optional gesture; Motor off is the accessible equivalent.
 5. **Assets in §10:** provide them, or let me draft originals in slice 4.
 6. **Messages as a main tab, or behind a header entrance.** Recommendation: keep the tab for now; it is existing, shipped behaviour.
-7. **Online cover lookup default** (pass 2). Recommendation: **off** for new and existing installs, with a one-time notice to existing users that it is now opt-in. It currently sends artist and album titles to third parties during "offline" listening.
+7. **Online cover lookup default** (pass 2). **Decided in Slice 0: off** for new and existing installs, with a one-time existing-user notice and an explicit Collection & storage opt-in.
 8. **Ritual audio target** (pass 2). Mixing into the sink, with silent program periods, is recommended over separate voices. It costs about 150 LOC for a format-matched silence source, plus index mapping. Accept, or stay on the interim voices with the documented focus limits.
 9. **The signal-path name in the UI** (pass 2). "Signal path" (recommended; it fits the hi-fi plate) or "Audio quality" (familiar from other apps).

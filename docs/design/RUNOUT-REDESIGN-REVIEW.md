@@ -335,6 +335,8 @@ A **✓** in the last column means the lead reviewer re-read the cited lines and
 | U-03 | The message text is cleared unconditionally; the 4,096-byte check throws before any FAILED row is saved. | `SoulseekPanels.kt:240–241`; `SoulseekRepository.kt:279–280` | SC | |
 | U-04 | "Remove" on a received record deletes files with no confirmation or undo. | `ListeningRoom.kt:416`; `ShareRepository.kt:151–155` | SC | |
 
+**Slice 0 status:** all 18 assigned findings in §16.1, plus N-07, were reproduced and fixed on `slice-0-stop-the-damage`. The command output and per-finding results are in [SLICE-0-VERIFICATION.md](SLICE-0-VERIFICATION.md). Later tiers remain open.
+
 ### 16.2 Tier 1: playback and listening truth (additions to §4)
 
 | ID | Finding | Evidence | Label | ✓ |
