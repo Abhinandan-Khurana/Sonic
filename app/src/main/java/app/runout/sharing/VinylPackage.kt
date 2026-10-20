@@ -31,6 +31,21 @@ object VinylPackage {
     private const val SLEEVE = "sleeve.jpg"
     private const val CHECKSUMS = "checksums.json"
     private const val MAX_TOTAL_BYTES = 4L * 1024 * 1024 * 1024
+    private const val MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+    private const val MAX_CHECKSUM_BYTES = 1024 * 1024
+
+    /** Zip entry sizes may be unknown or untrusted: bound the actual inflated bytes. */
+    private fun readJson(zip: ZipInputStream, limit: Int): JSONObject {
+        val bytes = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val n = zip.read(buffer, 0, minOf(buffer.size, limit - bytes.size() + 1))
+            if (n < 0) break
+            if (n > limit - bytes.size()) throw Invalid("Record metadata is too large")
+            bytes.write(buffer, 0, n)
+        }
+        return JSONObject(bytes.toString(Charsets.UTF_8.name()))
+    }
 
     enum class Kind { ALBUM, CARD, FRIEND }
 
@@ -131,8 +146,8 @@ object VinylPackage {
                 val name = entry.name
                 if (entry.isDirectory) continue
                 when {
-                    name == MANIFEST -> manifest = JSONObject(zip.readBytes().toString(Charsets.UTF_8))
-                    name == CHECKSUMS -> checksums = JSONObject(zip.readBytes().toString(Charsets.UTF_8))
+                    name == MANIFEST -> manifest = readJson(zip, MAX_MANIFEST_BYTES)
+                    name == CHECKSUMS -> checksums = readJson(zip, MAX_CHECKSUM_BYTES)
                     name == SLEEVE || name.startsWith("audio/") -> {
                         val target = File(destDir, name).canonicalFile
                         // Refuse anything that tries to write outside the record's folder.

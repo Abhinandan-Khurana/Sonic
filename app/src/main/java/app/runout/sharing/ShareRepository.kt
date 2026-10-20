@@ -10,6 +10,7 @@ import app.runout.model.Album
 import app.runout.model.Source
 import app.runout.social.ShelfItem
 import app.runout.social.SocialRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.FileVisitResult
+import java.nio.file.attribute.BasicFileAttributes
 
 sealed interface ImportResult {
     data class AlbumAdded(val album: Album) : ImportResult
@@ -37,6 +43,12 @@ class ShareRepository(
     private val receivedDir = File(context.filesDir, "received")
     private val listFile = File(context.filesDir, "received.json")
     private val shareDir = File(context.cacheDir, "share")
+
+    init {
+        // Only abandoned private imports, never published rx-/card- folders or user music.
+        receivedDir.listFiles()?.filter { it.name.startsWith("incoming-") }
+            ?.forEach { discardStaging(it) }
+    }
 
     private val _received = MutableStateFlow(AlbumJson.readValidatedList(context, listFile))
     val received: StateFlow<List<Album>> = _received.asStateFlow()
@@ -93,13 +105,15 @@ class ShareRepository(
         val staging = File(receivedDir, "incoming-${System.nanoTime()}")
         val contents = try {
             VinylPackage.read(input, staging)
-        } catch (e: Exception) {
-            staging.deleteRecursively()
+        } catch (e: Throwable) {
+            try { discardStaging(staging) } catch (cleanup: Exception) { e.addSuppressed(cleanup) }
+            // Cancellation and fatal VM errors are not user-facing import failures.
+            if (e is CancellationException || e !is Exception) throw e
             return@withContext ImportResult.Failed(e.message ?: "Not a Runout record")
         }
         when (contents.kind) {
             VinylPackage.Kind.FRIEND -> {
-                staging.deleteRecursively()
+                discardStaging(staging)
                 if (contents.from.id == social.profile.value.id) return@withContext ImportResult.Failed("That's your own friend card")
                 val isNew = social.upsertFriend(contents.from, contents.shelf)
                 ImportResult.FriendAdded(contents.from.name, isNew, contents.shelf.size)
@@ -125,7 +139,7 @@ class ShareRepository(
                 val dir = File(receivedDir, id).also { it.deleteRecursively() }
                 if (!staging.renameTo(dir)) {
                     staging.copyRecursively(dir, overwrite = true)
-                    staging.deleteRecursively()
+                    discardStaging(staging)
                 }
                 val received = album.copy(
                     id = id,
@@ -152,6 +166,23 @@ class ShareRepository(
         _received.value = _received.value.filterNot { it.id == albumId }
         AlbumJson.writeList(listFile, _received.value)
         File(receivedDir, albumId).deleteRecursively()
+    }
+
+    /** Walk without FOLLOW_LINKS so cleanup can never traverse into published music. */
+    private fun discardStaging(staging: File) {
+        if (!Files.exists(staging.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS)) return
+        Files.walkFileTree(staging.toPath(), object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.delete(file)
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun postVisitDirectory(dir: Path, exc: java.io.IOException?): FileVisitResult {
+                if (exc != null) throw exc
+                Files.delete(dir)
+                return FileVisitResult.CONTINUE
+            }
+        })
     }
 
     private fun openTrack(uri: String): InputStream? = runCatching {
