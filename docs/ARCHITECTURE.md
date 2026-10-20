@@ -4,7 +4,7 @@ Runout is a single Android application module with a small Rust workspace for So
 
 ```mermaid
 flowchart TD
-    UI[RunoutScreen / SetupScreen / DiscoveryScreen] --> Actions[RoomActions / MainActivity]
+    UI[RoomScreen / SetupScreen / DiscoveryScreen] --> Actions[RoomActions / MainActivity]
     Actions --> Library[Library, pressing and record repositories]
     Actions --> Soulseek[SoulseekRepository]
     Actions --> Deck[Deck and PlaybackService]
@@ -33,7 +33,7 @@ The Archive publication callback passes through `SoulseekRepository` to enforce 
 
 `MainActivity` collects flows into `RoomState` and supplies `RoomActions` to Compose. It handles folder pickers and notification permission. `RunoutApp` observes process lifecycle and the default network, preventing individual activity transitions from signing the account out. Panels render state and request actions; they do not open sockets or query the database.
 
-`RunoutScreen` owns the four destinations and global overlays. `SetupScreen` guides offline or Soulseek setup. Home embeds the existing turntable/crate renderer. Navigation preserves the discovery query/options and account data; network availability never gates the local deck.
+`RoomScreen` (`ui/ListeningRoom.kt`) is the home screen: the glass turntable, the crate and a sideways-scrolling strip of glass pills (Dig, Drops, Friends, Pressing Plant, Settings). Each pill opens a glass sheet over the room; downloads and the account open from the links next to the clock. `SetupScreen` guides offline or Soulseek setup in a sheet over the room. The deck is the only in-app player; search cues a song on the platter and START/STOP plays it. Navigation preserves the discovery query/options and account data; network availability never gates the local deck.
 
 The retained `account/`, `nostr/` and friend-card code supports legacy data/tests. The production graph creates no Nostr relay client or online Nostr account session. Local `.vinyl` sharing still uses the Android share sheet.
 

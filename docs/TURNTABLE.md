@@ -66,9 +66,9 @@ The platter rim features 4 precision strobe bands, each composed of 180 circular
 - **Band 4:** Calibrated for 45 RPM at 60 Hz illumination.
 
 During playback, the strobe markings rotate in real time at the platter's angular velocity:
-$$\omega = \text{RPM} \times \frac{2\pi}{60} \times (1 + \text{pitchOffset})$$
+$$\omega = \text{RPM} \times \frac{2\pi}{60}$$
 
-When the pitch fader is positioned at 0.0%, the corresponding strobe band visually synchronizes, producing the optical illusion of standing stationary.
+The deck always runs at recorded speed, so the matching strobe band visually synchronizes, producing the optical illusion of standing stationary.
 
 ---
 

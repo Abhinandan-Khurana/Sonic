@@ -17,7 +17,6 @@ local.properties
 *.apk
 *.aab
 !release/*.apk
-!Runout-0.3.0.apk
 output.json
 *.log
 

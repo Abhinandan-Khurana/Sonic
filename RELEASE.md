@@ -1,6 +1,6 @@
 # Releasing Runout
 
-The current artifact is [Runout 0.4.1 development](https://github.com/Somchandra17/runout/releases/tag/v0.4.1-dev.1). It is a GitHub **pre-release**, built as **Runout Dev** (`app.runout.dev`) for Android 9 or newer, with ARM64, ARMv7, x86-64 and x86 support.
+The latest artifact is on the fork's [releases page](https://github.com/Somchandra17/runout/releases). It is a GitHub **pre-release**, built as **Runout Dev** (`app.runout.dev`) for Android 9 or newer, with ARM64, ARMv7, x86-64 and x86 support.
 
 ## Prepare and verify
 
@@ -15,7 +15,7 @@ The current artifact is [Runout 0.4.1 development](https://github.com/Somchandra
    sha256sum -c Runout-<version>-development.apk.sha256
    ```
 
-5. Commit the source, docs, checksum and verification report. Keep new APK binaries in release assets rather than Git history; the supplied v0.3 artifacts remain as historical files.
+5. Commit the source, docs, checksum and verification report. Remove the previous version's checksum and report from `release/`: they stay attached to their GitHub release. Keep APK binaries in release assets, never in Git.
 
 ## Publish to the fork
 

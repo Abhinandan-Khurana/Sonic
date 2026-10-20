@@ -48,7 +48,7 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 
 ### 2 Minutes
 - **A collecting app, not a streaming app:** You only play what you own: your folder, drops you claimed, records friends sent you, and records you pressed yourself.
-- **The turntable is the interface:** Modelled on the classic DJ direct-drive deck: strobe-dotted platter, S-shaped tonearm, pitch fader, start/stop, 33/45, and a tiny pixel screen showing the track. Drop the needle anywhere to jump in the side. Hold the record to slow it down. Flip it when side A ends.
+- **The turntable is the interface:** Modelled on the classic DJ direct-drive deck: strobe-dotted platter, S-shaped tonearm, start/stop, track skip and a tiny pixel screen showing the track. Records play at the speed they were recorded at. Drop the needle anywhere to jump in the side. Hold the record to slow it down. Flip it when side A ends.
 - **Sound is taken seriously:** Hi-res output in 32-bit float, a 10-band EQ, headphone correction profiles, loudness levelling, a limiter, and a Pure mode that sends the music untouched (bit-perfect to a USB DAC on Android 14+).
 - **The Pressing Plant:** Make your own record: pick tracks, design the sleeve, choose splatter, marble, clear or picture-disc vinyl.
 - **Serverless sharing:** A record travels as a single `.vinyl` file over Quick Share, Telegram, WhatsApp or Drive, checked byte for byte on arrival.
@@ -93,11 +93,11 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 2. **Pull the disc:** Tap the front sleeve. The record slides out (upwards in portrait).
 3. **Load the platter:** Drag the disc onto the platter. It grows as it nears the spindle and snaps into place.
 4. **Drop the needle:** Lower the tonearm onto the record (drag it, tap it, or press START/STOP). You hear the needle drop and authentic surface crackle, then the music. The record spins with the album cover printed on it.
-5. **Pixel screen:** The pixel screen scrolls `A1 TRACK NAME · ARTIST` and shows playback time and speed.
+5. **Pixel screen:** The pixel screen scrolls `A1 TRACK NAME · ARTIST` and shows playback time, or CUE when a song is waiting under the needle.
 6. **Needle drop cueing:** Drop the needle anywhere on the record to jump to that point of the side. Gaps between tracks show as smooth bands in the grooves.
 7. **Track skipping:** `◀◀` / `▶▶` skip tracks. At the end of a side, `▶▶` turns the record over.
 8. **Platter hold:** Hold the record with a finger: the music winds down. Release: it spins back up.
-9. **Speeds:** `33` / `45` keys change speed; the pitch fader nudges it ±8%.
+9. **Cue from search:** Dig › "Put on the platter" loads the record and parks the needle at that song. Press START/STOP to play it.
 10. **Side flip:** When side A ends, you hear the runout groove; tap the record to flip it to side B.
 
 ### The Four Panels
@@ -120,12 +120,11 @@ Pull a record out of the crate and press **"Send with audio"** (for your own mus
   - Frosted glass plinth with optical refraction shaders (Android 13+).
   - Platter rim with 4 rows of 180 strobe dots.
   - S-shaped chrome tonearm with counterweight, anti-skate dial, and exact law-of-cosines tracking geometry.
-  - Tactile pitch fader (±8%) with center zero LED and double-tap reset.
-  - Start/Stop, 33/45 RPM buttons, and track skip controls.
+  - Start/Stop and track skip controls. No speed keys, pitch fader or power knob: records always play at recorded speed.
 - **The Pixel Screen `[BUILT]`:**
   - Dot-matrix screen built into the plinth with mint dots on dark smoked glass.
   - Driven by the Silkscreen pixel font at native 1-to-1 dot resolution.
-  - Displays track code, title, artist, running time, speed, pitch offset, and cue states.
+  - Displays track code, title, artist, running time and cue states.
   - Fully accessible with Android TalkBack.
 - **Picture Disc Records `[BUILT]`:**
   - Covers printed directly on vinyl under grooves with stationary lighting sheen.

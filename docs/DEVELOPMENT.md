@@ -6,7 +6,7 @@ Use [BUILDING](BUILDING.md) for setup and [ARCHITECTURE](ARCHITECTURE.md) for th
 
 | Area | Entry points | Checks to prioritize |
 | --- | --- | --- |
-| Panels and navigation | `ui/RunoutScreen.kt`, `SetupScreen.kt`, `DiscoveryScreen.kt`, `MainActivity.kt` | Compose behavior, portrait layout, keyboard, TalkBack |
+| Panels and navigation | `ui/ListeningRoom.kt`, `Panels.kt`, `Settings.kt`, `SetupScreen.kt`, `DiscoveryScreen.kt`, `MainActivity.kt` | Compose behavior, portrait layout, keyboard, TalkBack |
 | Search and ranking | `discovery/Discovery.kt`, `DiscoveryRepository.kt` | Incremental batches, full folder groups, 10k local/5k remote benchmarks |
 | Connection lifecycle | `soulseek/SoulseekConnectionManager.kt`, `RunoutApp.kt` | Network loss, picker/background transitions, displacement, stale events |
 | FLAC admission and migration | `library/FlacPolicy.kt`, `AlbumJson.kt`, `LibraryScanner.kt` | Disguised files, ID3-prefixed FLAC, mixed legacy albums |

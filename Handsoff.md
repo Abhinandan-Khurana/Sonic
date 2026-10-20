@@ -1,23 +1,19 @@
 # Runout handoff for Hermes
 
-Updated: 2026-10-20, Asia/Kolkata.
+Updated: 2026-10-21, Asia/Kolkata.
 
 This file transfers project context to Hermes or another coding agent. Continue the existing Android project; this handoff does not request a rewrite, a different application framework, or a Hermes runtime inside the APK. The workflows below use ordinary Git, Gradle, Cargo, Android SDK tools and Argent, so they do not depend on Codex tools or conversation history.
 
-## Latest: listening-room redesign planning (2026-10-20)
+## Latest: original room restored (2026-10-21)
 
-The application code is still `64e1222`. Planning documents now exist under `docs/design/`:
+The redesign drafts (inked deck, tab bar, mini player, "vinyl as controller") were tried and **rejected by the user**. They have been removed from the repository. The app is back on the original 0.3.0 listening room, with the newer features mapped into it. This is on branch `restore-original-ui` (pull request into `main` on the fork):
 
-- **`RUNOUT-REDESIGN-DRAFT-v2.md`** is the current plan. It enforces album-only playback with album-first discovery, replaces the DJ deck with a 1950s-style mechanism on a flat printed plate, and adds a reconciled deck state machine, lead-in and runout as deck phases, a signal-path view with Bluetooth and DAC guidance, and build slices 0–5.
-- **`RUNOUT-REDESIGN-REVIEW.md`** holds the source-checked findings. §16 is a second-pass register from six parallel audits, which includes data-loss, privacy, crash and retry-war bugs.
-- **`HERMES-NEXT-PROMPT.md`** is the next task: **Slice 0, "Stop the damage"**.
-- **`HERMES-UI-PROMPT.md`** holds the follow-on prompts for slices 1, 1b and 2–5, to use after Slice 0 is accepted.
-- **Design session (pass 3):**
-  - Decisions are in v2 §0.1: the vinyl is the controller (no play/pause/skip buttons); tap cover → disc pops up → drag to spindle; Home never scrolls; "inked owner's manual" look.
-  - Mockups are in `docs/design/mockups/` (gallery: `docs/design/mockups/README.md`).
-  - The editable pen.dev source is in `docs/design/pen/`.
+- **Home is `RoomScreen`** (`ui/ListeningRoom.kt`): the glass turntable, the crate coverflow and the original palette. Covered albums are picture discs. The app is immersive, with no app-name header, tab bar or mini player.
+- **The glass deck is the only player.** It has START/STOP, ◀◀ ▶▶, the pixel screen, tonearm drag, tap-to-flip and the platter hold. The 33/45 keys, pitch fader and POWER knob are gone, and records always play at recorded speed. Android notification, lock-screen and headset controls stay.
+- **Pill strip** (scrolls sideways): **Dig · Drops · Friends · Pressing Plant · Settings**. Each pill opens a glass sheet; `↓ N` (downloads) and the account link sit next to the clock. Settings has the sections Sound, Soulseek, Library and About. First-run setup is a glass sheet over the room.
+- **Search never plays.** "Put on the platter" cues the song with the needle up; the deck's START/STOP plays it.
 
-No build or test ran during planning. Every finding is labelled source-confirmed or hypothesis, and must be reproduced red-first before it is fixed.
+Do not reintroduce the removed shell or deck controls. Keep UI changes within this room unless the user asks otherwise.
 
 ## Start here
 
@@ -25,7 +21,7 @@ No build or test ran during planning. Every finding is labelled source-confirmed
 2. Inspect `git status`, the current branch and recent commits before editing. Preserve any work added after this handoff.
 3. Treat the released app and the remaining work below as separate. The latest application implementation is already pushed and released; Internet Archive is **not integrated into unified search**.
 4. Keep the user's retro vinyl home, FLAC-only policy, account-free offline playback, Internet Archive downloads and Soulseek messaging.
-5. Do not open a pull request unless the user changes their explicit instruction. The user has authorized pushing work to their fork and publishing development APKs; that does not authorize merging upstream or treating a development build as production-ready.
+5. Open or merge pull requests only when the user asks for it. The user has authorized pushing work to their fork and publishing development APKs; that does not authorize pushing or opening pull requests upstream, or treating a development build as production-ready.
 
 ## Repository and release baseline
 
@@ -46,8 +42,7 @@ The checkout was clean at the application commit before creating this handoff. A
 
 - [Release and assets](https://github.com/Somchandra17/runout/releases/tag/v0.4.1-dev.1)
 - [Universal development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.1-dev.1/Runout-0.4.1-development.apk)
-- [Detailed verification report](release/Runout-0.4.1-VERIFICATION.md)
-- [Committed APK checksum](release/Runout-0.4.1-development.apk.sha256)
+- Each release's verification report and checksum are attached to its GitHub release; the repository keeps only the latest ones in `release/`.
 
 Published APK SHA-256:
 
@@ -82,7 +77,7 @@ Relevant code:
 - `discovery/Discovery.kt`: `SearchSource` has only `ALL`, `LOCAL`, `SOULSEEK`.
 - `discovery/DiscoveryRepository.kt`: combines local metadata and Soulseek results; no Archive search provider.
 - `ui/DiscoveryScreen.kt`: search, filters, sorting and album/folder presentation.
-- `ui/RunoutScreen.kt`: Discover switches between **Find music** and **Friday Drops**.
+- `ui/ListeningRoom.kt`: the room's pill strip opens **Dig** (search) and **Drops** (Friday Drops) as separate glass sheets.
 - `drops/Drops.kt`: Archive's existing weekly discovery/download implementation.
 
 All Kotlin paths above are relative to `app/src/main/java/app/runout/`.
@@ -114,7 +109,7 @@ If the user authorizes unified Archive search, a sensible continuation is to add
 | --- | --- |
 | App composition and process/network observation | `RunoutApp.kt`, `AppGraph` |
 | UI state collection, actions, Android pickers and permission | `MainActivity.kt` |
-| Navigation, onboarding, discovery | `ui/RunoutScreen.kt`, `SetupScreen.kt`, `DiscoveryScreen.kt` |
+| Navigation, onboarding, discovery | `ui/ListeningRoom.kt` (`RoomScreen`, pills, sheets), `Panels.kt`, `Settings.kt`, `SetupScreen.kt`, `DiscoveryScreen.kt` |
 | Vinyl room and controls | `ui/ListeningRoom.kt`, `Controls.kt`, `Room.kt`, turntable/crate components |
 | Search models, local index, grouping/ranking | `discovery/Discovery.kt`, `DiscoveryRepository.kt` |
 | Single connection, retry, generations, remembered account | `soulseek/SoulseekConnectionManager.kt` |

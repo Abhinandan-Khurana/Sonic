@@ -19,7 +19,7 @@ FLAC-only applies to music throughout scanning, imports, downloads, sharing, pre
 
 [Download the development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.1-dev.1/Runout-0.4.1-development.apk) · [Soulseek behavior and architecture](docs/SOULSEEK.md) · [Build instructions](docs/BUILDING.md) · [Documentation index](docs/README.md)
 
-<img src="docs/images/home-0.4.1.png" width="270" alt="Runout vinyl home with an offline FLAC fixture album" />
+<img src="docs/images/home.png" width="270" alt="The Runout listening room: glass turntable above the record crate, with the Dig, Drops, Friends, Pressing Plant and Settings pills" />
 
 ## First use
 
