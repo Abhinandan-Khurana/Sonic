@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /** Consent is scoped to an exact account. Folder grants remain Android's responsibility. */
 class SoulseekPreferences(context: Context) {
     private val prefs = context.getSharedPreferences("soulseek-setup", Context.MODE_PRIVATE)
-    private val existingInstall = java.io.File(context.filesDir,"library.json").exists() || java.io.File(context.noBackupFilesDir,"soulseek-account.enc").exists()
+    // A backed-up library cache is not evidence that this device completed SAF setup.
+    private val existingInstall = java.io.File(context.noBackupFilesDir,"soulseek-account.enc").exists()
     private val _onboarded = MutableStateFlow(prefs.getBoolean("onboarded", existingInstall))
     private val _revision = MutableStateFlow(0)
     val revision = _revision.asStateFlow()

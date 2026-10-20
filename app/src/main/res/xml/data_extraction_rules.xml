@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
+        <!-- SAF grants do not transfer with these folder choices and setup flags. -->
+        <exclude domain="sharedpref" path="library.xml" />
+        <exclude domain="sharedpref" path="soulseek.xml" />
+        <exclude domain="sharedpref" path="soulseek-setup.xml" />
         <exclude domain="sharedpref" path="soulseek_credentials.xml" />
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="database" path="soulseek.db" />
@@ -8,6 +12,10 @@
         <exclude domain="database" path="soulseek.db-shm" />
     </cloud-backup>
     <device-transfer>
+        <!-- SAF grants do not transfer with these folder choices and setup flags. -->
+        <exclude domain="sharedpref" path="library.xml" />
+        <exclude domain="sharedpref" path="soulseek.xml" />
+        <exclude domain="sharedpref" path="soulseek-setup.xml" />
         <exclude domain="sharedpref" path="soulseek_credentials.xml" />
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="database" path="soulseek.db" />
