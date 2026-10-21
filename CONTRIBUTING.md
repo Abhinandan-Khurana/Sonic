@@ -1,6 +1,6 @@
 # Contributing to Runout
 
-Start with the [README](README.md), [build guide](docs/BUILDING.md), [architecture](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md). This fork's current integration is Runout 0.4.1 development; older Nostr guides describe v0.3.
+Start with the [README](README.md), [build guide](docs/BUILDING.md), [architecture](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md). The current integration is Runout 0.5.1 development; older Nostr guides describe v0.3.
 
 ## Product boundaries
 

@@ -1,6 +1,6 @@
 # Releasing Runout
 
-The latest artifact is on the fork's [releases page](https://github.com/Somchandra17/runout/releases). It is a GitHub **pre-release**, built as **Runout Dev** (`app.runout.dev`) for Android 9 or newer, with ARM64, ARMv7, x86-64 and x86 support.
+The latest artifact is on this repository's [releases page](https://github.com/Abhiroop1122/runout/releases). It is a GitHub **pre-release**, built as **Runout Dev** (`app.runout.dev`) for Android 9 or newer, with ARM64, ARMv7, x86-64 and x86 support.
 
 ## Prepare and verify
 
@@ -17,12 +17,12 @@ The latest artifact is on the fork's [releases page](https://github.com/Somchand
 
 5. Commit the source, docs, checksum and verification report. Remove the previous version's checksum and report from `release/`: they stay attached to their GitHub release. Keep APK binaries in release assets, never in Git.
 
-## Publish to the fork
+## Publish
 
-Push the reviewed commit to `Somchandra17/runout`. Create a unique source tag for that exact commit, then publish a pre-release with the APK, checksum and verification report. Use a notes file so the release body preserves its formatting:
+Push the reviewed commit to `Abhiroop1122/runout`. Create a unique source tag for that exact commit, then publish a pre-release with the APK, checksum and verification report. Use a notes file so the release body preserves its formatting:
 
 ```bash
-gh release create <tag>   release/Runout-<version>-development.apk   release/Runout-<version>-development.apk.sha256   release/Runout-<version>-VERIFICATION.md   --repo Somchandra17/runout --target <full-commit-sha>   --prerelease --latest=false --title 'Runout <version> development'   --notes-file release/RELEASE_NOTES.md
+gh release create <tag>   release/Runout-<version>-development.apk   release/Runout-<version>-development.apk.sha256   release/Runout-<version>-VERIFICATION.md   --repo Abhiroop1122/runout --target <full-commit-sha>   --prerelease --latest=false --title 'Runout <version> development'   --notes-file release/RELEASE_NOTES.md
 ```
 
 Download the published APK and verify it against the published checksum. GitHub's automatic source archives correspond to the release tag. Release creation is separate from opening a pull request.

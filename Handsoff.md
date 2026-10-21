@@ -4,13 +4,13 @@ Updated: 2026-10-21, Asia/Kolkata.
 
 This file transfers project context to Hermes or another coding agent. Continue the existing Android project; this handoff does not request a rewrite, a different application framework, or a Hermes runtime inside the APK. The workflows below use ordinary Git, Gradle, Cargo, Android SDK tools and Argent, so they do not depend on Codex tools or conversation history.
 
-## Latest: UI redesign on `ui-redesign` (2026-10-21)
+## Latest: 0.5.1, merged and released (2026-10-21)
 
-The owner's screen-by-screen interview, with every agreed change and its status, is in `docs/design/UI-REDESIGN.md`. Treat that checklist as the spec.
+The Soulseek/FLAC work, the reliability and privacy fixes, the original-room restoration and the full UI redesign were developed on the `ui-redesign` branch and merged into `main` in this repository as pull request #1. The redesign was built screen by screen against the owner's interview, which is recorded in `docs/design/UI-REDESIGN.md`; treat that checklist as the spec. The released tag is `v0.5.1-dev.1`.
 
 ## Before that: original room restored (2026-10-21)
 
-The redesign drafts (inked deck, tab bar, mini player, "vinyl as controller") were tried and **rejected by the user**. They have been removed from the repository. The app is back on the original 0.3.0 listening room, with the newer features mapped into it. This is on branch `restore-original-ui` (pull request into `main` on the fork):
+The redesign drafts (inked deck, tab bar, mini player, "vinyl as controller") were tried and **rejected by the user**. They have been removed from the repository. The app is back on the original 0.3.0 listening room, with the newer features mapped into it. This landed as commit `a235240` on `ui-redesign`:
 
 - **Home is `RoomScreen`** (`ui/ListeningRoom.kt`): the glass turntable, the crate coverflow and the original palette. Covered albums are picture discs. The app is immersive, with no app-name header, tab bar or mini player.
 - **The glass deck is the only player.** It has START/STOP, ◀◀ ▶▶, the pixel screen, tonearm drag, tap-to-flip and the platter hold. The 33/45 keys, pitch fader and POWER knob are gone, and records always play at recorded speed. Android notification, lock-screen and headset controls stay.
@@ -25,36 +25,36 @@ Do not reintroduce the removed shell or deck controls. Keep UI changes within th
 2. Inspect `git status`, the current branch and recent commits before editing. Preserve any work added after this handoff.
 3. Treat the released app and the remaining work below as separate. The latest application implementation is already pushed and released; Internet Archive is **not integrated into unified search**.
 4. Keep the user's retro vinyl home, FLAC-only policy, account-free offline playback, Internet Archive downloads and Soulseek messaging.
-5. Open or merge pull requests only when the user asks for it. The user has authorized pushing work to their fork and publishing development APKs; that does not authorize pushing or opening pull requests upstream, or treating a development build as production-ready.
+5. Open or merge pull requests only when the user asks for it. The user has authorized pushing work to this repository and publishing development APKs; that does not authorize treating a development build as production-ready.
 
 ## Repository and release baseline
 
 | Item | Value |
 | --- | --- |
-| Local checkout on this machine | `/home/som/Documents/github/runout` |
-| User's fork / `origin` | <https://github.com/Somchandra17/runout> |
+| Local checkout on this machine | *(not recorded — clone `Abhiroop1122/runout` and check `git status`)* |
+| Repository / `origin` | <https://github.com/Abhiroop1122/runout> |
 | Current working branch at handoff | `main` |
-| Latest application implementation commit | `64e12227fa42490f2f90a0b1f57e17abc017d352` |
-| Previous integration commit | `7d7b3b4186114b08f84aad9f6741ab4ee516ce94` |
-| Released tag | `v0.4.1-dev.1` |
-| App version | `0.4.1`, version code `5` |
+| Latest application implementation commit | `cfe0198b01ea3108ad44c2ec7cfc626e9099ad5a` (merge of pull request #1) |
+| Previous integration commit | `6ace951` (tip of `ui-redesign`) |
+| Released tag | `v0.5.1-dev.1` |
+| App version | `0.5.1`, version code `12` |
 | Development application ID / name | `app.runout.dev` / **Runout Dev** |
 | Normal application ID | `app.runout` |
 | Android compatibility | min SDK 28; compile/target SDK 36 |
 
 The checkout was clean at the application commit before creating this handoff. A later documentation commit containing this file does not change the released APK's source baseline. Re-check the actual repository state rather than assuming the above commit is still HEAD.
 
-- [Release and assets](https://github.com/Somchandra17/runout/releases/tag/v0.4.1-dev.1)
-- [Universal development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.1-dev.1/Runout-0.4.1-development.apk)
+- [Release and assets](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1-dev.1)
+- [Universal development APK](https://github.com/Abhiroop1122/runout/releases/download/v0.5.1-dev.1/Runout-0.5.1-development.apk)
 - Each release's verification report and checksum are attached to its GitHub release; the repository keeps only the latest ones in `release/`.
 
 Published APK SHA-256:
 
 ```text
-31d885d61f8b0e64e8622e003540b8a2c60504018385b84b6683876bbfb5b9cd
+d0ae199fe649f2844a4a303d01762cb6d0c123d6d4a93495eb829ec19595bbbc
 ```
 
-The published download was downloaded again and its checksum and signature verified. No PR was created.
+The published download was downloaded again and its checksum and signature verified. The work reached `main` as pull request #1 and is published as the `v0.5.1-dev.1` pre-release.
 
 ## User intent and decisions to preserve
 
@@ -90,7 +90,7 @@ Friday Drops currently chooses ten Creative Commons netlabel albums each week an
 
 If the user authorizes unified Archive search, a sensible continuation is to add a distinct Archive search/provider model with source labels, pagination/cancellation, FLAC availability checks and the existing validated publication boundary. Preserve Friday Drops and its allowance semantics. The allowance policy for arbitrary Archive search downloads has not been decided; do not silently remove the weekly limit or apply it to a new catalog. Verify Archive API behavior against official documentation before implementation. Item-level search metadata alone must not be treated as proof that downloadable FLAC exists.
 
-## What is implemented in 0.4.1
+## What is implemented in 0.5.1
 
 - Direct Soulseek integration through a Kotlin repository and Rust JNI adapter; the app does not launch a Soulseek CLI process.
 - One native connection owner, retained account identity during connection loss, bounded automatic reconnect, and distinct failure reasons.
@@ -195,7 +195,7 @@ Run long-lived emulator commands in separate terminals/process sessions. Assign 
 
 ## Verification baseline and how to repeat it
 
-The 0.4.1 report records **148 JVM/Compose tests: 147 passed, one historical opt-in Nostr relay test skipped; 332 native tests passed; four local Android tests passed on each of API 35 and 37; zero lint errors**. There were 60 nonfatal lint warnings and five hints. These are historical release results, not claims about future changes.
+The 0.5.1 report records **233 JVM/Compose tests: 232 passed, one opt-in public relay test skipped; zero lint errors**. There were 60 nonfatal lint warnings and two hints. These are historical release results, not claims about future changes. The native Soulseek library shipped in the 0.5.1 APK is the one from 0.4.6, unchanged; the native fix for interrupted reads is in the source and awaits the next native build.
 
 ```bash
 # After booting the intended emulator/device:

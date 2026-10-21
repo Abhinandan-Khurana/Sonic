@@ -2,7 +2,7 @@
 
 **A vinyl listening room for your FLAC records, on Android.** Flick through a crate of sleeves, pull a record out, drop it on a glass turntable and lower the needle. Dig for albums on Soulseek, claim free Friday Drops from the Internet Archive, and swap records with friends.
 
-[**Download 0.5.1 (development)**](https://github.com/Somchandra17/runout/releases/tag/v0.5.1-dev.1) · [Build guide](docs/BUILDING.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
+[**Download 0.5.1 (development)**](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1-dev.1) · [Build guide](docs/BUILDING.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/images/screens/home.png" width="250" alt="The listening room: a glass turntable with orange keys above a crate of record sleeves, and four icon tabs" />
@@ -90,7 +90,7 @@ FLAC is the rule for music everywhere: scanning, imports, downloads, sharing and
 
 ## Install
 
-Download the APK and its `.sha256` from the [0.5.1 release](https://github.com/Somchandra17/runout/releases/tag/v0.5.1-dev.1) and check the checksum:
+Download the APK and its `.sha256` from the [0.5.1 release](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1-dev.1) and check the checksum:
 
 ```bash
 sha256sum -c Runout-0.5.1-development.apk.sha256

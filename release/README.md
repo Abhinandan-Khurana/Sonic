@@ -1,6 +1,6 @@
 # Runout downloads
 
-Development builds are published as [GitHub pre-releases on the fork](https://github.com/Somchandra17/runout/releases). Each release has the universal APK, its `.sha256` file and a verification report attached. This folder keeps only the latest checksum and report, and the [release notes](RELEASE_NOTES.md) for the next build.
+Development builds are published as [GitHub pre-releases](https://github.com/Abhiroop1122/runout/releases) in this repository. Each release has the universal APK, its `.sha256` file and a verification report attached. This folder keeps only the latest checksum and report, and the [release notes](RELEASE_NOTES.md) for the next build.
 
 The universal APK supports Android 9 or newer and all four Android ABIs. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app, with separate private state.
 
