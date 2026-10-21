@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 
-## Unreleased — UI redesign (branch `ui-redesign`)
+## 0.5.0 development — UI redesign (2026-10-21)
 
 From a screen-by-screen interview with the owner; the full checklist is in `docs/design/UI-REDESIGN.md`.
 
