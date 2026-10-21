@@ -44,6 +44,30 @@ object FlacPolicy {
         context.contentResolver.openInputStream(uri)?.use { read(it, size, wantPicture) }
     }.getOrNull()
 
+    /**
+     * Why a .flac file was refused, in words a listener can act on. Only reads the start of the
+     * file; it never changes it.
+     */
+    fun diagnose(context: Context, uri: Uri): String = runCatching {
+        val head = context.contentResolver.openInputStream(uri)?.use { input ->
+            val buf = ByteArray(64 * 1024)
+            var n = 0
+            while (n < buf.size) { val r = input.read(buf, n, buf.size - n); if (r <= 0) break; n += r }
+            buf.copyOf(n)
+        } ?: return "Couldn't open the file. Choose the folder again in Settings › Library."
+        val text = String(head, Charsets.ISO_8859_1)
+        when {
+            head.isEmpty() -> "The file is empty."
+            text.startsWith("fLaC") || text.startsWith("ID3") && text.indexOf("fLaC") in 10..head.size -> "Damaged FLAC: the header or the first audio frame is broken, or the download was cut off."
+            text.startsWith("ID3") -> "An MP3 (or other format) renamed to .flac. Only real FLAC plays in Runout."
+            text.indexOf("fLaC") in 1..head.size -> "Extra data before the FLAC stream. Re-save or re-rip the file."
+            text.startsWith("RIFF") -> "A WAV file renamed to .flac. Only real FLAC plays in Runout."
+            text.contains("ftyp") -> "An M4A/ALAC file renamed to .flac. Only real FLAC plays in Runout."
+            text.startsWith("OggS") -> "An Ogg file renamed to .flac. Only real FLAC plays in Runout."
+            else -> "Not FLAC inside, despite the .flac name."
+        }
+    }.getOrDefault("Couldn't open the file. Choose the folder again in Settings › Library.")
+
     fun isValid(input: InputStream): Boolean = read(input) != null
     fun isValid(file: File): Boolean = read(file) != null
 

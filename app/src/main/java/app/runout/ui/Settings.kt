@@ -66,6 +66,7 @@ fun SettingsPanel(
                     Pill(if (state.hasFolder) "Change folder" else "Choose folder", actions::pickFolder, Modifier.testTag("settings-change-folder"), active = !state.hasFolder)
                     if (state.hasFolder) Pill("Rescan", actions::rescan)
                 }
+                if (state.hasFolder) RepairLibrary(state, actions)
                 SectionTitle("The deck")
                 ToggleRow("Crackle", "Surface noise under the music.", state.crackleOn, { actions.toggleCrackle() }, more = "Always off in Pure.")
             }
@@ -110,3 +111,41 @@ private fun SettingsRow(title: String, summary: String, modifier: Modifier, onCl
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Ink.copy(alpha = 0.08f)))
 }
+
+/**
+ * Repair local albums: rebuilds the shelf from the folder alone and lists each .flac file that
+ * couldn't be read, with the reason. The folder is opened read-only, so the files themselves
+ * aren't rewritten; the reasons say what to do with them.
+ */
+@Composable
+private fun RepairLibrary(state: RoomState, actions: RoomActions) {
+    SectionTitle("Repair local albums")
+    BasicText(
+        "Albums missing or vanishing? Rebuild the shelf from your folder. Runout forgets its saved list, reads every album again, " +
+            "and shows each file it couldn't play and why. Your music files are never changed.",
+        style = Room.LabelQuiet,
+    )
+    val scanning = state.scan != null
+    Pill(if (scanning) "Reading your folder…" else "Repair local albums", { if (!scanning) actions.repairLibrary() }, Modifier.padding(vertical = 8.dp).testTag("settings-repair"), active = !scanning)
+    val broken = state.report?.unreadableFiles.orEmpty()
+    if (broken.isEmpty()) return
+    val total = state.report?.unreadable ?: broken.size
+    BasicText("$total ${if (total == 1) "file" else "files"} couldn't be read", style = Room.Title.copy(fontSize = 14.sp), modifier = Modifier.padding(top = 4.dp))
+    Column(Modifier.fillMaxWidth().testTag("repair-report")) {
+        broken.take(SHOWN_BROKEN).forEach { f ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                BasicText(f.path, style = Room.Label.copy(color = Room.Ink), maxLines = 2)
+                BasicText(f.reason, style = Room.LabelQuiet)
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Ink.copy(alpha = 0.06f)))
+        }
+        if (total > SHOWN_BROKEN) BasicText("and ${total - SHOWN_BROKEN} more", style = Room.LabelQuiet, modifier = Modifier.padding(top = 6.dp))
+    }
+    BasicText(
+        "To fix one: re-download or re-rip it as real FLAC, or check it with a tool like flac -t on a computer. Then tap Repair again.",
+        style = Room.LabelQuiet,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+private const val SHOWN_BROKEN = 50

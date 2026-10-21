@@ -215,6 +215,24 @@ Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE l
 - [x] **BG-5** *(not an app bug: with the new album-only search, "moon safari" returns 40 album folders on the emulator)* Soulseek searches for "Pink Floyd Animals" and "Radiohead" returned 0 FLAC results, while "moon safari" returned 273. This may be emulator NAT. Verify on a real phone.
 - [x] **BG-6** *(step numbers removed; three progress dots instead)* The setup step numbering looked like it jumped from 02 to 04. Check the step order and numbering.
 
+
+## 11. Follow-up after 0.5.0 (owner, 2026-10-21)
+Feedback from the owner's phone and a friend's phone after the 0.5.0 build. Shipped in 0.5.1.
+
+- [~] **FU-1** *(the record collage fades out and the headline folds to the wordmark while the keyboard is up; the emulator has a hardware keyboard, so verify on a phone)* Sign-in: with the keyboard open, the titles slid up over the record collage.
+- [x] **FU-2** *(Settings › Sound and the new Audio quality sheet explain it: Pure is about processing, Hi-res output is about the format, and they combine)* Explain the difference between Pure and Hi-res output.
+- [x] **FU-3** *(a small chip under Crackle, e.g. "24/96 → Phone speaker", opens an Audio quality sheet: Track → Runout → Output, each with its spec, a verdict such as "Lossless, resampled to 48 kHz", and the Pure and Hi-res switches; Settings › Sound shows the same chain)* Bring the output info ("32-bit · 96 kHz → 32-bit float", DAC notes) to the home screen, in the style of Amazon Music's audio-quality chain.
+- [x] **FU-4** *(a round search key beside the field; a stop square while searching)* Dig: "Search Soulseek" becomes a search icon button.
+- [x] **FU-5** *(root cause: any unreadable .flac made a scan put back the previous shelf, which is empty after a reinstall. A partial scan now keeps what it read, merged with what it couldn't see, and saves it)* Albums showed for a second after picking the folder, then vanished.
+- [x] **FU-6** *(Settings › Library › Repair local albums: rebuilds the shelf from the folder alone and lists each unreadable file with a reason, such as "an MP3 renamed to .flac" or "damaged FLAC". Files are read-only to Runout, so they are diagnosed, not rewritten)* "Repair the local albums" under Settings › Library.
+- [x] **FU-7** *(the archive query now asks for `format:flac`; this week was picked again. Checked on the emulator: the first drop lists FLAC tracks and can be claimed)* Drops: offer FLAC albums only.
+- [x] **FU-8** *(the Dig filters and the New chat sheet are drawn by the page itself: one even shade over the whole page, edge to edge, and a white sheet with a handle)* The Dig filter sheet and Friends' New chat sheet had a shade over only part of the page.
+- [x] **FU-9** Crackle on the home screen is a switch, not "Crackle on/off" text.
+- [x] **FU-10** *(`ui/Turntable.kt` now holds only the deck, with a map at the top; the unused GlassPill is gone. The record itself is in `RecordArt.kt`)* The vinyl player's code in one file to edit.
+- [x] **FU-11** *(landscape: the tab bar moved to the bottom right under the crate; the hint, record count and status dots share one line at the top right)* Landscape: "11 records" ran into the crate's sleeves, and the tab bar should sit at the bottom.
+- [~] **FU-12** *(a friend's phone with Background usage off: downloads failed with "Stream read error: Interrupted system call (os error 4)". The app now treats that as a pause, explains it, shows a "Background usage is off" note with a link to App info, and resumes when Runout is back. The native fix (retry EINTR) is in the source but not in this APK, because this Mac has no NDK. Verify on that phone)* Background downloads breaking.
+- [ ] **FU-13** *(not reproduced: the card was sent, and the receive path decodes it. Cards need 0.5.x on both phones; an older Runout or another client shows it as text. Check the friend's version)* A record card sent to a friend didn't render on their side.
+
 ---
 
 Implementation decision (owner, 2026-10-21): Claude implements this directly on `ui-redesign`, instead of handing a prompt to Hermes.

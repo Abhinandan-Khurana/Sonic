@@ -426,6 +426,9 @@ impl DownloadPeer {
                         break;
                     }
                 }
+                // A signal interrupted the read (EINTR): Android does this when it
+                // freezes or restricts a backgrounded app. Nothing was lost, so read again.
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
                 Err(e)
                     if matches!(
                         e.kind(),

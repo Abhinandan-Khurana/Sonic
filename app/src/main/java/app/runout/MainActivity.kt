@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
                 object : RoomActions {
                     override fun pickFolder() { graph.soulseek.onExternalFlow(true); folderPicker.launch(null) }
                     override fun rescan() { graph.library.rescan() }
+                    override fun repairLibrary() { graph.library.repair() }
                     override fun setCoverLookupEnabled(enabled: Boolean) { graph.library.setCoverLookupEnabled(enabled) }
                     override fun dismissCoverLookupNotice() { graph.library.dismissCoverLookupNotice() }
                     override fun load(album: Album) = graph.deck.load(album)

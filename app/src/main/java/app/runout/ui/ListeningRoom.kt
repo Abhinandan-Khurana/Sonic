@@ -49,6 +49,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -152,6 +153,8 @@ data class RoomState(
 interface RoomActions : DeckActions {
     fun pickFolder()
     fun rescan()
+    /** Settings › Library › Repair local albums: rebuild the shelf from the folder alone. */
+    fun repairLibrary() { rescan() }
     fun setCoverLookupEnabled(enabled: Boolean) {}
     fun dismissCoverLookupNotice() {}
     fun load(album: Album)
@@ -371,7 +374,7 @@ fun RoomScreen(
                     Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 16.dp, end = 16.dp, top = 70.dp, bottom = 110.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 80.dp, bottom = 110.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     turntable(Modifier.fillMaxWidth().weight(0.42f), Alignment.Center)
@@ -388,7 +391,8 @@ fun RoomScreen(
                 ) {
                     turntable(Modifier.weight(0.53f).fillMaxHeight(), Alignment.CenterStart)
                     Spacer(Modifier.width(24.dp))
-                    crate(Modifier.weight(0.47f).fillMaxHeight())
+                    // Room underneath for the tab bar.
+                    crate(Modifier.weight(0.47f).fillMaxHeight().padding(bottom = LANDSCAPE_TAB_ROOM))
                 }
             }
 
@@ -397,6 +401,7 @@ fun RoomScreen(
                 onOpen = { if (it == Panel.SETTINGS) settings = null; panel = it; pulledId = null },
                 onDownloads = { panel = Panel.DOWNLOADS; pulledId = null },
                 onAccount = openAccount,
+                onSignal = { panel = Panel.SIGNAL; pulledId = null },
             )
         }
 
@@ -542,6 +547,7 @@ fun RoomScreen(
                     onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
                 )
                 Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions)
+                Panel.SIGNAL -> SignalPanel(state, actions, onSoundSettings = { settings = SettingsSection.SOUND; panel = Panel.SETTINGS })
             }
         }
 
@@ -778,6 +784,7 @@ private fun PanelSheet(
  */
 @Composable
 private fun FullPage(title: String, onClose: () -> Unit, scroll: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    val sheets = remember { PageSheetHost() }
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
         RoomBackground(Modifier.fillMaxSize(), portrait = true)
         Column(
@@ -793,8 +800,12 @@ private fun FullPage(title: String, onClose: () -> Unit, scroll: Boolean = false
                 TextAction("Close", onClose, color = Room.Ink)
             }
             val body = Modifier.fillMaxWidth().weight(1f)
-            Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
+            CompositionLocalProvider(LocalPageSheetHost provides sheets) {
+                Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
+            }
         }
+        // Sheets opened by the page's content cover the whole page, edge to edge.
+        PageSheetLayer(sheets)
     }
 }
 
@@ -837,6 +848,7 @@ private fun CornerLabels(
     onOpen: (Panel) -> Unit,
     onDownloads: () -> Unit,
     onAccount: () -> Unit,
+    onSignal: () -> Unit,
 ) {
     val deck = state.deck
     val nowSpinning = when {
@@ -869,9 +881,17 @@ private fun CornerLabels(
     }
 
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout).padding(start = if (portrait) 18.dp else 28.dp, end = if (portrait) 18.dp else 28.dp, top = 4.dp, bottom = 16.dp)) {
-        Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextAction(if (state.crackleOn) "Crackle on" else "Crackle off", actions::toggleCrackle)
-            if (state.hasFolder) RefreshKey(actions::rescan)
+        // What's reaching your ears, once something plays: tap for the whole chain. In portrait it
+        // sits under Crackle; in landscape the deck starts right below, so it joins the same line.
+        val signal = signalPath(state.output, state.sound)
+        Column(Modifier.align(Alignment.TopStart)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                MiniToggle("Crackle", state.crackleOn, { actions.toggleCrackle() }, tag = "toggle-crackle")
+                if (state.hasFolder) RefreshKey(actions::rescan)
+                if (!portrait && signal != null) SignalChip(signal, onSignal)
+            }
+            // Tucked up under Crackle (its key is taller than it looks), above the deck.
+            if (portrait && signal != null) SignalChip(signal, onSignal, Modifier.offset(y = (-12).dp))
         }
 
         if (portrait) {
@@ -884,23 +904,30 @@ private fun CornerLabels(
                 nav(Modifier)
             }
         } else {
-            Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                nav(Modifier.widthIn(max = screenW * 0.42f))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BasicText(status, style = Room.Label)
-                    links()
-                }
-            }
-            BasicText(nowSpinning, style = Room.Label, modifier = Modifier.align(Alignment.BottomStart), maxLines = 1)
+            // Landscape: the tab bar sits at the bottom under the crate, like the portrait one, and the
+            // hint, record count and status dots share one line at the top, clear of the sleeves.
+            nav(Modifier.align(Alignment.BottomEnd).widthIn(max = screenW * 0.42f))
+            BasicText(nowSpinning, style = Room.Label, modifier = Modifier.align(Alignment.BottomStart).widthIn(max = screenW * 0.48f), maxLines = 1)
             val hint = when {
                 state.albums.isEmpty() -> "Choose a folder to begin"
                 pulled -> "Drag the disc onto the platter"
                 else -> "Flick to dig  ⟷"
             }
-            BasicText(hint, style = Room.Label, modifier = Modifier.align(Alignment.BottomEnd))
+            Row(
+                Modifier.align(Alignment.TopEnd).widthIn(max = screenW * 0.46f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BasicText(hint, style = Room.LabelQuiet, maxLines = 1)
+                BasicText(status, style = Room.Label, maxLines = 1)
+                links()
+            }
         }
     }
 }
+
+/** Space kept under the crate in landscape for the tab bar (58 dp) and a small gap. */
+private val LANDSCAPE_TAB_ROOM = 50.dp
 
 internal fun recordCount(n: Int) = if (n == 1) "1 record" else "$n records"
 

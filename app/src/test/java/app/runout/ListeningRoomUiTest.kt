@@ -357,7 +357,10 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("settings:SOUND").assertIsDisplayed()
         compose.onNodeWithTag("settings:SOUND").performClick()
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()
-        compose.onNodeWithText("24-bit · 96 kHz → 32-bit float").assertIsDisplayed()
+        // The signal chain: the file, Runout's path, and where it goes out.
+        compose.onNodeWithTag("signal-path").assertIsDisplayed()
+        compose.onNodeWithTag("spec:Track").assertTextContains("24-BIT · 96 KHZ")
+        compose.onNodeWithTag("spec:Runout").assertTextContains("32-BIT FLOAT", substring = true)
 
         compose.onNodeWithTag("fader:1k").performScrollTo().performTouchInput {
             swipe(center, center - Offset(0f, 140f), durationMillis = 300)

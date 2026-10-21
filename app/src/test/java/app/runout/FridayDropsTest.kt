@@ -80,6 +80,7 @@ class FridayDropsTest {
         assertNotEquals(a, DropsRepository.pick(pool, DropsRepository.seed(2912)))
         assertTrue(DropsRepository.searchUrl(3).contains("page=3"))
         assertTrue(DropsRepository.searchUrl(3).contains("creativecommons"))
+        assertTrue("drops are picked from FLAC albums only", DropsRepository.searchUrl(3).contains("format%3Aflac"))
     }
 
     @Test

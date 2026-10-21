@@ -42,6 +42,10 @@ import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+/** Wait before continuing a download Android interrupted, and how often to try in a row. */
+private const val AUTO_RESUME_DELAY_MS = 2_000L
+private const val AUTO_RESUME_LIMIT = 3
+
 class SoulseekRepository(
     private val context: Context,
     private val scope: CoroutineScope,
@@ -260,6 +264,7 @@ class SoulseekRepository(
     fun setTurtle(enabled: Boolean) { preferences.setTurtle(enabled) }
     fun pause(id: String): Job = work { pauseOne(id); pumpQueue() }
     private suspend fun pauseOne(id: String) {
+        interruptedIds.remove(id)
         val row = ownTransfer(id)
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()
@@ -278,6 +283,7 @@ class SoulseekRepository(
     }
     fun retry(id: String): Job = resume(id)
     fun cancel(id: String): Job = work {
+        interruptedIds.remove(id)
         val row = ownTransfer(id)
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()
@@ -410,7 +416,40 @@ class SoulseekRepository(
         preferences.setBackground(owner, enabled); _stayOnline.value = enabled
         connection.updatePolicy()
     }
-    fun onForegroundChanged(isForeground: Boolean): Job = work { connection.foregroundChanged(isForeground) }
+    fun onForegroundChanged(isForeground: Boolean): Job = work {
+        foreground = isForeground
+        connection.foregroundChanged(isForeground)
+        // Back in the app: continue downloads Android interrupted while it was in the background.
+        if (isForeground) interruptedIds.keys.toList().forEach { id -> autoResume(id) }
+    }
+
+    @Volatile private var foreground = true
+    /** Downloads paused by an interrupted read, with how many times each was resumed for it. */
+    private val interruptedIds = ConcurrentHashMap<String, Int>()
+
+    /** Android's battery setting "Background usage: off" (Android 9 and later). */
+    fun backgroundRestricted(): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 28 &&
+            context.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted == true
+
+    private fun interruptionReason(): String =
+        if (backgroundRestricted()) "Android paused this download: Background usage is off for Runout. Allow it in the app's Battery settings, or keep Runout open. It continues when you're back."
+        else "Android interrupted this download. Your progress is kept, and it continues by itself."
+
+    private fun scheduleAutoResume(id: String) {
+        interruptedIds.putIfAbsent(id, 0)
+        // Restricted apps can't do network work in the background; wait for the app to come back.
+        if (!foreground || backgroundRestricted()) return
+        scope.launch(Dispatchers.IO) { delay(AUTO_RESUME_DELAY_MS); if (foreground) autoResume(id) }
+    }
+
+    private suspend fun autoResume(id: String) {
+        val tries = interruptedIds[id] ?: return
+        val row = dao.transfer(id)
+        if (row == null || row.state != "PAUSED" || tries >= AUTO_RESUME_LIMIT) { interruptedIds.remove(id); return }
+        interruptedIds[id] = tries + 1
+        runCatching { resumeOne(id) }.onFailure { if (it is CancellationException) throw it }
+    }
     fun onExternalFlow(active: Boolean) { connection.externalFlow(active) }
     fun onNetworkChanged(available: Boolean): Job = work { connection.networkChanged(available) }
     private fun hasActiveTransfers() = archiveJobs.isNotEmpty() || transfers.value.any { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) } || uploads.value.any { it.state == "uploading" || it.state == "queued" }
@@ -476,16 +515,22 @@ class SoulseekRepository(
             "transfer" -> {
                 val id = event.optString("id"); val row = dao.transfer(id) ?: return
                 if (row.owner != owner || row.state in listOf("COMPLETED", "CANCELLED")) return
-                val state = event.optString("state").uppercase()
-                if (row.state == "PAUSED" && state !in listOf("PAUSED", "CANCELLED")) return
+                val reported = event.optString("state").uppercase()
+                if (row.state == "PAUSED" && reported !in listOf("PAUSED", "CANCELLED")) return
+                val nativeError = if (event.isNull("error")) null else event.optString("error").takeIf { it.isNotBlank() }
+                // An interrupted read is Android pausing the app, not a broken file or peer: keep the
+                // bytes, say why, and pick it up again.
+                val interrupted = reported == "FAILED" && SoulseekPolicy.isInterruption(nativeError)
+                val state = if (interrupted) "PAUSED" else reported
                 val updated = row.copy(bytes = event.optLong("bytes", row.bytes).coerceIn(0, row.size), state = if (state == "COMPLETED") "VALIDATING" else state,
                     queuePosition = if (event.has("queuePosition") && !event.isNull("queuePosition")) event.optLong("queuePosition") else null,
-                    speed = event.optDouble("speed", 0.0), stagePath = event.optString("path").ifBlank { row.stagePath }, error = if (event.isNull("error")) null else event.optString("error").takeIf { it.isNotBlank() })
+                    speed = event.optDouble("speed", 0.0), stagePath = event.optString("path").ifBlank { row.stagePath }, error = if (interrupted) interruptionReason() else nativeError)
                 if (runCatching { SoulseekTransferState.valueOf(updated.state) }.isFailure) return
                 dao.putTransfer(updated)
                 if (state == "COMPLETED") { activeTransfers.remove(id); publishAsync(updated) }
                 if (state == "FAILED" || state == "CANCELLED" || state == "PAUSED") activeTransfers.remove(id)
                 if (state == "COMPLETED" || state == "FAILED" || state == "CANCELLED" || state == "PAUSED") pumpQueue()
+                if (interrupted) scheduleAutoResume(id)
             }
             "message" -> {
                 val serverId = event.getLong("id"); val username = event.getString("username")

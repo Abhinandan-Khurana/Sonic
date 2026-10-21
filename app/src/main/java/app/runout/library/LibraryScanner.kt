@@ -21,6 +21,9 @@ class ScannedAlbum(
 
 data class ScanProgress(val folders: Int, val albums: Int, val audioFiles: Int = 0)
 
+/** A .flac file the scan couldn't use, with a plain reason. */
+data class UnreadableFile(val path: String, val reason: String)
+
 /** What a scan found, shown when a folder turns up no albums so the user can see why. */
 data class ScanReport(
     val folders: Int,
@@ -29,16 +32,23 @@ data class ScanReport(
     val albums: Int,
     val otherFiles: Map<String, Int>,
     val error: String? = null,
+    /** The files behind [unreadable], up to [MAX_LISTED]. */
+    val unreadableFiles: List<UnreadableFile> = emptyList(),
 ) {
     val summary: String
         get() = when {
             error != null -> "Couldn't read the folder: $error"
+            albums > 0 && unreadable > 0 -> "$albums albums from $audioFiles music files in $folders folders · $unreadable files couldn't be read"
             albums > 0 -> "$albums albums from $audioFiles music files in $folders folders"
             audioFiles == 0 && otherFiles.isEmpty() -> "Looked in $folders folders and found no files"
             audioFiles == 0 -> "Looked in $folders folders and found no music files " +
                 "(found ${otherFiles.entries.sortedByDescending { it.value }.take(3).joinToString { ".${it.key} ×${it.value}" }})"
             else -> "Found $audioFiles music files but couldn't read them"
         }
+
+    companion object {
+        const val MAX_LISTED = 200
+    }
 }
 
 /**
@@ -63,6 +73,7 @@ class LibraryScanner(private val context: Context) {
         var unreadable = 0
         var albums = 0
         val other = mutableMapOf<String, Int>()
+        val failedFiles = mutableListOf<UnreadableFile>()
         val rootId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrElse {
             return@withContext ScanReport(0, 0, 0, 0, emptyMap(), error = "not a folder")
         }
@@ -88,7 +99,8 @@ class LibraryScanner(private val context: Context) {
             if (audio.isNotEmpty()) {
                 val image = pickFolderImage(files)?.let { DocumentsContract.buildDocumentUriUsingTree(treeUri, it.docId) }
                 val (found, failed) = readFolder(treeUri, docId, nameOf(children, docId), audio, image)
-                unreadable += failed
+                unreadable += failed.size
+                if (failedFiles.size < ScanReport.MAX_LISTED) failedFiles += failed.take(ScanReport.MAX_LISTED - failedFiles.size)
                 found.forEach {
                     albums++
                     onAlbum(it)
@@ -103,6 +115,7 @@ class LibraryScanner(private val context: Context) {
             albums = albums,
             otherFiles = other,
             error = if (!listedAnything) "Android didn't let the app list this folder. Try choosing it again." else null,
+            unreadableFiles = failedFiles,
         )
     }
 
@@ -127,6 +140,9 @@ class LibraryScanner(private val context: Context) {
         }.getOrNull()
     }
 
+    /** A readable folder path from a document id ("primary:Music/Air" → "Music/Air"). */
+    private fun docPath(docId: String): String = docId.substringAfter(':', docId)
+
     private fun nameOf(@Suppress("UNUSED_PARAMETER") children: List<Entry>, docId: String): String =
         docId.substringAfterLast('/').substringAfterLast(':').ifBlank { "Untitled" }
 
@@ -146,17 +162,20 @@ class LibraryScanner(private val context: Context) {
         folderName: String,
         audio: List<Entry>,
         folderImage: Uri?,
-    ): Pair<List<ScannedAlbum>, Int> {
+    ): Pair<List<ScannedAlbum>, List<UnreadableFile>> {
         data class Read(val entry: Entry, val uri: Uri, val info: AudioInfo, val estimated: Boolean)
 
-        var failed = 0
+        val failed = mutableListOf<UnreadableFile>()
         var pictureFound = false
         val reads = audio.sortedBy { it.name.lowercase() }.mapNotNull { entry ->
             coroutineContext.ensureActive()
             val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, entry.docId)
             val info = readFile(uri, entry, wantPicture = !pictureFound)
             if (info?.picture != null) pictureFound = true
-            if (info == null) { failed++; return@mapNotNull null }
+            if (info == null) {
+                failed += UnreadableFile("${docPath(folderId)}/${entry.name}", FlacPolicy.diagnose(context, uri))
+                return@mapNotNull null
+            }
             // A verified FLAC stream may omit its total sample count.
             val base = info
             val estimated = base.durationMs <= 0

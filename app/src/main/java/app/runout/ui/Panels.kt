@@ -91,6 +91,7 @@ enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true
     FRIENDS("Friends", "Friends", fullPage = true),
     SETTINGS("Settings", "Settings"),
     DOWNLOADS("Downloads", "Downloads", inStrip = false),
+    SIGNAL("Audio quality", "Audio", inStrip = false),
 }
 
 /** The sections of the Settings sheet. */
@@ -102,24 +103,21 @@ enum class SettingsSection(val label: String) { SOUND("Sound"), ACCOUNT("Soulsee
 @Composable
 fun SoundPanel(s: SoundSettings, output: OutputStatus, actions: RoomActions) {
     Column(Modifier.fillMaxWidth().testTag("panel:sound")) {
-        BasicText(output.label, style = Room.Label.copy(fontWeight = FontWeight.Medium))
-        if (s.pure && output.bitPerfect != BitPerfect.OFF) {
-            BasicText(output.bitPerfect.label, style = Room.LabelQuiet)
-        }
-        Spacer(Modifier.height(6.dp))
+        SignalChain(signalPath(output, s))
+        Spacer(Modifier.height(10.dp))
         ToggleRow(
             "Pure",
             "The music, untouched.",
             s.pure,
             { on -> actions.updateSound { it.copy(pure = on) } },
-            more = "Nothing touches the signal: no EQ, ReplayGain, crackle or platter wind-down. Bit-perfect to a USB DAC on Android 14 and later.",
+            more = "Pure is about processing: no EQ, ReplayGain, limiter, crackle or platter wind-down, so the decoded samples pass untouched. Bit-perfect to a USB DAC on Android 14 and later.",
         )
         ToggleRow(
             "Hi-res output",
             "Each file at its own sample rate.",
             s.hiResOutput,
             { on -> actions.updateSound { it.copy(hiResOutput = on) } },
-            more = "Plays each file at its own sample rate in 32-bit float, up to 24-bit/192 kHz, instead of folding it down to 16-bit.",
+            more = "Hi-res is about the format: each file plays at its own sample rate in 32-bit float, up to 24-bit/192 kHz, instead of being cut to 16-bit. Use both for the cleanest path.",
         )
 
         val dsp = !s.pure

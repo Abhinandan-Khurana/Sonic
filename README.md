@@ -2,7 +2,7 @@
 
 **A vinyl listening room for your FLAC records, on Android.** Flick through a crate of sleeves, pull a record out, drop it on a glass turntable and lower the needle. Dig for albums on Soulseek, claim free Friday Drops from the Internet Archive, and swap records with friends.
 
-[**Download 0.5.0 (development)**](https://github.com/Somchandra17/runout/releases/tag/v0.5.0-dev.1) · [Build guide](docs/BUILDING.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
+[**Download 0.5.1 (development)**](https://github.com/Somchandra17/runout/releases/tag/v0.5.1-dev.1) · [Build guide](docs/BUILDING.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
 <p align="center">
   <img src="docs/images/screens/home.png" width="250" alt="The listening room: a glass turntable with orange keys above a crate of record sleeves, and four icon tabs" />
@@ -35,8 +35,9 @@ Long-press any record to send it, see its details and licence, or remove it.
 </p>
 
 **Sound:**
-- **Pure** passes the decoder's output straight through: bit-perfect to a USB DAC on Android 14 and later.
-- **Hi-res output** plays each file at its own sample rate in 32-bit float.
+- **Pure** is about processing: no EQ, ReplayGain, limiter or crackle, so the decoded samples pass untouched. Bit-perfect to a USB DAC on Android 14 and later.
+- **Hi-res output** is about the format: each file plays at its own sample rate in 32-bit float instead of being cut to 16-bit. The two combine.
+- **Audio quality:** a chip on the home screen ("24/96 → Phone speaker") opens the whole chain, Track → Runout → Output, with each step's bit depth and rate.
 - A 10-band EQ with presets, AutoEq headphone profiles, ReplayGain, a limiter, and an optional "warmth".
 
 ## Dig
@@ -55,7 +56,7 @@ Tap a folder to see its full track list, laid out like the back of a sleeve, bef
 
 Every Friday, ten Creative Commons albums from the Internet Archive's netlabel collection, the same ten for everyone. Three lights show your claims left this week.
 
-Tap a drop to see its FLAC tracks, listen to thirty seconds of any of them, and claim it into your crate. Albums with no FLAC say so and don't use a claim.
+Only albums with FLAC files are picked. Tap a drop to see its tracks, listen to thirty seconds of any of them, and claim it into your crate.
 
 ## Friends
 
@@ -79,21 +80,25 @@ Chat with other Soulseek listeners, keep a friends list with online dots, and se
   <img src="docs/images/screens/setup-rhythm.png" width="250" alt="Setup: 'When should you stay online?' with two tappable cards, the selected one tinted" />
 </p>
 
+## Repair local albums
+
+If albums are missing, Settings › Library › **Repair local albums** rebuilds the shelf from your folder and lists every file Runout couldn't read, with the reason (an MP3 renamed to `.flac`, a damaged or cut-off FLAC). Runout only reads your folder, so it never changes the files.
+
 ## FLAC only
 
 FLAC is the rule for music everywhere: scanning, imports, downloads, sharing and playback. Renaming an MP3 to `.flac` does not get it in. Artwork, record containers and the turntable's synthesised sounds are fine.
 
 ## Install
 
-Download the APK and its `.sha256` from the [0.5.0 release](https://github.com/Somchandra17/runout/releases/tag/v0.5.0-dev.1) and check the checksum:
+Download the APK and its `.sha256` from the [0.5.1 release](https://github.com/Somchandra17/runout/releases/tag/v0.5.1-dev.1) and check the checksum:
 
 ```bash
-sha256sum -c Runout-0.5.0-development.apk.sha256
+sha256sum -c Runout-0.5.1-development.apk.sha256
 ```
 
 The development build installs as **Runout Dev** (`app.runout.dev`), alongside the original Runout app, with its own crate and account.
 
-0.5.0 is signed with a different debug certificate from 0.4.x, so **uninstall Runout Dev 0.4.x first**. That clears only Runout Dev's own data: pick your music folder and sign in again. Your music files aren't touched. Android 9 or newer, on ARM64, ARMv7, x86-64 and x86.
+0.5.1 installs over 0.5.0. It is signed with a different debug certificate from 0.4.x, so **uninstall Runout Dev 0.4.x first**. That clears only Runout Dev's own data: pick your music folder and sign in again. Your music files aren't touched. Android 9 or newer, on ARM64, ARMv7, x86-64 and x86.
 
 ## Soulseek, privacy and staying connected
 

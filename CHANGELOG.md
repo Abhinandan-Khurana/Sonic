@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## 0.5.1 development — fixes from the first phones (2026-10-21)
+
+- **Library:**
+  - Fixed: after a reinstall, albums appeared for a second and then vanished. One unreadable `.flac` made the whole scan roll back to the previous shelf, which was empty. A partial scan now keeps everything it read, merged with what it couldn't see, and saves it.
+  - New: Settings › Library › **Repair local albums**. It rebuilds the shelf from the folder alone and lists every file it couldn't read, with the reason (for example an MP3 renamed to `.flac`, or a damaged or cut-off FLAC). Music files are never changed.
+- **Audio quality on the home screen:** a small chip such as "24/96 → Phone speaker" opens the signal chain: Track → Runout → Output, each with its bit depth and rate, and a plain verdict ("Bit-perfect", "Lossless, resampled to 48 kHz", "Lossy over Bluetooth"). Runout now knows the output device: speaker, wired, USB DAC or Bluetooth.
+- **Pure and Hi-res output** are explained where they're switched: Pure is about processing, Hi-res about the format, and they combine.
+- **Friday Drops:** only albums with FLAC files are picked. This week is picked again.
+- **Downloads:** "Stream read error: Interrupted system call" was Android pausing the app (Background usage off). It now shows as a pause with the reason, Downloads shows a note with a link to App info, and interrupted downloads continue when Runout is back.
+- **Dig:** a round search key beside the field. Its filters sheet, and Friends' New chat sheet, now shade the whole page.
+- **Home:** Crackle is a switch. In landscape the tab bar sits at the bottom right, and the status line no longer runs into the sleeves.
+- **Sign-in:** with the keyboard up, the record collage fades and the headline folds away instead of sliding under the titles.
+- **Code:** `ui/Turntable.kt` holds only the vinyl player, with a map at the top.
+- **Native (source only):** download reads retry an interrupted system call. Not in this APK: the native library is reused unchanged from 0.4.6.
+
 
 ## 0.5.0 development — UI redesign (2026-10-21)
 

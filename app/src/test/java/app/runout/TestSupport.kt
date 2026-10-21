@@ -204,6 +204,7 @@ open class RecordingActions : RoomActions {
     val log = CopyOnWriteArrayList<String>()
     override fun pickFolder() { log += "pickFolder" }
     override fun rescan() { log += "rescan" }
+    override fun repairLibrary() { log += "repair" }
     override fun dismissCoverLookupNotice() { log += "dismissCoverLookupNotice" }
     override fun load(album: Album) { log += "load:${album.title}" }
     override fun cueTrack(album: Album, trackId: String?) { log += "cue:${album.title}:$trackId" }

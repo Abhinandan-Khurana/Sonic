@@ -70,6 +70,9 @@ data class SoulseekConversation(val username: String, val messages: List<Soulsee
 
 /** Stable identities include the complete remote path, expected size and exact peer name. */
 object SoulseekPolicy {
+    /** The native downloader's read was cut by a signal (EINTR), as Android does to paused apps. */
+    fun isInterruption(error: String?): Boolean =
+        error != null && (error.contains("Interrupted system call", ignoreCase = true) || error.contains("os error 4)"))
     fun remoteId(username: String, path: String, size: Long): String = digest("$username\u0000$path\u0000$size")
     fun accountKey(owner: String, key: String): String = digest("$owner\u0000$key")
     fun albumId(username: String, directory: String): String = "soulseek-" + digest("$username\u0000$directory")

@@ -1,3 +1,22 @@
+/*
+ * THE VINYL PLAYER — everything that draws and drives the turntable lives in this one file.
+ * Edit here to change how the deck looks or feels; nothing else in the app draws it.
+ *
+ * Map, top to bottom:
+ *   DeckActions        what a press on the deck asks the player to do (start/stop, skip, flip, drop the needle)
+ *   DeckGeometry       where every part sits on the plinth: platter, tonearm pivot, keys, screen (ASPECT = shape)
+ *   RPM_33_DEG         how fast the platter turns on screen; strobeDrift() = the strobe dots' crawl
+ *   screenLines()      the text on the little dot-matrix screen
+ *   Turntable()        the composable: spin animation, touch areas, tonearm drag, platter hold, then the drawing
+ *   Chrome/SmokedGlass the base colours of the plinth
+ *   drawPlinth         the body and its glass coat        drawPlatter / drawStrobe / drawMat   the platter
+ *   drawArmBase        tonearm base and counterweight      drawTonearm                         the arm and headshell
+ *   teKey / drawButtons  the Teenage Engineering-style keys (signalMetal/greyMetal = their anodised finish)
+ *   drawPixelScreen    the LCD, using PixelLine/PixelFont (the Silkscreen dot font)
+ *
+ * The record on the platter (label, grooves, picture discs) is drawn in RecordArt.kt: drawRecord().
+ * Colours shared with the rest of the app (Room.Signal, Room.SignalLight, ...) are in Room.kt.
+ */
 package app.runout.ui
 
 import androidx.compose.animation.core.Spring
@@ -798,39 +817,5 @@ object PixelFont {
             bits[row * w + x] = (bmp.getPixel(x, row + 4) ushr 24) > 0x80
         }
         return PixelLine(w, bits).also { cache.put(key, it) }
-    }
-}
-
-/** A small liquid-glass button. */
-@Composable
-fun GlassPill(
-    text: String,
-    backdrop: Backdrop,
-    modifier: Modifier = Modifier,
-    active: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
-            .touchHeight()
-            .height(30.dp)
-            .widthIn(min = 48.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { RoundedCornerShape(50) },
-                effects = {
-                    vibrancy()
-                    blur(2.dp.toPx())
-                    lens(9.dp.toPx(), 14.dp.toPx())
-                },
-                onDrawSurface = {
-                    drawRect(if (active) Room.Accent.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.42f))
-                },
-            )
-            .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        BasicText(text, style = Room.Label.copy(color = if (active) Color.White else Room.Ink, fontWeight = FontWeight.Medium))
     }
 }

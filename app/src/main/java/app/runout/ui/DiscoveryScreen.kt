@@ -37,14 +37,18 @@ internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().testTag("screen:search"),contentPadding = PaddingValues(bottom = 96.dp),verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item("search-controls") {
-                Field(discovery.query,actions::setSearchQuery,"Search albums or artists",onSubmit = { if(source == SearchSource.SOULSEEK && state.soulseekSession.connected && !searching) submit() })
+                val online = source == SearchSource.SOULSEEK && state.soulseekSession.connected
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        Field(discovery.query,actions::setSearchQuery,"Search albums or artists",onSubmit = { if(online && !searching) submit() })
+                    }
+                    // One round key beside the field: search, and while searching, stop.
+                    if(online) SearchKey(searching, enabled = discovery.query.trim().toByteArray().size >= 2, onSearch = submit, onStop = actions::stopSoulseekSearch)
+                }
                 Chips(listOf(SearchSource.LOCAL, SearchSource.SOULSEEK),source,{ it.label },{ actions.setSearchOptions(options.copy(source = it, kind = SearchKind.ALBUMS)) },Modifier.padding(vertical = 8.dp))
                 if(source == SearchSource.SOULSEEK) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if(state.soulseekSession.connected) {
-                            Pill(if(searching) "Searching Soulseek…" else "Search Soulseek",submit,Modifier.testTag("submit-search"),active = true,enabled = discovery.query.trim().toByteArray().size >= 2 && !searching)
-                            if(searching) Pill("Stop",actions::stopSoulseekSearch)
-                        } else Pill(if(state.soulseekSession.hasAccount) "Reconnect Soulseek" else "Connect Soulseek",{ if(state.soulseekSession.hasAccount) actions.reconnectSoulseek() else onAccount() },active = true,enabled = state.soulseekSession.state != SoulseekConnection.RECONNECTING)
+                        if(!state.soulseekSession.connected) Pill(if(state.soulseekSession.hasAccount) "Reconnect Soulseek" else "Connect Soulseek",{ if(state.soulseekSession.hasAccount) actions.reconnectSoulseek() else onAccount() },active = true,enabled = state.soulseekSession.state != SoulseekConnection.RECONNECTING)
                     }
                     if(!state.soulseekSession.connected && state.soulseekSession.hasAccount) BasicText(state.soulseekSession.error ?: "Your account is kept. Reconnect to search online.",style = Room.LabelQuiet,modifier = Modifier.padding(vertical = 8.dp))
                 }
@@ -73,7 +77,7 @@ internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: 
         }
         // Filters & sort: a small floating key, bottom right, out of the way of the results.
         if (source == SearchSource.SOULSEEK) FiltersKey(Modifier.align(Alignment.BottomEnd).padding(16.dp)) { filters = true }
-        if (filters) FiltersCard(options, actions, Modifier.align(Alignment.BottomCenter)) { filters = false }
+        if (filters) FiltersCard(options, actions) { filters = false }
     }
 }
 
@@ -170,6 +174,34 @@ internal fun GeneratedSleeve(title: String, artist: String?, modifier: Modifier 
 private fun qualityShort(bits: Int?, rate: Int?): String? =
     if (bits == null || rate == null) null else "$bits/${if (rate % 1000 == 0) (rate / 1000).toString() else String.format(Locale.ROOT, "%.1f", rate / 1000.0)}"
 
+/** The round search key beside the field; a stop square while Soulseek is being searched. */
+@Composable
+private fun SearchKey(searching: Boolean, enabled: Boolean, onSearch: () -> Unit, onStop: () -> Unit) {
+    val tick = rememberTick()
+    val on = searching || enabled
+    Box(
+        Modifier
+            .size(48.dp)
+            .background(if (on) Room.Accent else Room.Ink.copy(alpha = 0.1f), androidx.compose.foundation.shape.CircleShape)
+            .clickable(enabled = on, role = androidx.compose.ui.semantics.Role.Button) { tick(); if (searching) onStop() else onSearch() }
+            .semantics { contentDescription = if (searching) "Stop searching" else "Search Soulseek" }
+            .testTag(if (searching) "stop-search" else "submit-search"),
+        contentAlignment = Alignment.Center,
+    ) {
+        val ink = if (on) Color.White else Room.Quiet
+        Canvas(Modifier.size(20.dp)) {
+            val w = size.width
+            if (searching) {
+                drawRoundRect(ink, androidx.compose.ui.geometry.Offset(w * 0.25f, w * 0.25f), androidx.compose.ui.geometry.Size(w * 0.5f, w * 0.5f), androidx.compose.ui.geometry.CornerRadius(w * 0.08f))
+            } else {
+                val stroke = w * 0.11f
+                drawCircle(ink, w * 0.3f, androidx.compose.ui.geometry.Offset(w * 0.42f, w * 0.42f), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+                drawLine(ink, androidx.compose.ui.geometry.Offset(w * 0.64f, w * 0.64f), androidx.compose.ui.geometry.Offset(w * 0.9f, w * 0.9f), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+    }
+}
+
 /** The floating Filters & sort key. */
 @Composable
 private fun FiltersKey(modifier: Modifier, onClick: () -> Unit) {
@@ -196,25 +228,15 @@ private fun FiltersKey(modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FiltersCard(options: DiscoveryOptions, actions: RoomActions, modifier: Modifier, onDismiss: () -> Unit) {
-    BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.08f)).clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDismiss))
-        Column(
-            modifier
-                .fillMaxWidth()
-                .background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .padding(20.dp)
-                .testTag("search-filter-card"),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            BasicText("Sort", style = Room.LabelQuiet)
-            Chips(SearchSort.entries,options.sort,{ it.label },{ actions.setSearchOptions(options.copy(sort = it)) })
-            BasicText("Reported FLAC quality", style = Room.LabelQuiet)
-            Chips(SearchQuality.entries,options.quality,{ it.label },{ actions.setSearchOptions(options.copy(quality = it)) })
-            ToggleRow("Free upload slots only","Peer availability is advertised and can change.",options.availableOnly,{ actions.setSearchOptions(options.copy(availableOnly = it)) })
-            Pill("Done", onDismiss, Modifier.testTag("search-filters-done"))
-        }
+private fun FiltersCard(options: DiscoveryOptions, actions: RoomActions, onDismiss: () -> Unit) {
+    PageSheet("search-filter-card", onDismiss) {
+        BasicText("Filters & sort", style = Room.Title.copy(fontSize = 17.sp))
+        BasicText("Sort", style = Room.LabelQuiet)
+        Chips(SearchSort.entries,options.sort,{ it.label },{ actions.setSearchOptions(options.copy(sort = it)) })
+        BasicText("Reported FLAC quality", style = Room.LabelQuiet)
+        Chips(SearchQuality.entries,options.quality,{ it.label },{ actions.setSearchOptions(options.copy(quality = it)) })
+        ToggleRow("Free upload slots only","Peer availability is advertised and can change.",options.availableOnly,{ actions.setSearchOptions(options.copy(availableOnly = it)) })
+        Pill("Done", onDismiss, Modifier.testTag("search-filters-done"), active = true)
     }
 }
 

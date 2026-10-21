@@ -88,13 +88,21 @@ class LibraryRepository(
         return rescan()
     }
 
-    fun rescan(): Job? {
+    /**
+     * Rebuilds the shelf from the folder alone: forgets the saved index, so albums that are gone
+     * or broken drop off, and the report lists every file that couldn't be read and why. Music
+     * files are only read, never changed.
+     */
+    fun repair(): Job? = rescan(fresh = true)
+
+    fun rescan(fresh: Boolean = false): Job? {
         val tree = _folder.value ?: return null
         scanJob?.cancel()
         val job = scope.launch {
             _scan.value = ScanState.Scanning(ScanProgress(0, 0))
             _report.value = null
             val previous = _albums.value
+            if (fresh) _albums.value = emptyList()
             val found = mutableListOf<Album>()
             val report = try {
                 scanner.scan(
@@ -118,13 +126,16 @@ class LibraryRepository(
                 ScanReport(0, 0, 0, found.size, emptyMap(), error = e.message ?: e.javaClass.simpleName)
             }
             _report.value = report
-            if (report.error != null || report.unreadable > 0) {
-                // Partial scans cannot prove that absent records/tracks were intentionally removed.
+            if (report.error != null && found.isEmpty()) {
+                // Nothing was listed: keep the shelf rather than empty it.
                 _albums.value = previous
                 _scan.value = null
                 return@launch
             }
-            _albums.value = sortShelf(found)
+            // A partial scan (some files unreadable, or the listing broke off) can't prove that the
+            // albums it didn't see were removed, so keep them next to everything it did read.
+            val partial = report.error != null || report.unreadable > 0
+            _albums.value = sortShelf(if (partial && !fresh) mergePartial(previous, found) else found)
             withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
 
             if (coverLookupEnabled.value) {
@@ -151,6 +162,21 @@ class LibraryRepository(
 
     companion object {
         private const val KEY_FOLDER = "folder"
+
+        /**
+         * A partial scan's shelf: everything it read, plus whatever it couldn't see from before.
+         * An album read only in part keeps its earlier tracks next to the ones read now.
+         */
+        fun mergePartial(previous: List<Album>, found: List<Album>): List<Album> {
+            val byId = found.associateBy { it.id }
+            val merged = found.map { now ->
+                val before = previous.firstOrNull { it.id == now.id } ?: return@map now
+                val missing = before.tracks.filter { old -> now.tracks.none { it.id == old.id } }
+                if (missing.isEmpty()) now
+                else now.copy(tracks = (now.tracks + missing).sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.fileName })))
+            }
+            return merged + previous.filter { it.id !in byId }
+        }
 
         fun sortShelf(list: List<Album>): List<Album> =
             list.sortedWith(compareBy({ it.artist.lowercase() }, { it.year ?: 0 }, { it.title.lowercase() }))

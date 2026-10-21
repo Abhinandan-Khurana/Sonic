@@ -16,8 +16,8 @@ android {
         applicationId = "app.runout"
         minSdk = 28
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.5.0"
+        versionCode = 12
+        versionName = "0.5.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["runoutLabel"] = "@string/app_name"
     }

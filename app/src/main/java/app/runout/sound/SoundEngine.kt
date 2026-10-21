@@ -2,10 +2,13 @@ package app.runout.sound
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.AudioMixerAttributes
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,13 +24,28 @@ enum class BitPerfect(val label: String) {
     ON("Bit-perfect to USB DAC"),
 }
 
-/** What's actually reaching the speakers, shown in the Sound panel. */
+/** The kind of thing the sound comes out of. */
+enum class OutputKind(val label: String) {
+    SPEAKER("Phone speaker"),
+    WIRED("Wired headphones"),
+    USB("USB DAC"),
+    BLUETOOTH("Bluetooth"),
+    OTHER("Audio output"),
+}
+
+/** Where the sound goes, and the rate Android's mixer runs at for it (0 when unknown). */
+data class OutputDevice(val kind: OutputKind = OutputKind.SPEAKER, val name: String? = null, val mixerRate: Int = 0) {
+    val label: String get() = if (name != null) "${kind.label} · $name" else kind.label
+}
+
+/** What's actually reaching the speakers, shown on the home screen and in the Sound panel. */
 data class OutputStatus(
     val sourceBits: Int = 0,
     val sampleRate: Int = 0,
     val floatPath: Boolean = false,
     val processing: Boolean = false,
     val bitPerfect: BitPerfect = BitPerfect.OFF,
+    val device: OutputDevice = OutputDevice(),
 ) {
     val label: String
         get() = if (sampleRate == 0) "Nothing playing" else buildString {
@@ -54,6 +72,25 @@ class SoundEngine(private val context: Context?) {
 
     @Volatile var version: Int = 0
         private set
+
+    init {
+        // Plugging in a DAC or headphones changes the path mid-song: follow it.
+        context?.let { ctx ->
+            runCatching {
+                ctx.getSystemService(AudioManager::class.java)?.registerAudioDeviceCallback(object : AudioDeviceCallback() {
+                    override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = refreshDevice()
+                    override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) = refreshDevice()
+                }, Handler(Looper.getMainLooper()))
+            }
+            _status.value = _status.value.copy(device = OutputDevices.current(ctx))
+        }
+    }
+
+    private fun refreshDevice() {
+        val ctx = context ?: return
+        val st = _status.value
+        if (st.sampleRate > 0) applyPure(st.sampleRate) else _status.value = st.copy(device = OutputDevices.current(ctx))
+    }
 
     @Volatile private var albumGainDb: Float? = null
     @Volatile private var trackGainDb: Float? = null
@@ -104,14 +141,14 @@ class SoundEngine(private val context: Context?) {
             C.ENCODING_PCM_FLOAT -> 32
             else -> 0
         }
-        _status.value = OutputStatus(bits, format.sampleRate, floatPath, processing = !_settings.value.pure)
+        _status.value = OutputStatus(bits, format.sampleRate, floatPath, processing = !_settings.value.pure, device = _status.value.device)
         applyPure(format.sampleRate)
     }
 
     private fun applyPure(sampleRate: Int) {
         val ctx = context ?: return
         val state = runCatching { PureOutput.apply(ctx, _settings.value.pure, sampleRate) }.getOrDefault(BitPerfect.UNSUPPORTED)
-        _status.value = _status.value.copy(bitPerfect = state, processing = !_settings.value.pure)
+        _status.value = _status.value.copy(bitPerfect = state, processing = !_settings.value.pure, device = OutputDevices.current(ctx))
     }
 
     fun applyPreset(name: String) {
@@ -132,6 +169,45 @@ class SoundEngine(private val context: Context?) {
     private companion object {
         const val KEY = "settings"
     }
+}
+
+/** Finds where media is playing to right now. */
+object OutputDevices {
+    private val media = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
+
+    fun current(context: Context): OutputDevice = runCatching {
+        val am = context.getSystemService(AudioManager::class.java) ?: return OutputDevice()
+        val outputs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()
+        // Android 13+ says which device media is routed to; before that, guess the way Android
+        // routes: USB, then wired, then Bluetooth, then the speaker.
+        val routed = if (Build.VERSION.SDK_INT >= 33) {
+            runCatching { am.getAudioDevicesForAttributes(media) }.getOrNull()?.firstOrNull()
+                ?.let { a -> outputs.firstOrNull { it.type == a.type } }
+        } else null
+        val device = routed ?: outputs.filter { kindOf(it.type) != OutputKind.OTHER }.minByOrNull { ROUTE_ORDER.indexOf(kindOf(it.type)) }
+        val kind = device?.let { kindOf(it.type) } ?: OutputKind.SPEAKER
+        val name = device?.productName?.toString()?.trim()
+            ?.takeIf { it.isNotEmpty() && kind != OutputKind.SPEAKER && !it.equals(Build.MODEL, ignoreCase = true) }
+        val rate = am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0
+        OutputDevice(kind, name, rate)
+    }.getOrDefault(OutputDevice())
+
+    private val ROUTE_ORDER = listOf(OutputKind.USB, OutputKind.WIRED, OutputKind.BLUETOOTH, OutputKind.SPEAKER)
+
+    fun kindOf(type: Int): OutputKind = when (type) {
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> OutputKind.SPEAKER
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_LINE_ANALOG -> OutputKind.WIRED
+        AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_ACCESSORY -> OutputKind.USB
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, BLE_HEADSET, BLE_SPEAKER -> OutputKind.BLUETOOTH
+        else -> OutputKind.OTHER
+    }
+
+    // AudioDeviceInfo.TYPE_BLE_HEADSET / TYPE_BLE_SPEAKER (Android 12).
+    private const val BLE_HEADSET = 26
+    private const val BLE_SPEAKER = 27
 }
 
 /** Android 14+ bit-perfect output to USB DACs, when the phone and the DAC both support it. */

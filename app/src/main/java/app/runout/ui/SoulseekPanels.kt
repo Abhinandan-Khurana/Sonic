@@ -143,6 +143,7 @@ private fun bytesLabel(bytes: Long): String = if (bytes >= 1_073_741_824L) Strin
 @Composable
 fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
     Column(Modifier.fillMaxWidth().testTag("panel:transfers")) {
+        BackgroundUseNote()
         // The controls as three small hardware keys: pause all, resume all, turtle (go gently).
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
             TeKey(null, actions::pauseAllDownloads, Modifier.testTag("downloads-pause-all"), enabled = state.soulseekSession.signedIn, description = "Pause all") { c ->
@@ -307,18 +308,11 @@ private fun preview(m: SoulseekMessage): String {
 private fun NewChat(onDismiss: () -> Unit, onStart: (String, Boolean) -> Unit) {
     var username by rememberSaveable { mutableStateOf("") }
     var friend by rememberSaveable { mutableStateOf(true) }
-    androidx.activity.compose.BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.10f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss))
-        Column(
-            Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(20.dp).testTag("new-chat-card"),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            BasicText("New chat", style = Room.Title.copy(fontSize = 17.sp))
-            Field(username, { username = it.take(30) }, "Soulseek username")
-            ToggleRow("Add as a friend", "See when they're online.", friend, { friend = it })
-            Pill("Start chat", { onStart(username.trim(), friend) }, Modifier.testTag("start-chat"), active = true, enabled = SoulseekPolicy.validUsername(username.trim()))
-        }
+    PageSheet("new-chat-card", onDismiss) {
+        BasicText("New chat", style = Room.Title.copy(fontSize = 17.sp))
+        Field(username, { username = it.take(30) }, "Soulseek username")
+        ToggleRow("Add as a friend", "See when they're online.", friend, { friend = it })
+        Pill("Start chat", { onStart(username.trim(), friend) }, Modifier.testTag("start-chat"), active = true, enabled = SoulseekPolicy.validUsername(username.trim()))
     }
 }
 
@@ -445,5 +439,42 @@ internal data class RecordCard(val artist: String, val album: String, val qualit
             if (artist.isBlank() || album.isBlank()) return null
             return RecordCard(artist, album, m.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() }?.let(::d))
         }
+    }
+}
+
+/**
+ * When Android's "Background usage" is off for Runout, downloads stop the moment you leave the app
+ * (they come back as "Interrupted system call"). Say so where the downloads are, with a way to fix it.
+ */
+@Composable
+private fun BackgroundUseNote() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val restricted = remember {
+        android.os.Build.VERSION.SDK_INT >= 28 &&
+            context.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted == true
+    }
+    if (!restricted) return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .background(Room.Signal.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+            .padding(12.dp)
+            .testTag("background-restricted"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        BasicText("Background usage is off for Runout", style = Room.Title.copy(fontSize = 13.sp))
+        BasicText(
+            "Android stops downloads as soon as you leave the app. Keep Runout open, or allow background usage: App info › Battery › Allow background usage. Interrupted downloads continue when you come back.",
+            style = Room.LabelQuiet,
+        )
+        Pill("Open App info", {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }, Modifier.testTag("open-app-info"), active = true)
     }
 }

@@ -71,11 +71,57 @@ class Slice0RescanTest {
         try {
             val repo = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context), scope, lookupCoversOnline = false)
             repo.setFolder(tree)!!.join()
-            val before = File(context.filesDir, "library.json").readBytes()
             second.writeText("not FLAC")
             repo.rescan()!!.join()
             assertEquals(2, repo.albums.value.single().tracks.size)
-            assertArrayEquals(before, File(context.filesDir, "library.json").readBytes())
+            // The saved shelf keeps both tracks too, and the report names the file it couldn't read.
+            assertEquals(2, AlbumJson.readList(File(context.filesDir, "library.json")).single().tracks.size)
+            assertEquals(listOf("02 Lowlight.flac"), repo.report.value!!.unreadableFiles.map { it.path.substringAfterLast('/') })
+        } finally { scope.cancel() }
+    }
+
+    @Test fun `after a reinstall, a scan with an unreadable file still fills the shelf and saves it`() = runBlocking {
+        // The phone bug: nothing cached, one broken file, and the albums appeared then vanished.
+        val context = Fixtures.context
+        File(context.filesDir, "library.json").delete()
+        val dir = File(context.cacheDir, "reinstall-root").apply { mkdirs() }
+        File(dir, "01 Opening.flac").writeBytes(Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac"))
+        File(dir, "02 Broken.flac").writeBytes(Fixtures.bytes("Music/Ines Varga/Paper Moons/01 Paper Moons.mp3"))
+        val tree = FolderProvider.install(dir)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val repo = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context), scope, lookupCoversOnline = false)
+            repo.setFolder(tree)!!.join()
+            assertEquals(1, repo.albums.value.size)
+            assertEquals(1, AlbumJson.readList(File(context.filesDir, "library.json")).size)
+            val broken = repo.report.value!!.unreadableFiles.single()
+            assertTrue(broken.path.endsWith("02 Broken.flac"))
+            assertTrue(broken.reason, broken.reason.contains("MP3"))
+        } finally { scope.cancel() }
+    }
+
+    @Test fun `repair forgets albums that are gone, even when a file is unreadable`() = runBlocking {
+        val context = Fixtures.context
+        // An index from before, holding an album this folder doesn't have.
+        val stale = Fixtures.nightDrive().copy(id = "gone-album", title = "Gone")
+        AlbumJson.writeList(File(context.filesDir, "library.json"), listOf(stale))
+        val dir = File(context.cacheDir, "repair-root").apply { mkdirs() }
+        File(dir, "01 Opening.flac").writeBytes(Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac"))
+        File(dir, "02 Broken.flac").writeText("not FLAC")
+        val tree = FolderProvider.install(dir)
+        context.getSharedPreferences("library", 0).edit().putString("folder", tree.toString()).commit()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val repo = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context), scope, lookupCoversOnline = false)
+            withTimeout(5_000) { while (repo.albums.value.isEmpty()) delay(10) }
+            // A plain rescan can't prove the stale album is gone: one file was unreadable.
+            repo.rescan()!!.join()
+            assertTrue(repo.albums.value.any { it.id == "gone-album" })
+            // Repair rebuilds from the folder alone.
+            repo.repair()!!.join()
+            assertFalse(repo.albums.value.any { it.id == "gone-album" })
+            assertEquals(1, repo.albums.value.size)
+            assertEquals(1, repo.report.value!!.unreadable)
         } finally { scope.cancel() }
     }
 

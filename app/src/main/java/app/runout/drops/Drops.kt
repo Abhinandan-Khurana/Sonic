@@ -86,7 +86,7 @@ class DropsRepository(
     suspend fun refresh(): DropState = withContext(Dispatchers.IO) {
         val index = currentIndex()
         _claimed.value = claimedThisWeek()
-        prefs.getString("week-$index", null)?.let { cached ->
+        prefs.getString(weekKey(index), null)?.let { cached ->
             runCatching { parseCached(index, cached) }.getOrNull()?.let {
                 _state.value = DropState.Ready(it)
                 return@withContext _state.value
@@ -104,7 +104,7 @@ class DropsRepository(
             return@withContext _state.value
         }
         val week = DropWeek(index, opens(index), opens(index).plusDays(7), pick(docs, seed(index)))
-        prefs.edit().putString("week-$index", JSONArray(week.items.map { it.toJson() }).toString()).apply()
+        prefs.edit().putString(weekKey(index), JSONArray(week.items.map { it.toJson() }).toString()).apply()
         _state.value = DropState.Ready(week)
         _state.value
     }
@@ -247,10 +247,14 @@ class DropsRepository(
 
         fun opens(index: Long): LocalDate = LocalDate.of(1970, 1, 2).plusWeeks(index)
 
+        /** "flac" in the key: weeks picked before drops were FLAC-only are picked again. */
+        fun weekKey(index: Long): String = "week-flac-$index"
+
         fun seed(index: Long): Long = (index * 2_654_435_761L) and 0x7FFFFFFF
 
         fun searchUrl(page: Int): String {
-            val q = "collection:netlabels AND mediatype:audio AND licenseurl:*creativecommons*"
+            // Only albums the archive lists with FLAC files, so every drop can be claimed.
+            val q = "collection:netlabels AND mediatype:audio AND licenseurl:*creativecommons* AND format:flac"
             return "https://archive.org/advancedsearch.php?q=" + URLEncoder.encode(q, "UTF-8") +
                 listOf("identifier", "title", "creator", "year", "licenseurl").joinToString("") { "&fl%5B%5D=$it" } +
                 "&sort%5B%5D=downloads+desc&rows=$ROWS&page=$page&output=json"

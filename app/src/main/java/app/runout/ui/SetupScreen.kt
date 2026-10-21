@@ -242,13 +242,20 @@ private fun LoginStep(state: RoomState, actions: RoomActions, onConnected: () ->
         actions.signInSoulseek(id.trim(), password, true)
         password = ""
     }
-    StepFrame(progress = null, onBack = null, top = { RecordCollage(Modifier.fillMaxWidth().fillMaxHeight(0.42f)) }) {
+    // With the keyboard up there is no room for the collage and the headline: they'd slide up
+    // under each other. The records fade away and the title shrinks to the wordmark.
+    @OptIn(ExperimentalLayoutApi::class)
+    val typing = WindowInsets.isImeVisible
+    val collage by androidx.compose.animation.core.animateFloatAsState(if (typing) 0f else 1f, label = "collage")
+    StepFrame(progress = null, onBack = null, top = {
+        if (collage > 0f) RecordCollage(Modifier.fillMaxWidth().fillMaxHeight(0.42f).alpha(collage))
+    }) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            AppMark()
+            if (!typing) AppMark()
             Canvas(Modifier.size(width = 150.dp, height = 22.dp).semantics { contentDescription = "Runout" }) {
                 drawDotWordmark("RUNOUT", Offset(size.width / 2f, size.height / 2f), dot = size.height / 7.2f, shown = 1f)
             }
-            BasicText(
+            if (!typing) BasicText(
                 "Every record you own.\nOne room to play them.",
                 style = Room.Title.copy(fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
                 modifier = Modifier.semantics { heading() },

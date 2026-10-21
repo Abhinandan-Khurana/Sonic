@@ -45,6 +45,7 @@ Events use `type`: session, search_batch, search_done, browse_result, transfer, 
 - Bounded Android host upload queues, duplicate-request handling and recent upload history.
 - Optional peer admission grace (zero by default upstream; ten seconds for Android), preserving new discovery connections before eviction while allowing explicit work to preempt them.
 - Incremental `take_search_results` drain that retains the active query token, plus optional peer queue length parsed from search replies.
+- Download reads retry `ErrorKind::Interrupted` (EINTR) instead of failing with "Stream read error: Interrupted system call". Android interrupts reads when it freezes or restricts a backgrounded app.
 
 The adapter adds strict remote FLAC selection, local header checks, bounded discovery events, typed errors, storage descriptors and session/transfer tracking. Kotlin applies the complete application admission policy and durable publication.
 
