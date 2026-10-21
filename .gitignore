@@ -44,3 +44,6 @@ release/Runout-*-development.apk
 .argent/artifacts/
 .argent/reports/
 node_modules/
+
+# Python bytecode (Blender scripts)
+__pycache__/
