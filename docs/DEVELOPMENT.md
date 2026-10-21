@@ -60,4 +60,4 @@ Use the pinned [Argent flows](../.argent/README.md) for offline navigation, sign
 
 The published development APK is the **debug variant** (`app.runout.dev`, label **Runout Dev**). The `release` build variant currently inherits prototype debug signing and is not a production update. Debug certificates differ between machines; a previous development installation can be updated only with the same certificate. Do not advise uninstalling the original app to work around a signature mismatch.
 
-Follow [RELEASE.md](../RELEASE.md) for checks, source tags, checksum verification and publication. The [inactive CI template](../.github/workflows-templates/README.md) builds and uploads test artifacts when enabled; it does not publish GitHub releases.
+Follow [RELEASE.md](../RELEASE.md) for checks, source tags, checksum verification and publication. The [inactive CI template](../.github/workflows-templates/README.md) builds and uploads test artifacts when enabled; it does not publish GitHub releases. Run `scripts/enable-ci.sh` to copy it into `.github/workflows/`; pushing a workflow file needs a login with the separate `workflow` scope.

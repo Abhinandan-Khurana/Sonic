@@ -11,7 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## 0.5.1 development — fixes from the first phones (2026-10-21)
+## 0.5.1 — fixes from the first phones (2026-10-21)
+
+This is the current release. It is the build published as `v0.5.1`, the same bytes and the same
+certificate as the `v0.5.1-dev.1` development pre-release it was promoted from.
 
 - **Library:**
   - Fixed: after a reinstall, albums appeared for a second and then vanished. One unreadable `.flac` made the whole scan roll back to the previous shelf, which was empty. A partial scan now keeps everything it read, merged with what it couldn't see, and saves it.
@@ -25,6 +28,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Sign-in:** with the keyboard up, the record collage fades and the headline folds away instead of sliding under the titles.
 - **Code:** `ui/Turntable.kt` holds only the vinyl player, with a map at the top.
 - **Native (source only):** download reads retry an interrupted system call. Not in this APK: the native library is reused unchanged from 0.4.6.
+
+### Release archive
+
+Every development build from 0.4.0 to 0.5.0 is kept as a GitHub pre-release, with its APK, its
+checksum and its verification report attached, so each step of the work can be inspected and
+installed on its own:
+
+| Tag | Build |
+| :--- | :--- |
+| `v0.5.0-dev.1` | The redesigned listening room |
+| `v0.4.6-dev.1` | The original glass room restored |
+| `v0.4.5-dev.1` | The glass room returns |
+| `v0.4.4-dev.1` | Download labels and record writing |
+| `v0.4.3-dev.1` | The idle vinyl rack |
+| `v0.4.2-dev.1` | Data-loss and privacy fixes |
+| `v0.4.1-dev.1` | Faster FLAC discovery, reliable sessions |
+| `v0.4.0-dev.1` | Soulseek and FLAC |
+
+They are kept under their original `-dev.1` names, because that is what they were: development
+builds, and the record should say so.
 
 
 ## 0.5.0 development — UI redesign (2026-10-21)

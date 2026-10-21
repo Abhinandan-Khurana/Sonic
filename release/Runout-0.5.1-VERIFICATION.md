@@ -1,4 +1,12 @@
-# Runout 0.5.1 development verification
+# Runout 0.5.1 verification
+
+> **Published as the stable 0.5.1 release.** The build itself is unchanged from the
+> `v0.5.1-dev.1` development pre-release: the same bytes, the same SHA-256
+> (`d0ae199fe649f2844a4a303d01762cb6d0c123d6d4a93495eb829ec19595bbbc`), signed with the same
+> certificate. Only the asset name changed, from `Runout-0.5.1-development.apk` to
+> `Runout-0.5.1.apk`. The report below is the original verification record, kept as it was
+> written at build time.
+
 
 Verified on 2026-10-21 (Asia/Kolkata), on macOS. Source branch: `ui-redesign`.
 

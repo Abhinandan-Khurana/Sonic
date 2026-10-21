@@ -45,7 +45,7 @@ The legacy `LiveRelayCheck` remains opt-in for historical Nostr code and is skip
 
 ## Continuous integration
 
-[The CI template](../.github/workflows-templates/README.md) runs native tests, builds all ABIs, runs JVM tests/lint and uploads reports and APKs on Ubuntu. It is not active in this fork yet: the publishing login lacks GitHub's separate workflow-write permission. Copy the template into `.github/workflows/android.yml` using an authorized login to enable it. Device instrumentation remains an explicit check in the release process.
+[The CI template](../.github/workflows-templates/README.md) runs native tests, builds all ABIs, runs JVM tests/lint and uploads reports and APKs on Ubuntu. It is not active yet: enabling it needs a GitHub login with the separate `workflow` scope, which the publishing login does not have. Run `scripts/enable-ci.sh` to copy the template into `.github/workflows/` and push it with such a login. Device instrumentation remains an explicit check in the release process.
 
 ## Android UI flows and explicit live checks
 

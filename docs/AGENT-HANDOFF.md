@@ -21,7 +21,7 @@ Do not reintroduce the removed shell or deck controls. Keep UI changes within th
 
 ## Start here
 
-1. Read this file, [README.md](README.md), [architecture](docs/ARCHITECTURE.md) and [developer notes](docs/DEVELOPMENT.md). Follow any applicable repository instructions.
+1. Read this file, [README.md](README.md), [architecture](ARCHITECTURE.md) and [developer notes](DEVELOPMENT.md). Follow any applicable repository instructions.
 2. Inspect `git status`, the current branch and recent commits before editing. Preserve any work added after this handoff.
 3. Treat the released app and the remaining work below as separate. The latest application implementation is already pushed and released; Internet Archive is **not integrated into unified search**.
 4. Keep the user's retro vinyl home, FLAC-only policy, account-free offline playback, Internet Archive downloads and Soulseek messaging.
@@ -36,7 +36,7 @@ Do not reintroduce the removed shell or deck controls. Keep UI changes within th
 | Current working branch at handoff | `main` |
 | Latest application implementation commit | `cfe0198b01ea3108ad44c2ec7cfc626e9099ad5a` (merge of pull request #1) |
 | Previous integration commit | `6ace951` (tip of `ui-redesign`) |
-| Released tag | `v0.5.1-dev.1` |
+| Released tag | `v0.5.1` (the development build it was cut from is `v0.5.1-dev.1`) |
 | App version | `0.5.1`, version code `12` |
 | Development application ID / name | `app.runout.dev` / **Runout Dev** |
 | Normal application ID | `app.runout` |
@@ -44,8 +44,8 @@ Do not reintroduce the removed shell or deck controls. Keep UI changes within th
 
 The checkout was clean at the application commit before creating this handoff. A later documentation commit containing this file does not change the released APK's source baseline. Re-check the actual repository state rather than assuming the above commit is still HEAD.
 
-- [Release and assets](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1-dev.1)
-- [Universal development APK](https://github.com/Abhiroop1122/runout/releases/download/v0.5.1-dev.1/Runout-0.5.1-development.apk)
+- [Release and assets](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1)
+- [Release APK](https://github.com/Abhiroop1122/runout/releases/download/v0.5.1/Runout-0.5.1.apk)
 - Each release's verification report and checksum are attached to its GitHub release; the repository keeps only the latest ones in `release/`.
 
 Published APK SHA-256:
@@ -54,7 +54,7 @@ Published APK SHA-256:
 d0ae199fe649f2844a4a303d01762cb6d0c123d6d4a93495eb829ec19595bbbc
 ```
 
-The published download was downloaded again and its checksum and signature verified. The work reached `main` as pull request #1 and is published as the `v0.5.1-dev.1` pre-release.
+The published download was downloaded again and its checksum and signature verified. The work reached `main` as pull request #1 and is published as the `v0.5.1` release; the development builds from 0.4.0 to 0.5.0 are kept as pre-releases.
 
 ## User intent and decisions to preserve
 
@@ -142,7 +142,7 @@ Keep these invariants:
 
 ## Build on another machine
 
-Use Linux/Bash, JDK 21, Android SDK platform/build tools 36, Rust 1.91.0 and Android NDK r27d (`27.3.13750724`) or newer. Gradle wrapper version is 8.14.3. See [BUILDING.md](docs/BUILDING.md) for details.
+Use Linux/Bash, JDK 21, Android SDK platform/build tools 36, Rust 1.91.0 and Android NDK r27d (`27.3.13750724`) or newer. Gradle wrapper version is 8.14.3. See [BUILDING.md](BUILDING.md) for details.
 
 ```bash
 export JAVA_HOME=/path/to/jdk-21
@@ -220,7 +220,7 @@ Reports: `app/build/reports/tests/`, `app/build/reports/androidTests/`, `app/bui
 
 ### Device flows and live-account testing
 
-Read [.argent/README.md](.argent/README.md) and each flow's prerequisite. Available flows cover offline navigation/song playback, Soulseek setup, public discovery, picker return and network loss/recovery. Ordinary tests need no public account.
+Read [.argent/README.md](../.argent/README.md) and each flow's prerequisite. Available flows cover offline navigation/song playback, Soulseek setup, public discovery, picker return and network loss/recovery. Ordinary tests need no public account.
 
 - Do not run instrumentation and UI automation against the same app/device simultaneously: instrumentation restarts the process.
 - gRPC input can trigger emulator stylus handwriting and defer typed text. On the test emulator, disable it with `adb -s <serial> shell settings put secure stylus_handwriting_enabled 0`. Focus, wait for layout/keyboard, type, then assert the result. Do not blindly retry a secret that might already be present.
@@ -238,14 +238,14 @@ Debug log tags: `RunoutSession` for sanitized connection/lifecycle reasons, `Run
 
 - [SeekerAndroid](https://github.com/jackBonadies/SeekerAndroid), inspected at commit `ff1dcc6de55a412e8d6eadaddf36deca54517413`, informed streaming, folder grouping, availability and connection-state behavior. Its GPL implementation was not copied.
 - [Nicotine+ protocol reference](https://nicotine-plus.org/doc/SLSKPROTOCOL.html), [Nicotine+](https://github.com/nicotine-plus/nicotine-plus), [Soulseek.NET](https://github.com/jpdillingham/Soulseek.NET) and [Argent](https://github.com/software-mansion/argent) are investigation/tooling references, not bundled replacement runtimes.
-- Runout remains MIT. The vendored core is MIT `soulseek-rs` v19.1.0 at `dc39e24ad7909b93f600e60f19807db1f8f1c3ad`. See `native/vendor/UPSTREAM` and [native/README.md](native/README.md) for the patch inventory and JNI contract. Preserve notices and document future vendor changes.
+- Runout remains MIT. The vendored core is MIT `soulseek-rs` v19.1.0 at `dc39e24ad7909b93f600e60f19807db1f8f1c3ad`. See `native/vendor/UPSTREAM` and [native/README.md](../native/README.md) for the patch inventory and JNI contract. Preserve notices and document future vendor changes.
 - Production signing and an appropriate Soulseek production client identifier remain outstanding. Development uses experimental protocol version 177/1.
 - Soulseek credentials/messages are plaintext on the protocol; optional remembered credentials use Android Keystore locally. The onboarding explains this.
 - Physical ARM devices, every Android background policy and every mobile network/router have not been verified. Maximum font scaling still constrains dense physical deck/sleeve labels. Very large message histories may need database pagination.
-- CI is an **inactive template** under `.github/workflows-templates/`. The publishing login previously lacked workflow-write permission. Do not claim CI is active or work around GitHub's permission rejection by adding an active workflow without the required authorization/access.
-- Use [RELEASE.md](RELEASE.md) for future publication. New APKs belong in GitHub release assets, with checksums and a verification report, not Git history. Keep the production app's signing identity and user files intact.
+- CI is an **inactive template** under `.github/workflows-templates/`. Enabling it needs a GitHub login with the separate `workflow` scope, which the publishing login does not have; `scripts/enable-ci.sh` copies the template into `.github/workflows/` and prints the push command. Do not claim CI is active or work around GitHub's permission rejection by adding an active workflow without the required authorization/access.
+- Use [RELEASE.md](../RELEASE.md) for future publication. New APKs belong in GitHub release assets, with checksums and a verification report, not Git history. Keep the production app's signing identity and user files intact.
 
 ## Suggested first message to Hermes
 
-> Continue the Runout Android project from this repository. Read Handsoff.md first, inspect the current Git state and preserve the existing FLAC-only, offline, Soulseek and retro-player behavior. The latest unresolved user discussion concerns missing Internet Archive results in unified search; it is documented as unimplemented, not an approved code change in this handoff. Establish the current requested scope with me before changing that feature. Use the documented build/test tooling, keep credentials out of source, and do not open a PR.
+> Continue the Runout Android project from this repository. Read docs/AGENT-HANDOFF.md first, inspect the current Git state and preserve the existing FLAC-only, offline, Soulseek and retro-player behavior. The latest unresolved user discussion concerns missing Internet Archive results in unified search; it is documented as unimplemented, not an approved code change in this handoff. Establish the current requested scope with me before changing that feature. Use the documented build/test tooling, keep credentials out of source, and do not open a PR.
 

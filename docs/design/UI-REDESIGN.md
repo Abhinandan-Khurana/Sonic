@@ -182,7 +182,7 @@ Answers: **"Full screen like Dig, Chat list first, Share records in chat, Friend
 ## 6. Pressing Plant
 > "remove this whole module."
 
-- [x] **PP-1** *(code, tests and docs removed: HANDBOOK, PRESSING-AND-DROPS, README, Handsoff)* Remove the tab, the screen, pressing creation, and their tests and docs.
+- [x] **PP-1** *(code, tests and docs removed: HANDBOOK, PRESSING-AND-DROPS, README, AGENT-HANDOFF)* Remove the tab, the screen, pressing creation, and their tests and docs.
 - [x] **PP-2** Do not delete user data: records that were already pressed stay playable and removable.
 
 ## 7. Settings

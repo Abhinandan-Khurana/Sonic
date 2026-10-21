@@ -39,3 +39,5 @@ For playback issues, include Android version, device, sample rate/bit depth, Pur
 Ordinary development and CI use fixtures and local Soulseek peers. Public-network sign-in, account creation and messages require a deliberate manual test with an account you control. Do not send unsolicited messages to test a feature.
 
 Describe the problem, final behavior, validation and limitations in a proposed contribution. A release should identify the exact source commit and signing variant; follow [RELEASE.md](RELEASE.md).
+
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
