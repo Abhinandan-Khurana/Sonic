@@ -1,0 +1,5 @@
+soulseek-rs v19.1.0
+https://github.com/michel/soulseek-rs
+commit dc39e24ad7909b93f600e60f19807db1f8f1c3ad
+License: MIT; see LICENSE.
+Runout modifications: deferred message acknowledgements, safe host-provided FLAC share manifest and file descriptors, native Android bridge, bounded peer admission grace/explicit-work priority, incremental search reply drain and optional queue length parsing. See ../README.md for the adapter contract and patch notes.

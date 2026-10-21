@@ -1,0 +1,20 @@
+executionPrerequisite: Runout Dev is connected on its main screen with no dialog open. The Android folder picker starts at the storage root or one folder below it.
+steps:
+  - tap: { id: open-account }
+  - await: { visible: { id: account-connection } }
+  - assert: { text: { in: { id: account-connection }, equals: Connected to Soulseek } }
+  - scroll-to: { target: { text: { matches: '^(Choose|Change) download folder$' } } }
+  - tap: { text: { matches: '^(Choose|Change) download folder$' } }
+  - await: { visible: { text: USE THIS FOLDER } }
+  - await: { idle: true, stableFor: 6500, timeout: 10000 }
+  - tool: button
+    args: { button: back }
+  - await: { idle: true, stableFor: 500, timeout: 3000 }
+  - when: { visible: { text: USE THIS FOLDER } }
+    steps:
+      - tool: button
+        args: { button: back }
+  - await: { visible: { id: account-connection } }
+  - assert: { text: { in: { id: account-connection }, equals: Connected to Soulseek } }
+  - tap: { id: 'action:Close' }
+  - assert: { text: { in: { id: open-account }, contains: Online } }

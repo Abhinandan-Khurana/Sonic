@@ -1,5 +1,13 @@
 package app.runout
 
+import app.runout.discovery.remoteAlbums
+
+import app.runout.discovery.SearchSource
+
+import app.runout.discovery.DiscoveryState
+
+import app.runout.discovery.DiscoveryOptions
+
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
@@ -13,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertContentDescriptionContains
@@ -20,6 +29,7 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -27,6 +37,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.longClick
 import app.runout.drops.DropItem
 import app.runout.drops.DropState
 import app.runout.drops.DropWeek
@@ -47,10 +58,8 @@ import app.runout.ui.CoverCache
 import app.runout.ui.Panel
 import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
-import app.runout.ui.PeopleState
-import app.runout.account.Account
-import app.runout.account.AccountStatus
-import app.runout.account.RemoteProfile
+import app.runout.ui.SettingsSection
+import app.runout.soulseek.*
 import app.runout.sharing.VinylPackage
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
@@ -124,9 +133,9 @@ class ListeningRoomUiTest {
         listOf(
             Album("a1", "Monsoon Sessions", "Tidal Room", 2019, "", tracks("a1", 5.0, 6.2, 4.8, 7.1, 5.5, 6.0), AudioQuality("FLAC", 16, 44_100), monsoon, AColor.rgb(30, 120, 120)),
             Album("a2", "Night Drive", "Vela Park", 2023, "", tracks("a2", 4.2, 3.9, 5.1, 4.4, 3.6, 4.8, 4.0, 3.7, 5.3), AudioQuality("FLAC", 24, 96_000), night, AColor.rgb(180, 80, 160), license = "https://creativecommons.org/licenses/by/4.0/"),
-            Album("a3", "Paper Moons", "Ines Varga", 2021, "", tracks("a3", 3.2, 3.5, 4.1, 2.9, 3.8, 4.4), AudioQuality("MP3", bitrateKbps = 320), paper, AColor.rgb(230, 110, 60), source = Source.RECEIVED, from = "Maya"),
+            Album("a3", "Paper Moons", "Ines Varga", 2021, "", tracks("a3", 3.2, 3.5, 4.1, 2.9, 3.8, 4.4), AudioQuality("FLAC", 16, 44_100), paper, AColor.rgb(230, 110, 60), source = Source.RECEIVED, from = "Maya"),
             Album("a4", "Static Bloom", "Halcyon Dial", 2024, "", tracks("a4", 4.0, 4.0, 4.0, 4.0), AudioQuality("FLAC", 24, 192_000), bloom, AColor.rgb(200, 170, 240)),
-            Album("a5", "Summer Tape", "Abhi", 2026, "", tracks("a5", 3.0, 4.0, 3.5), AudioQuality("MIXED"), null, null, source = Source.PRESSING, disc = DiscStyle.SPLATTER, labelColor = 0xFFE0569B.toInt()),
+            Album("a5", "Summer Tape", "Abhi", 2026, "", tracks("a5", 3.0, 4.0, 3.5), AudioQuality("FLAC", 16, 44_100), null, null, source = Source.PRESSING, disc = DiscStyle.SPLATTER, labelColor = 0xFFE0569B.toInt()),
         )
     }
 
@@ -151,26 +160,15 @@ class ListeningRoomUiTest {
         drops: DropState = DropState.Ready(week),
         sound: SoundSettings = SoundSettings(),
         message: String? = null,
-        account: Account? = me,
-        people: PeopleState = PeopleState(),
+        session: SoulseekSession = SoulseekSession(SoulseekConnection.CONNECTED, "abhi"),
+        results: List<SoulseekSearchResult> = emptyList(),
+        contacts: List<SoulseekContact> = emptyList(),
     ) = RoomState(
         albums = albums, hasFolder = true, scan = null, deck = deck, crackleOn = true, clock = "3:21 PM",
         sound = sound, output = OutputStatus(24, 96_000, floatPath = true, processing = true),
         profile = Profile("me", "Abhi", Profile.ACCENTS[0]), friends = listOf(maya), drops = drops,
-        claimed = setOf("DWK123"), message = message, account = account,
-        accountStatus = AccountStatus("Profile is up on 3 of 3 relays", true), people = people,
-    )
-
-    private val me = Account("7f3a" + "0".repeat(60), "abhi", "Abhi", Profile.ACCENTS[0])
-
-    private val lena = RemoteProfile(
-        pubkey = "c21b" + "1".repeat(60), username = "dj.lena", name = "Lena", accent = Profile.ACCENTS[3],
-        shelf = listOf(
-            ShelfItem("Night Drive", "Vela Park", 2023, "FLAC · 24-bit · 96 kHz", null, AColor.rgb(120, 60, 140)),
-            ShelfItem("Blue Hour", "Kite", 2019, "MP3 · 320 kbps", null, AColor.rgb(40, 90, 160)),
-            ShelfItem("Concrete Garden", "Studio Kiln", 2018, "AAC · 256 kbps", null, AColor.rgb(110, 112, 118)),
-        ),
-        shelfCount = 3, updatedAt = 0,
+        claimed = setOf("DWK123"), message = message, soulseekSession = session,
+        soulseekResults = results, soulseekContacts = contacts, downloadFolder = "Music",
     )
 
     private fun playing(): DeckState {
@@ -195,16 +193,142 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `pulling a record offers to send it, with or without audio`() {
+    fun `pulling a record, then a long press offers to send it with audio`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }
         compose.onNodeWithTag("sleeve:Night Drive").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("pulled-disc").assertIsDisplayed()
+        // No buttons beside the disc any more: what you can do lives behind a long press.
+        compose.onNodeWithText("Send with audio").assertDoesNotExist()
+        compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
         compose.onNodeWithText("Send with audio").assertIsDisplayed() // Creative Commons
-        compose.onNodeWithTag("send").performClick()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_menu.png")
+        compose.onNodeWithTag("menu:Send with audio").performClick()
         assertEquals(listOf("share:Night Drive"), actions.log.filter { it.startsWith("share") })
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_pulled_send.png")
+    }
+
+    @Test
+    fun `a record's details hold the licence the short caption leaves out`() {
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithText("Vela Park").assertIsDisplayed()
+        compose.onNodeWithText("CC BY 4.0").assertDoesNotExist()
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        compose.onNodeWithTag("menu:Details").performClick()
+        compose.onNodeWithTag("record-details").assertIsDisplayed()
+        compose.onNodeWithText("CC BY 4.0", substring = true).assertExists()
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // README screenshots: realistic (but made-up) data, rendered to build/outputs/roborazzi/readme/.
+
+    private fun readme(name: String) = compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/$name.png")
+
+    private fun flac(user: String, path: String, mb: Int, bits: Int = 16, rate: Int = 44_100, free: Int = 1, queue: Long = 0, speed: Long = 4_000_000) =
+        SoulseekSearchResult(user, path, mb * 1_048_576L, bitDepth = bits, sampleRate = rate, freeSlots = free, queueLength = queue, uploadSpeed = speed)
+
+    private val moonSafari = listOf(
+        "La femme d'argent", "Sexy Boy", "All I Need", "Kelly Watch the Stars", "Talisman",
+        "Remember", "You Make It Easy", "Ce matin-là", "New Star in the Sky", "Le voyage de Pénélope",
+    )
+
+    @Test
+    fun `readme shots of the room`() {
+        portrait()
+        still("readme-tmp", state(deck = playing()), crateIndex = 1)
+        readme("home")
+    }
+
+    @Test
+    fun `readme shot of the record menu`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
+        readme("record-menu")
+    }
+
+    @Test
+    fun `readme shots of Dig`() {
+        portrait()
+        val results = moonSafari.mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/${(i + 1).toString().padStart(2, '0')} $t.flac", 30, 24, 96_000, speed = 9_600_000) } +
+            moonSafari.take(10).mapIndexed { i, t -> flac("blinkacre", "Shares/Air/Moon Safari/Air - Moon Safari - ${(i + 1).toString().padStart(2, '0')} $t.flac", 27, queue = 182, speed = 2_500_000) } +
+            listOf(flac("orbit", "FLAC/Air - Premiers Symptomes/03 Brakes On.flac", 22, free = 0, queue = 40, speed = 600_000)) +
+            moonSafari.take(4).mapIndexed { i, t -> flac("lowlight", "Music/Air - 1998 - Moon Safari [WEB]/0${i + 1} $t.flac", 41, 24, 48_000, speed = 7_000_000) }
+        val options = DiscoveryOptions(source = SearchSource.SOULSEEK)
+        val discovery = DiscoveryState("moon safari", options, remote = remoteAlbums("moon safari", results, options), online = SoulseekSearchStatus("r", "moon safari", SearchPhase.COMPLETE))
+        compose.setContent { RoomScreen(state().copy(discovery = discovery), RecordingActions(), initialPanel = Panel.DIG) }
+        compose.waitForIdle()
+        readme("dig")
+    }
+
+    @Test
+    fun `readme shot of a folder preview`() {
+        portrait()
+        val files = moonSafari.mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/Air - Moon Safari - ${(i + 1).toString().padStart(2, '0')} $t.flac", 30, 24, 96_000) }
+        val preview = SoulseekFolderPreview("r", "jules", "Music/Air - Moon Safari (1998)", files, loading = false)
+        compose.setContent { RoomScreen(state().copy(folderPreview = preview), RecordingActions(), initialPanel = Panel.DIG) }
+        compose.waitForIdle()
+        readme("dig-preview")
+    }
+
+    @Test
+    fun `readme shot of a chat with a record card`() {
+        portrait()
+        val now = 1_792_540_000_000L
+        val night = albums.first { it.title == "Night Drive" }
+        val messages = listOf(
+            SoulseekMessage("1", "maya", "found anything good this week?", now - 600_000, outgoing = false, state = SoulseekMessageState.RECEIVED, read = true),
+            SoulseekMessage("2", "maya", "this one has been on the platter all day", now - 540_000, outgoing = true, state = SoulseekMessageState.SENT),
+            SoulseekMessage("3", "maya", app.runout.ui.RecordCard.of(night).encode(), now - 530_000, outgoing = true, state = SoulseekMessageState.SENT),
+            SoulseekMessage("4", "maya", app.runout.ui.RecordCard("Air", "Moon Safari", "FLAC · 24-bit · 96 kHz").encode(), now - 120_000, outgoing = false, state = SoulseekMessageState.RECEIVED, read = true),
+        )
+        val s = state(contacts = listOf(SoulseekContact("maya", true), SoulseekContact("ro", false))).copy(
+            soulseekConversations = listOf(SoulseekConversation("maya", messages, 0)),
+            soulseekConversation = "maya",
+        )
+        compose.setContent { RoomScreen(s, RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.waitForIdle()
+        readme("friends-chat")
+    }
+
+    @Test
+    fun `readme shots of Settings and Drops`() {
+        portrait()
+        compose.setContent { RoomScreen(state(sound = SoundSettings(eqEnabled = true)), RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.SOUND) }
+        compose.waitForIdle()
+        readme("settings-sound")
+    }
+
+    @Test
+    fun `readme shot of Friday Drops`() {
+        portrait()
+        // Netlabel-ish placeholder sleeves: a two-tone gradient, a sun and a few bands.
+        fun sleeve(id: String): String {
+            val seed = id.hashCode() and 0x7fffffff
+            val hue = (seed % 360).toFloat()
+            val bmp = android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(bmp)
+            val top = android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.45f, 0.95f))
+            val bottom = android.graphics.Color.HSVToColor(floatArrayOf((hue + 50f) % 360f, 0.7f, 0.45f))
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, 600f, top, bottom, android.graphics.Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, 600f, 600f, paint)
+            paint.shader = null; paint.color = android.graphics.Color.argb(230, 255, 214, 160)
+            c.drawCircle(200f + seed % 200, 260f, 110f, paint)
+            paint.color = android.graphics.Color.argb(90, 255, 255, 255)
+            for (i in 0 until 5) c.drawRect(0f, 420f + i * 28f, 600f, 432f + i * 28f, paint)
+            val f = java.io.File(Fixtures.context.cacheDir, "readme-sleeves/$id.png").apply { parentFile?.mkdirs() }
+            java.io.FileOutputStream(f).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            return f.absolutePath
+        }
+        val actions = object : RecordingActions() {
+            override suspend fun dropCover(item: app.runout.drops.DropItem): String = sleeve(item.identifier)
+        }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
+        compose.waitForIdle()
+        readme("drops")
     }
 
     @Test
@@ -215,19 +339,28 @@ class ListeningRoomUiTest {
         val sleeve = compose.onNodeWithTag("sleeve:Night Drive").getBoundsInRoot()
         assertTrue("turntable ${deck.bottom} above crate ${sleeve.top}", deck.bottom <= sleeve.top)
         assertTrue((deck.right - deck.left) > (deck.bottom - deck.top))
-        compose.onNodeWithTag("nav:SOUND").assertIsDisplayed()
+        // The platter never idles here, so check the pill strip without scrolling it.
+        compose.onNodeWithTag("nav:DIG").assertIsDisplayed()
+        compose.onNodeWithTag("nav:SETTINGS").assertExists()
     }
 
     @Test
-    fun `the Sound panel controls Pure mode, hi-res and the EQ`() {
+    fun `Settings opens on Sound, which controls Pure mode, hi-res and the EQ`() {
         val actions = object : RecordingActions() {
             var sound by mutableStateOf(SoundSettings())
             override fun updateSound(transform: (SoundSettings) -> SoundSettings) { sound = transform(sound) }
         }
         compose.setContent { RoomScreen(state(sound = actions.sound), actions) }
-        compose.onNodeWithTag("nav:SOUND").performClick()
-        compose.onNodeWithTag("panel-title").assertTextContains("Sound")
-        compose.onNodeWithText("24-bit · 96 kHz → 32-bit float").assertIsDisplayed()
+        compose.onNodeWithTag("nav:SETTINGS").performClick()
+        compose.onNodeWithTag("panel-title").assertTextContains("Settings")
+        // A plain list first; Sound is one row of it.
+        compose.onNodeWithTag("settings:SOUND").assertIsDisplayed()
+        compose.onNodeWithTag("settings:SOUND").performClick()
+        compose.onNodeWithTag("panel:sound").assertIsDisplayed()
+        // The signal chain: the file, Runout's path, and where it goes out.
+        compose.onNodeWithTag("signal-path").assertIsDisplayed()
+        compose.onNodeWithTag("spec:Track").assertTextContains("24-BIT · 96 KHZ")
+        compose.onNodeWithTag("spec:Runout").assertTextContains("32-BIT FLOAT", substring = true)
 
         compose.onNodeWithTag("fader:1k").performScrollTo().performTouchInput {
             swipe(center, center - Offset(0f, 140f), durationMillis = 300)
@@ -256,16 +389,18 @@ class ListeningRoomUiTest {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
         compose.onNodeWithText("Week of 16 October").assertIsDisplayed()
-        compose.onNodeWithText("2 of 3 claims left this week").assertIsDisplayed()
+        // Claims left are three TE lights; the drops stand on a shelf as sleeves.
+        compose.onNodeWithContentDescription("2 of 3 claims left").assertIsDisplayed()
         compose.onNodeWithText("In your crate").assertIsDisplayed() // already claimed
-        compose.onNodeWithText("CC BY-NC-SA 4.0").assertIsDisplayed()
         compose.onNodeWithTag("drop:NS050").assertIsDisplayed()
-        // Two records are still claimable; the first is NS050's.
-        val claims = compose.onAllNodes(hasText("Claim"))
-        claims.assertCountEquals(2)
-        claims[0].performClick()
-        assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
+        compose.onAllNodes(hasText("Claim")).assertCountEquals(0)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/05_drops_panel.png")
+        // A tap opens the drop: its licence, its tracks, and Claim inside.
+        compose.onNodeWithTag("drop:NS050").performClick()
+        compose.onNodeWithTag("drop-preview").assertIsDisplayed()
+        compose.onNodeWithText("CC BY-NC-SA 4.0").assertIsDisplayed()
+        compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
+        assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
     }
 
     @Test
@@ -278,98 +413,87 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `Friends shows your handle, your friends, and sends your card`() {
+    fun `private messages open by Soulseek username and send through the action`() {
         val actions = RecordingActions()
-        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.FRIENDS) }
-        compose.onNodeWithTag("my-handle").assertTextContains("@abhi·7F3A")
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/06_friends_panel.png")
-        compose.onNodeWithText("Send my friend card").performScrollTo().performClick()
-        assertTrue(actions.log.contains("shareCard"))
-        compose.onNodeWithText("Copy account key").performScrollTo().performClick()
-        assertTrue(actions.log.contains("copyKey"))
-        compose.onNodeWithTag("friend:Maya").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("2 records · 1 you both have").assertIsDisplayed()
+        compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), actions, initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("panel:messages").assertIsDisplayed()
+        compose.onNodeWithText("maya").assertIsDisplayed()
+        compose.onNodeWithTag("new-chat").assertIsDisplayed()
+        compose.onNodeWithTag("friend:maya").performClick()
+        assertTrue(actions.log.contains("soulseekConversation:maya"))
+        compose.onNodeWithTag("field:Private message").performTextInput("Hi Maya")
+        compose.onNodeWithText("Send message").performClick()
+        assertTrue(actions.log.contains("soulseekMessage:maya:Hi Maya"))
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/06_messages_panel.png")
     }
 
     @Test
-    fun `making an account checks the username first`() {
+    fun `Settings sends you to the one sign-in, which checks the ID and always keeps you signed in`() {
         val actions = RecordingActions()
-        compose.setContent { RoomScreen(state(account = null), actions, initialPanel = Panel.FRIENDS) }
-        compose.onNodeWithText("Make your account", substring = true, ignoreCase = true).assertIsDisplayed()
-        compose.onNodeWithTag("field:Username").performTextInput("A!")
-        compose.onNodeWithText("At least 3 characters").assertIsDisplayed()
-        compose.onNodeWithText("Create account").performClick()
-        assertTrue("disabled while the name is wrong", actions.log.none { it.startsWith("createAccount") })
-        compose.onNodeWithTag("field:Username").performTextClearance()
-        compose.onNodeWithTag("field:Username").performTextInput("Abhi_99")
-        compose.onNodeWithTag("field:Display name").performTextClearance()
-        compose.onNodeWithTag("field:Display name").performTextInput("Abhi")
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/10_make_account.png")
-        compose.onNodeWithText("Create account").performScrollTo().performClick()
-        assertTrue(actions.log.toString(), actions.log.contains("createAccount:abhi_99:Abhi"))
+        compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
+        // No second sign-in form and no "Remember me": Settings opens the same login as onboarding.
+        compose.onNodeWithText("Remember my sign-in").assertDoesNotExist()
+        compose.onNodeWithTag("account-sign-in").performScrollTo().performClick()
+        compose.onNodeWithTag("screen:setup").assertIsDisplayed()
+        compose.onNodeWithTag("field:Soulseek ID").performTextInput("अ")
+        compose.onNodeWithTag("field:Password").performTextInput("test password")
+        compose.onNodeWithTag("submit-soulseek").assertIsNotEnabled()
+        compose.onNodeWithTag("field:Soulseek ID").performTextClearance()
+        compose.onNodeWithTag("field:Soulseek ID").performTextInput("Abhi_99")
+        compose.onNodeWithTag("field:Password").performTextInput("test password")
+        compose.onNodeWithTag("submit-soulseek").performClick()
+        assertTrue(actions.log.toString(), actions.log.contains("soulseekSignIn:Abhi_99:true"))
+        // The ⓘ explains that there is no sign-up page.
+        compose.onNodeWithTag("soulseek-id-info").performClick()
+        compose.onNodeWithText("Soulseek has no sign-up page", substring = true).assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/12_login.png")
+        compose.onNodeWithTag("soulseek-id-help-close").performClick()
+        compose.onNodeWithTag("setup-close").performClick()
+        compose.onNodeWithTag("screen:setup").assertDoesNotExist()
     }
 
     @Test
-    fun `search finds people and opens their profile and shelf`() {
-        var people by mutableStateOf(PeopleState(results = listOf(lena), searched = "lena"))
-        val actions = object : RecordingActions() {
-            override fun openProfile(pubkey: String) { super.openProfile(pubkey); people = people.copy(viewing = lena) }
-            override fun closeProfile() { super.closeProfile(); people = people.copy(viewing = null) }
-        }
-        compose.setContent { RoomScreen(state(people = people), actions, initialPanel = Panel.FRIENDS) }
-        compose.onNodeWithTag("field:Search usernames").performScrollTo().performTextInput("lena")
-        compose.onNodeWithText("Search").performClick()
-        assertTrue(actions.log.contains("search:lena"))
-        compose.onNodeWithTag("result:dj.lena").performScrollTo().performClick()
-        assertTrue(actions.log.toString(), actions.log.any { it.startsWith("open:c21b11") })
-
-        compose.onNodeWithTag("profile:dj.lena").assertIsDisplayed()
-        compose.onNodeWithText("@dj.lena·C21B").assertIsDisplayed()
-        compose.onNodeWithText("3 records · 1 you both have").assertIsDisplayed()
-        compose.onAllNodes(hasText("Blue Hour"))[0].assertIsDisplayed()
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/11_profile.png")
-        compose.onNodeWithText("Add friend").performClick()
-        assertTrue(actions.log.contains("addFriend:dj.lena"))
-        compose.onNodeWithTag("profile-back").performClick()
-        assertTrue(actions.log.contains("closeProfile"))
+    fun `Internet Archive claim actions are disabled without Soulseek sign in`() {
+        val actions = RecordingActions()
+        compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.DROPS) }
+        compose.onNodeWithText("Sign in with Soulseek").assertIsDisplayed()
+        compose.onNodeWithTag("drop:NS050").performScrollTo().performClick()
+        compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
+        assertTrue(actions.log.none { it.startsWith("claim:") })
     }
 
     @Test
-    fun `the deck's keys, fader and screen work`() {
+    fun `the deck's keys and screen work, and it has no speed controls`() {
         val actions = RecordingActions()
         // Needle up, so the platter is still and the test can wait for the screen to settle.
         compose.setContent { RoomScreen(state(deck = playing().copy(isPlaying = false, needleDown = false)), actions) }
         compose.onNodeWithTag("deck:startstop").performClick()
         compose.onNodeWithTag("deck:next").performClick()
         compose.onNodeWithTag("deck:prev").performClick()
-        compose.onNodeWithTag("deck:45").performClick()
-        compose.onNodeWithTag("deck:33").performClick() // already at 33: nothing to do
-        assertEquals(listOf("startStop", "next", "prev", "speed"), actions.log.filter { it in setOf("startStop", "next", "prev", "speed") })
-        compose.onNodeWithTag("deck:pitch").performTouchInput { swipe(center, center + Offset(0f, height * 0.3f), durationMillis = 300) }
-        compose.waitForIdle()
-        val pitch = actions.log.last { it.startsWith("pitch:") }.removePrefix("pitch:").toFloat()
-        assertTrue("dragged towards + : $pitch", pitch > 1f)
+        assertEquals(listOf("startStop", "next", "prev"), actions.log.filter { it in setOf("startStop", "next", "prev") })
+        compose.onNodeWithTag("deck:33").assertDoesNotExist()
+        compose.onNodeWithTag("deck:45").assertDoesNotExist()
+        compose.onNodeWithTag("deck:pitch").assertDoesNotExist()
         compose.onNodeWithTag("deck:screen").assertContentDescriptionContains("Lowlight", substring = true)
     }
 
     @Test
-    fun `the Pressing Plant presses a record from tracks on your shelf`() {
-        val actions = RecordingActions()
-        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.PRESSING) }
-        compose.onNodeWithTag("field:Title").performTextInput("Late Summer")
-        compose.onNodeWithText("Splatter").performScrollTo().performClick()
-        compose.onNodeWithTag("pick-album:Night Drive").performScrollTo().performClick()
-        compose.onNodeWithTag("pick-track:Opening").performScrollTo().performClick()
-        compose.onNodeWithTag("pick-track:Lowlight").performScrollTo().performClick()
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/07_pressing_plant.png")
-        compose.onNodeWithText("Press it").performScrollTo().performClick()
-        assertTrue(actions.log.toString(), actions.log.contains("press:Late Summer:2"))
+    fun `the footer is four icon tabs and the Pressing Plant is gone`() {
+        compose.setContent { RoomScreen(state(), RecordingActions()) }
+        listOf("DIG", "DROPS", "FRIENDS", "SETTINGS").forEach { compose.onNodeWithTag("nav:$it").assertIsDisplayed() }
+        compose.onNodeWithTag("nav:PRESSING").assertDoesNotExist()
+        compose.onNodeWithText("Pressing Plant").assertDoesNotExist()
+        // The top bar: no clock, no Change folder; the record count stays.
+        compose.onNodeWithText("3:21 PM", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Change folder").assertDoesNotExist()
+        compose.onNodeWithTag("action:Rescan").assertIsDisplayed()
+        compose.onNodeWithText("5 records").assertIsDisplayed()
     }
 
     @Test
     fun `panels slide up as sheets in portrait`() {
         portrait()
-        still("08_portrait_sound", state(), panel = Panel.SOUND)
+        still("08_portrait_settings", state(), panel = Panel.SETTINGS)
         val sheet = compose.onNodeWithTag("panel-title").getBoundsInRoot()
         assertTrue("sheet starts in the lower part of the screen", sheet.top.value > 892 * 0.2f)
     }
@@ -393,6 +517,20 @@ class ListeningRoomUiTest {
         }
         compose.setContent { RoomScreen(state(message = message), actions) }
         compose.onNodeWithTag("message").assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("message").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a Soulseek problem shows as the room's glass note and stays until tapped away`() {
+        var problem by mutableStateOf<String?>("This Soulseek ID connected in another client. Reconnect when you are ready.")
+        val actions = object : RecordingActions() {
+            override fun clearSoulseekError() { problem = null }
+        }
+        compose.setContent { RoomScreen(state().copy(soulseekError = problem), actions) }
+        compose.onNodeWithTag("message").assertIsDisplayed()
+        compose.onNodeWithText("another client", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("message").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("message").assertDoesNotExist()
     }

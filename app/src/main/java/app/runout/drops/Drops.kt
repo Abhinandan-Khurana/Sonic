@@ -5,7 +5,7 @@ import android.net.Uri
 import app.runout.library.AlbumJson
 import app.runout.library.ArtworkRepository
 import app.runout.library.LibraryScanner
-import app.runout.library.TagReader
+import app.runout.library.FlacPolicy
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.Source
@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -37,6 +40,9 @@ data class DropItem(
     val coverUrl: String get() = "https://archive.org/services/img/$identifier"
 }
 
+/** One FLAC track of a drop, as listed before claiming. */
+data class DropTrack(val title: String, val url: String, val lengthMs: Long?)
+
 data class DropWeek(val index: Long, val opens: LocalDate, val closes: LocalDate, val items: List<DropItem>)
 
 sealed interface DropState {
@@ -56,6 +62,8 @@ class DropsRepository(
     private val http: Http,
     private val clock: () -> Long = System::currentTimeMillis,
     private val zone: ZoneId = ZoneId.systemDefault(),
+    private val canDownload: () -> Boolean = { false },
+    private val publishDownload: suspend (Album, File) -> Album = { _, _ -> error("Choose a download folder first") },
 ) {
     private val prefs = context.getSharedPreferences("drops", Context.MODE_PRIVATE)
     private val dir = File(context.filesDir, "drops")
@@ -64,7 +72,8 @@ class DropsRepository(
     private val _state = MutableStateFlow<DropState>(DropState.Idle)
     val state: StateFlow<DropState> = _state.asStateFlow()
 
-    private val _albums = MutableStateFlow(AlbumJson.readList(listFile))
+    private val _albums = MutableStateFlow(AlbumJson.readValidatedList(context, listFile))
+    private val claimLock = Mutex()
     val albums: StateFlow<List<Album>> = _albums.asStateFlow()
 
     private val _claimed = MutableStateFlow(claimedThisWeek())
@@ -77,7 +86,7 @@ class DropsRepository(
     suspend fun refresh(): DropState = withContext(Dispatchers.IO) {
         val index = currentIndex()
         _claimed.value = claimedThisWeek()
-        prefs.getString("week-$index", null)?.let { cached ->
+        prefs.getString(weekKey(index), null)?.let { cached ->
             runCatching { parseCached(index, cached) }.getOrNull()?.let {
                 _state.value = DropState.Ready(it)
                 return@withContext _state.value
@@ -95,33 +104,64 @@ class DropsRepository(
             return@withContext _state.value
         }
         val week = DropWeek(index, opens(index), opens(index).plusDays(7), pick(docs, seed(index)))
-        prefs.edit().putString("week-$index", JSONArray(week.items.map { it.toJson() }).toString()).apply()
+        prefs.edit().putString(weekKey(index), JSONArray(week.items.map { it.toJson() }).toString()).apply()
         _state.value = DropState.Ready(week)
         _state.value
     }
 
+    /**
+     * What's on a drop before you spend a claim: its FLAC tracks, each with a streaming address so a
+     * few seconds can be heard. Reads the archive's metadata only; nothing is downloaded.
+     */
+    suspend fun preview(item: DropItem): Result<List<DropTrack>> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(item.identifier.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid Internet Archive identifier" }
+            val meta = http.get("https://archive.org/metadata/${item.identifier}")?.toString(Charsets.UTF_8)
+                ?: error("Couldn't load the album from Internet Archive")
+            planDownload(JSONObject(meta)).tracks.map { f ->
+                DropTrack(f.title ?: f.name.substringAfterLast('/').substringBeforeLast('.'), fileUrl(item.identifier, f.name), f.lengthMs)
+            }
+        }.onFailure { if (it is CancellationException) throw it }
+    }
+
     /** Downloads one of this week's albums onto the shelf. */
     suspend fun claim(item: DropItem, onProgress: (Float) -> Unit = {}): Result<Album> = withContext(Dispatchers.IO) {
-        runCatching {
+        claimLock.withLock { runCatching {
+            check(canDownload()) { "Sign in to Soulseek to download and keep music from Internet Archive" }
+            require(item.identifier.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid Internet Archive identifier" }
+            val index = currentIndex()
             val week = (state.value as? DropState.Ready)?.week ?: error("This week's drop hasn't loaded yet")
+            if (week.index != index) {
+                refresh()
+                error("A new Friday Drop has opened. Choose an album from this week's selection.")
+            }
+            val admittedClaims = claimsFor(index)
+            _claimed.value = admittedClaims
             require(week.items.any { it.identifier == item.identifier }) { "That album isn't in this week's drop" }
-            if (item.identifier !in _claimed.value) check(claimsLeft > 0) { "You've claimed all $CLAIMS_PER_WEEK records this week" }
+            if (item.identifier !in admittedClaims) check(admittedClaims.size < CLAIMS_PER_WEEK) { "You've claimed all $CLAIMS_PER_WEEK records this week" }
 
             val meta = http.get("https://archive.org/metadata/${item.identifier}")?.toString(Charsets.UTF_8)
                 ?: error("Couldn't load the album from Internet Archive")
             val plan = planDownload(JSONObject(meta))
-            require(plan.tracks.isNotEmpty()) { "This album has no playable files" }
+            require(plan.tracks.isNotEmpty()) { "This album is unavailable in FLAC. No claim was used." }
+            require(plan.tracks.map { it.name.substringAfterLast('/') }.distinct().size == plan.tracks.size) { "Album contains conflicting FLAC filenames" }
             val albumDir = File(dir, item.identifier).apply { mkdirs() }
             val totalBytes = plan.tracks.sumOf { it.size }.coerceAtLeast(1)
             var doneBytes = 0L
             val tracks = plan.tracks.mapIndexed { i, f ->
                 val target = File(albumDir, f.name.substringAfterLast('/'))
-                if (!target.exists()) {
-                    val ok = http.download(fileUrl(item.identifier, f.name), target) { b -> onProgress(((doneBytes + b).toFloat() / totalBytes).coerceAtMost(0.99f)) }
+                check(canDownload()) { "Sign in to Soulseek to continue downloading" }
+                if (!FlacPolicy.isValid(target) || (f.size > 0 && target.length() != f.size)) {
+                    val partial = File(albumDir, target.name + ".part")
+                    val ok = http.download(fileUrl(item.identifier, f.name), partial) { b -> onProgress(((doneBytes + b).toFloat() / totalBytes).coerceAtMost(0.99f)) }
                     check(ok) { "Download failed for ${f.title}" }
+                    val valid = partial.inputStream().use { FlacPolicy.read(it, partial.length()) } != null
+                    check(valid) { partial.delete(); "${f.title ?: target.name} is not valid FLAC audio. The broken download was removed. No claim was used." }
+                    check(f.size <= 0 || partial.length() == f.size) { "${f.title ?: target.name} did not download completely. No claim was used." }
+                    check(partial.renameTo(target)) { "Couldn't save ${target.name}" }
                 }
                 doneBytes += f.size
-                val info = target.inputStream().use { TagReader.read(it, target.extension, target.length(), wantPicture = false) }
+                val info = FlacPolicy.read(target) ?: error("Invalid FLAC audio")
                 Track(
                     id = "drop-${item.identifier}/${target.name}",
                     uri = Uri.fromFile(target).toString(),
@@ -138,8 +178,8 @@ class DropsRepository(
                 if (f.exists() || http.download(fileUrl(item.identifier, name), f)) f else null
             } ?: File(albumDir, "cover.jpg").takeIf { it.exists() || http.download(item.coverUrl, it) }
             val first = tracks.firstOrNull()?.let { File(Uri.parse(it.uri).path!!) }
-            val info = first?.inputStream()?.use { TagReader.read(it, first.extension, first.length(), false) }
-            val album = Album(
+            val info = first?.let { FlacPolicy.read(it) }
+            val staged = Album(
                 id = "drop-${item.identifier}",
                 title = item.title,
                 artist = item.creator,
@@ -153,14 +193,17 @@ class DropsRepository(
                 license = item.license ?: plan.license,
                 notes = "Friday Drop · week of ${week.opens}",
             )
+            check(canDownload()) { "Sign in to Soulseek to finish the download" }
+            val album = publishDownload(staged, albumDir)
+            check(album.tracks.isNotEmpty() && album.tracks.all { FlacPolicy.read(context, it) != null }) { "Couldn't verify the saved FLAC album" }
             _albums.value = _albums.value.filterNot { it.id == album.id } + album
             AlbumJson.writeList(listFile, _albums.value)
-            val claimed = _claimed.value + item.identifier
-            _claimed.value = claimed
-            prefs.edit().putStringSet("claims-${week.index}", claimed).apply()
+            val claimed = admittedClaims + item.identifier
+            prefs.edit().putStringSet("claims-$index", claimed).apply()
+            _claimed.value = if (currentIndex() == index) claimed else claimedThisWeek()
             onProgress(1f)
             album
-        }
+        }.onFailure { if (it is CancellationException) throw it } }
     }
 
     /** Takes a claimed album off the shelf. The claim still counts for the week. */
@@ -179,7 +222,8 @@ class DropsRepository(
         if (http.download(item.coverUrl, f)) f else null
     }
 
-    private fun claimedThisWeek(): Set<String> = prefs.getStringSet("claims-${currentIndex()}", emptySet())?.toSet() ?: emptySet()
+    private fun claimedThisWeek(): Set<String> = claimsFor(currentIndex())
+    private fun claimsFor(index: Long): Set<String> = prefs.getStringSet("claims-$index", emptySet())?.toSet() ?: emptySet()
 
     private fun parseCached(index: Long, json: String): DropWeek {
         val arr = JSONArray(json)
@@ -203,10 +247,14 @@ class DropsRepository(
 
         fun opens(index: Long): LocalDate = LocalDate.of(1970, 1, 2).plusWeeks(index)
 
+        /** "flac" in the key: weeks picked before drops were FLAC-only are picked again. */
+        fun weekKey(index: Long): String = "week-flac-$index"
+
         fun seed(index: Long): Long = (index * 2_654_435_761L) and 0x7FFFFFFF
 
         fun searchUrl(page: Int): String {
-            val q = "collection:netlabels AND mediatype:audio AND licenseurl:*creativecommons*"
+            // Only albums the archive lists with FLAC files, so every drop can be claimed.
+            val q = "collection:netlabels AND mediatype:audio AND licenseurl:*creativecommons* AND format:flac"
             return "https://archive.org/advancedsearch.php?q=" + URLEncoder.encode(q, "UTF-8") +
                 listOf("identifier", "title", "creator", "year", "licenseurl").joinToString("") { "&fl%5B%5D=$it" } +
                 "&sort%5B%5D=downloads+desc&rows=$ROWS&page=$page&output=json"
@@ -234,17 +282,13 @@ class DropsRepository(
         fun pick(docs: List<DropItem>, seed: Long): List<DropItem> =
             docs.distinctBy { it.identifier }.shuffled(java.util.Random(seed)).take(PER_DROP)
 
-        /** Chooses which files to fetch: FLAC originals first, then MP3, then Ogg; and a cover. */
+        /** FLAC only. Archive format labels never override the filename or downloaded bytes. */
         fun planDownload(meta: JSONObject): Plan {
             val files = meta.getJSONArray("files")
             val all = (0 until files.length()).map { files.getJSONObject(it) }
-            val families = listOf(
-                "FLAC" to setOf("Flac", "24bit Flac", "FLAC"),
-                "MP3" to setOf("VBR MP3", "MP3", "128Kbps MP3", "64Kbps MP3", "320Kbps MP3"),
-                "OGG" to setOf("Ogg Vorbis"),
-            )
+            val families = listOf("FLAC" to setOf("flac", "24bit flac"))
             for ((codec, formats) in families) {
-                val chosen = all.filter { it.optString("format") in formats }
+                val chosen = all.filter { it.optString("format").lowercase() in formats && FlacPolicy.isFlacName(it.optString("name")) }
                     .let { list -> list.filter { it.optString("source") == "original" }.ifEmpty { list } }
                     .sortedWith(compareBy({ trackNo(it.optString("track")) ?: Int.MAX_VALUE }, { it.optString("name") }))
                 if (chosen.isNotEmpty()) {

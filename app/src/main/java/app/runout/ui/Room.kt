@@ -16,6 +16,15 @@ object Room {
     val Faint = Color(0xFFC9C9C4)
     val Accent = Color(0xFF2B6BFF)
     val Chrome = Color(0xFFD7D8DC)
+    /**
+     * Teenage Engineering orange, softened to anodised aluminium: the deck's keys, lights and small
+     * hardware highlights. Larger parts are shaded from [SignalLight] to [SignalDark] like metal.
+     */
+    val Signal = Color(0xFFE07A4F)
+    val SignalLight = Color(0xFFF3B395)
+    val SignalDark = Color(0xFFB4603D)
+    val Online = Color(0xFF2E9E5B)
+    val Danger = Color(0xFFD0342C)
 
     val Inter = FontFamily(
         Font(R.font.inter_regular, FontWeight.Normal),

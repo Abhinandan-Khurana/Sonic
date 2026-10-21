@@ -1,0 +1,238 @@
+# Runout UI redesign: interview record and checklist
+
+This document records a screen-by-screen interview with the owner, held on 2026-10-21 against Runout 0.4.6-dev.1 on a Pixel 6 emulator. It is the agreed scope for the redesign on branch `ui-redesign`.
+
+How to use this checklist:
+
+- **Owner's words** are quoted as they were given in the interview, typos included.
+- Every agreed change has an ID, such as `ON-3`, and a checkbox. Tick an item only after it is implemented and has been checked on the emulator or a device. Add the commit hash next to it.
+- Implement exactly this. Do not add a redesign beyond it, and do not reinterpret it. Anything not listed keeps its current look and behaviour.
+- **Landscape:** keep it working, but this pass does not redesign it (`GL-2`).
+
+Status key: `[ ]` not started · `[~]` in progress · `[x]` done and verified.
+
+---
+
+## 1. Onboarding
+
+### 1.1 Welcome
+> "Need intro like vector animation which shows the vision for this app a small but pretty one … There should be app name. Remove Drop the needle. Connect soulseek should be selected as 1st and better cards which will respect the design more flat and less info and cluttred."
+
+Intro story picked: **"Needle drop"**. Format: **"Compose code"**.
+
+- [x] **ON-1** Intro vector animation, about 3 s:
+  - a sleeve slides in;
+  - the disc slides out and lands on a platter;
+  - the tonearm swings in and the needle drops;
+  - the grooves glow TE orange;
+  - "RUNOUT" types out in dot-matrix.
+  It is built as self-contained Compose code (no new dependency) and can be skipped.
+- [x] **ON-2** Show the app name on the welcome. The home screen still shows no app name.
+- [x] **ON-3** Remove "Drop the needle."
+- [x] **ON-4** Connect Soulseek comes first. Listen offline comes second.
+- [x] **ON-5** Flatter, cleaner choices with less text and less clutter.
+
+### 1.2 Offline folder step ("Bring your own records")
+> "keep as it is"
+
+- [x] **ON-6** Keep the content. It only moves into the full-screen onboarding layout (`ON-10`, `ON-11`).
+
+### 1.3 Login
+> "remap the whole login flow like after that vector intro drop into login UI like spotify: Following the design lang ofc. And if there is no option to give Create an ID so Just Welcome then Souldseek ID a small info button if the user presses that then it will tell about the login process and sign up proceess of soulsleek client its like there is no sign up page and if they dont have soulseek account just try entring the id if prompts wrong its already taken try with another one! and Rememeber my sign-in should not be optional its an app so we can just keep them sign in."
+
+The owner attached a screenshot of Spotify's welcome screen as the reference. Placement of "Listen offline": **"Small text link"**.
+
+- [x] **ON-7** After the intro, show a Spotify-style login in Runout's design language (light glass and blue accent, NOT Spotify's dark/green). Borrow only the structure:
+  - hero artwork at the top: a collage of records and sleeves;
+  - the app mark;
+  - one big headline;
+  - stacked full-width controls.
+- [x] **ON-8** Remove the "Sign in / Create an ID" tabs. The screen shows a welcome, then a "Soulseek ID" field with a small ⓘ, then the password and Connect.
+  - The ⓘ explains that Soulseek has no sign-up page.
+  - To make an account, enter the ID you want and it is created on first login.
+  - If the app says the password is wrong, that ID is already taken: try another one.
+- [x] **ON-9** Remove the "Remember my sign-in" toggle. Users always stay signed in, with credentials in Android Keystore as today.
+- [x] **ON-9b** "Listen offline" becomes a small, quiet text link at the bottom.
+
+### 1.4 Download folder step ("02 / Keep your records")
+> "Bring all the things near to bottom so that its easier for one hand use and there should not be continue button there is no need of that after choosing the download fodler it should go to the next step. and also its better when the onboarding section have the full screen or seperate screen."
+
+- [x] **ON-10** The whole onboarding becomes its own full screen (intro, login and steps). It is no longer a glass sheet over the room.
+- [x] **ON-11** Content and actions sit near the bottom of the screen, for one-handed use.
+- [x] **ON-12** No Continue button. Picking the folder moves on automatically. Keep a quiet way to choose later.
+
+### 1.5 Share step ("03 / Give something back")
+> "after the later step it should be just prompted as in button and with a caution logo and descriptin as the folder is getting shared. and a small skip button,"
+
+- [x] **ON-13** Show a simple prompt:
+  - one "Share a folder" button with a caution icon;
+  - a short description saying the chosen folder becomes public to Soulseek users;
+  - a small Skip button.
+  Remove the toggle and "Not now — continue".
+
+### 1.6 Stay-online step ("04 / Choose your rhythm")
+> "those cards are good but i will prefer insted of selecting a button inside a card just change the color of the card which user will be selecting and remove that continue button."
+
+- [x] **ON-14** Keep the two cards. Remove the in-card buttons ("Selected" / "Use background mode"). The whole card is the tap target, and the selected card shows by its colour.
+- [x] **ON-15** No Continue button. Tapping a card selects it and moves on.
+
+### 1.7 Finish ("Ready to spin")
+> "this feels way to static: It does not need to show what user have selected just greet and with a popping in animaiton drop to the home page"
+
+- [x] **ON-16** No summary card. Greet the user, then play a "pop in" animation into the home room.
+
+---
+
+## 2. Home (the room)
+
+### 2.1 Deck look
+Answers:
+- direction: **"Teenage Engineering"**;
+- accent: **"TE orange"**;
+- details: **"Physical keys, Engraved labels & ticks"**;
+- LCD: **"small font and small dot matrix but still readble"**;
+- body: **"Glass + TE details"**;
+- platter and arm: **"Keep strobe dots, Orange details on arm, Keep tonearm as is"**;
+- keys: **"Keep layout"**.
+
+- [x] **DK-1** TE orange (about `#FF5A1F`) is the deck's accent for keys, lights and highlights.
+- [x] **DK-2** Keep the frosted-glass plinth and add TE details on top. It does NOT become a solid aluminium body.
+- [x] **DK-3** Physical keys: visible depth, a shadow, a pressed state that travels down, and a small light.
+- [x] **DK-4** Engraved labels and ticks: tiny printed labels by the keys, scale ticks, and model-plate details.
+- [x] **DK-5** The pixel screen keeps its role, with a smaller font and a smaller dot matrix that is still readable.
+- [x] **DK-6** Keep the strobe dots (restyle only).
+- [x] **DK-7** Keep the S-shaped tonearm as is, and make the counterweight and/or headshell TE orange.
+- [x] **DK-8** Key positions stay as today (START/STOP left, ◀◀ ▶▶ middle, LCD right).
+- [x] **DK-9** Performance: cache the static deck layers, and spin the platter and record as their own layer instead of redrawing the whole deck every frame.
+  - This was agreed in discussion: the deck stays code-drawn vector. Figma is used as the design reference, and Rive or Lottie only for the intro and transitions.
+
+- [x] **DK-10** *(added after the interview)* "the disk spins way to fast keep it slow and real".
+  - First pass: true 33⅓ rpm with real mains-strobe physics and a slower spin-up. The owner said it was still too fast.
+  - Now: the picture turns at half speed (one turn every 3.6 s). The strobe is re-tuned to a 50 Hz flash, so the dots stand still at that speed.
+  - The music still plays at its recorded speed.
+- [x] **DK-11** *(added after phase-2 review)* "can we get some grassy finish over the buttons keeping the current texture". The deck keys get a clear glass coat over their existing colours: a glossy top, a diagonal reflection and a bright rim.
+- [x] **DK-12** *(added after phase-2 review)* "that orange is way too much contrasty can you give it a fade / metallic shade". The signal orange is softened to anodised aluminium (`#E07A4F`). The START/STOP cap and the counterweight are shaded light to dark like brushed metal, and the grey keys get a matching metal sheen.
+- [x] **HM-13** *(added after phase-2 review)* A weird shadow flashed between sleeves while flicking (the owner sent a screenshot). Sleeves no longer cast their own shadows. One soft floor shadow sits under the front slot and fades in only when a sleeve settles square.
+
+### 2.2 Crate, caption and footer
+Answers:
+- crate: **"Keep coverflow, refine"**;
+- caption: **"Shorter"**;
+- footer: **"Icon tab bar"**;
+- disc motion: **"Pull-out, Drag to platter"**;
+- pull-out: **"Slide up + spin-up"**;
+- drag: **"Shadow lift, Drop thud, Haptics"**;
+- buttons beside a pulled disc: **"Long-press menu"**.
+
+- [x] **HM-1** Keep the coverflow. Refine its perspective, depth and shadows.
+- [x] **HM-2** Caption: title and artist only, with format/hi-res as a tiny tag. The licence moves into the record's details.
+- [x] **HM-3** Replace the scrolling pill strip with an icon tab bar (icons and tiny labels) that always fits: Dig, Drops, Friends, Settings.
+- [x] **HM-4** Pull-out: the disc slides up out of the sleeve with a slight overshoot and spins up a little.
+- [x] **HM-5** Drag: the shadow lifts while the disc is held. The landing has a "thud" (a small squash, the shadow settling and a soft thud sound), and haptics fire on pickup and on landing.
+- [x] **HM-6** Remove "Sleeve back" / "Send with audio" / "Remove" beside the pulled disc. Use a long-press menu on the sleeve or disc instead, with Put back, Send, Remove and Details.
+
+### 2.3 Top bar
+> "Move change folder to settings, Keep rescan but icon of refresh matching TE color, Keep crackle and keep online as in green and red dot and download number (grey if paused, green downlaoding, red if error) remove time, keep number of records"
+
+- [x] **HM-7** "Change folder" moves to Settings › Library.
+- [x] **HM-8** Rescan becomes a refresh icon in TE orange.
+- [x] **HM-9** Keep the Crackle toggle.
+- [x] **HM-10** Online status: a green dot when online, red when offline or on error.
+- [x] **HM-11** Download count colour: grey when idle or paused, green while downloading, red on error.
+- [x] **HM-12** Remove the clock. Keep the record count.
+
+---
+
+## 3. Dig (search)
+> "Dig becomes its own full screen (like onboarding), not a sheet over the room. remove all sources keep on this device and soulseek as two options. remove the option of songs. it will only show albums need backend changes. It should only show folders. turn that filters and sort option to an icon on the bottom right howvering."
+
+Results: **"One tap = preview, Fix ranking, Peer stats as icons, Cover art on cards"**.
+Folder preview: **"Sleeve-style header, Clean track names, Drop the disclaimer, Peer info small"**.
+
+- [x] **DG-1** Dig is its own full screen.
+- [x] **DG-2** Two sources only: On this device and Soulseek. Remove "All sources".
+- [x] **DG-3** Albums (folders) only. Remove the Songs option and the All/Songs/Albums row. This is a backend change: results are album/folder groups only.
+- [x] **DG-4** "Filters & sort" becomes a floating icon button at the bottom right.
+- [~] **DG-5** *(cards and the preview show a generated sleeve. Search results only list matching FLAC files, so a folder's real cover isn't known until its image file is fetched. Follow-up: fetch the folder's cover image during preview)* Result cards show cover art when the folder shares one.
+- [x] **DG-6** Tapping a result card opens the preview. Remove the "Preview album folder" / "Show tracks" buttons.
+- [x] **DG-7** Peer stats (slot, queue, speed) become tiny icons or colour.
+- [x] **DG-8** Fix ranking: exact album/artist matches first. Example: "moon safari" ranked "(2010) Active 2.0_ The BT Workout" above "Air - Moon Safari".
+- [x] **DG-9** Preview header in sleeve style: cover, title, artist and a spec tag (e.g. FLAC 24/192 · 1.7 GB).
+- [x] **DG-10** Clean track names: "01  La femme d'argent", not "Air - Moon Safari - 01 La femme d'argent.flac".
+- [x] **DG-11** Remove the "This is a peer's folder listing…" disclaimer.
+- [x] **DG-12** Peer info becomes small: the name plus a small Message icon.
+
+---
+
+## 4. Friday Drops
+Answers: **"Record-shop shelf, Claim counter as TE, Tap = preview first"**. Drops stays a sheet.
+
+- [x] **DR-1** The 10 drops appear as big sleeves (a shelf or grid) instead of a text list.
+- [x] **DR-2** The claim counter becomes three small TE lights or tokens that switch off as you claim.
+- [x] **DR-3** *(the preview lists FLAC tracks from the archive metadata and streams 30 s per track with a MediaPlayer that never touches the deck; albums with no FLAC say so and can't be claimed)* Tapping a drop opens a preview (track list and a short listen), with Claim inside the preview.
+
+## 5. Friends (Soulseek messages)
+Answers: **"Full screen like Dig, Chat list first, Share records in chat, Friends list"**.
+
+- [x] **FR-1** Friends is its own full screen.
+- [x] **FR-2** Chat list first (initial, last message, unread dot). A floating "+" starts a chat by username.
+- [x] **FR-3** A friends list of saved usernames, with online/offline dots.
+- [x] **FR-4** *(wire format: the message is ordinary text, "♪ Album — Artist · FLAC …", plus a last line `runout:record?artist=…&album=…&q=…`, URL-encoded. Other Soulseek clients show readable text; Runout renders a card whose button searches Soulseek for that album and opens Dig)* Share records in chat: a record card the other person can tap to preview or download. This needs a wire-format design over Soulseek private messages.
+
+## 6. Pressing Plant
+> "remove this whole module."
+
+- [x] **PP-1** *(code, tests and docs removed: HANDBOOK, PRESSING-AND-DROPS, README, Handsoff)* Remove the tab, the screen, pressing creation, and their tests and docs.
+- [x] **PP-2** Do not delete user data: records that were already pressed stay playable and removable.
+
+## 7. Settings
+Answers: **"TE hardware EQ, Shorter copy, Simple list layout"**. Settings stays a sheet.
+
+- [x] **ST-1** A plain list (Sound ›, Soulseek ›, Library ›, About ›) where each row opens its own page. This replaces the chip tabs.
+- [x] **ST-2** Shorter copy: one-line descriptions, with details behind an ⓘ.
+- [x] **ST-3** TE hardware EQ: orange fader caps, a tick scale, and presets as small keys.
+- [x] **ST-4** Library gains "Change folder" (see `HM-7`).
+
+## 8. Downloads
+Answers: **"Controls as icons, Shorter copy"**. Downloads stays a sheet.
+
+- [x] **DL-1** Pause all / Resume all / Turtle mode become small icon keys.
+- [x] **DL-2** Shorter copy: remove the two explanation lines and show a small empty state instead.
+
+## 9. Global
+Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE look everywhere".
+
+- [x] **GL-1** *(deck keys, tabs, pills, toggles, TE keys, menu rows, onboarding buttons, result cards, disc pickup/landing)* Haptics on keys, toggles, tab switches, and disc pickup/landing.
+- [x] **GL-2** *(checked on the emulator: landscape keeps the deck left, the tab bar top right and the crate right)* Portrait first. Landscape must keep working but is not redesigned now.
+- [x] **GL-3** *(TE styling is used on the deck, the EQ faders and preset keys, the download and listen keys, spec tags, claim lights and the refresh key; other screens keep the room's glass and blue)* TE styling stays limited to what is listed: the deck, the EQ, spec tags, claim tokens and the refresh icon. Do not restyle the rest of the app into TE hardware.
+
+## 10. Bugs found during the interview
+- [x] **BG-7** *(found while testing)* A tap on a tab during a sheet's fade-out was swallowed. The scrim only catches taps while the sheet is open, a closing sheet stops catching taps, and the exit is quicker (180 ms). A tap within about 150 ms of Close can still land on the departing sheet.
+- [x] **BG-1** The record count says "1 records". It should say "1 record".
+- [x] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
+- [~] **BG-3** *(on the emulator a hardware keyboard is attached, so no on-screen keyboard appears and Back closes Dig. On a phone the keyboard takes the first Back by default. Verify on a real phone)* With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.
+- [~] **BG-4** *(each onboarding step is now its own keyed subtree, and glass-card scrims no longer merge their cards; the tree still looked stale in Argent on the room screen, which may be the tool: re-check on a device with TalkBack)* During setup, the accessibility tree (uiautomator/TalkBack) kept the previous step's content after moving on. Verify, then fix.
+- [x] **BG-5** *(not an app bug: with the new album-only search, "moon safari" returns 40 album folders on the emulator)* Soulseek searches for "Pink Floyd Animals" and "Radiohead" returned 0 FLAC results, while "moon safari" returned 273. This may be emulator NAT. Verify on a real phone.
+- [x] **BG-6** *(step numbers removed; three progress dots instead)* The setup step numbering looked like it jumped from 02 to 04. Check the step order and numbering.
+
+
+## 11. Follow-up after 0.5.0 (owner, 2026-10-21)
+Feedback from the owner's phone and a friend's phone after the 0.5.0 build. Shipped in 0.5.1.
+
+- [~] **FU-1** *(the record collage fades out and the headline folds to the wordmark while the keyboard is up; the emulator has a hardware keyboard, so verify on a phone)* Sign-in: with the keyboard open, the titles slid up over the record collage.
+- [x] **FU-2** *(Settings › Sound and the new Audio quality sheet explain it: Pure is about processing, Hi-res output is about the format, and they combine)* Explain the difference between Pure and Hi-res output.
+- [x] **FU-3** *(a small chip under Crackle, e.g. "24/96 → Phone speaker", opens an Audio quality sheet: Track → Runout → Output, each with its spec, a verdict such as "Lossless, resampled to 48 kHz", and the Pure and Hi-res switches; Settings › Sound shows the same chain)* Bring the output info ("32-bit · 96 kHz → 32-bit float", DAC notes) to the home screen, in the style of Amazon Music's audio-quality chain.
+- [x] **FU-4** *(a round search key beside the field; a stop square while searching)* Dig: "Search Soulseek" becomes a search icon button.
+- [x] **FU-5** *(root cause: any unreadable .flac made a scan put back the previous shelf, which is empty after a reinstall. A partial scan now keeps what it read, merged with what it couldn't see, and saves it)* Albums showed for a second after picking the folder, then vanished.
+- [x] **FU-6** *(Settings › Library › Repair local albums: rebuilds the shelf from the folder alone and lists each unreadable file with a reason, such as "an MP3 renamed to .flac" or "damaged FLAC". Files are read-only to Runout, so they are diagnosed, not rewritten)* "Repair the local albums" under Settings › Library.
+- [x] **FU-7** *(the archive query now asks for `format:flac`; this week was picked again. Checked on the emulator: the first drop lists FLAC tracks and can be claimed)* Drops: offer FLAC albums only.
+- [x] **FU-8** *(the Dig filters and the New chat sheet are drawn by the page itself: one even shade over the whole page, edge to edge, and a white sheet with a handle)* The Dig filter sheet and Friends' New chat sheet had a shade over only part of the page.
+- [x] **FU-9** Crackle on the home screen is a switch, not "Crackle on/off" text.
+- [x] **FU-10** *(`ui/Turntable.kt` now holds only the deck, with a map at the top; the unused GlassPill is gone. The record itself is in `RecordArt.kt`)* The vinyl player's code in one file to edit.
+- [x] **FU-11** *(landscape: the tab bar moved to the bottom right under the crate; the hint, record count and status dots share one line at the top right)* Landscape: "11 records" ran into the crate's sleeves, and the tab bar should sit at the bottom.
+- [~] **FU-12** *(a friend's phone with Background usage off: downloads failed with "Stream read error: Interrupted system call (os error 4)". The app now treats that as a pause, explains it, shows a "Background usage is off" note with a link to App info, and resumes when Runout is back. The native fix (retry EINTR) is in the source but not in this APK, because this Mac has no NDK. Verify on that phone)* Background downloads breaking.
+- [ ] **FU-13** *(not reproduced: the card was sent, and the receive path decodes it. Cards need 0.5.x on both phones; an older Runout or another client shows it as text. Check the friend's version)* A record card sent to a friend didn't render on their side.
+
+---
+
+Implementation decision (owner, 2026-10-21): Claude implements this directly on `ui-redesign`, instead of handing a prompt to Hermes.

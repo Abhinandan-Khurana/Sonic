@@ -54,10 +54,10 @@ class FolderScanTest {
     fun `choosing a folder finds every album in it`() {
         val (report, albums) = scan()
         assertNull(report.error)
-        assertEquals(setOf("Night Drive", "Paper Moons", "Untagged", "Odd"), albums.map { it.album.title }.toSet())
-        assertEquals(4, report.albums)
-        assertEquals(7, report.audioFiles)
-        assertEquals("4 albums from 7 music files in ${report.folders} folders", report.summary)
+        assertEquals(setOf("Night Drive"), albums.map { it.album.title }.toSet())
+        assertEquals(1, report.albums)
+        assertEquals(2, report.audioFiles)
+        assertEquals("1 albums from 2 music files in ${report.folders} folders", report.summary)
     }
 
     @Test
@@ -67,10 +67,7 @@ class FolderScanTest {
         assertEquals("Vela Park", nd.artist)
         assertEquals(2023, nd.year)
         assertEquals(listOf("Opening", "Lowlight"), nd.tracks.map { it.title })
-        val pm = albums.named("Paper Moons")
-        assertEquals("Ines Varga", pm.artist)
-        assertEquals(listOf(1, 2, 3), pm.tracks.map { it.trackNumber })
-        assertEquals(listOf("Paper Moons", "Glass Hours", "Signal"), pm.tracks.map { it.title })
+
     }
 
     @Test
@@ -83,36 +80,28 @@ class FolderScanTest {
         assertEquals(-6.2f, nd.albumGainDb!!, 0.01f)
         assertEquals(-5.1f, nd.tracks[0].trackGainDb!!, 0.01f)
         assertTrue(nd.isOpenLicence)
-        val wav = albums.named("Untagged")
-        assertEquals("WAV · 16-bit · 44.1 kHz", wav.quality.label)
-        assertEquals(1_500L, wav.tracks.single().durationMs)
+
     }
 
     @Test
-    fun `a file Android can't read still appears instead of hiding the album`() {
-        // This was the bug: the old scanner relied on Android's metadata reader and dropped any track
-        // it returned nothing for, so whole albums vanished. Here the reader returns nothing for .ogg.
+    fun `unsupported music is excluded even when Android can decode it`() {
         val (report, albums) = scan()
-        val odd = albums.named("Odd")
-        assertEquals(1, odd.tracks.size)
-        assertFalse(odd.tracks.single().durationKnown)
-        assertTrue(odd.tracks.single().durationMs >= 1_000)
-        assertEquals(1, report.unreadable)
+        assertTrue(albums.all { it.album.tracks.all { track -> track.fileName.endsWith(".flac") } })
+        assertTrue(albums.none { it.album.title in setOf("Paper Moons", "Untagged", "Odd") })
+        assertEquals(0, report.unreadable)
     }
 
     @Test
     fun `covers come from the files or the folder`() {
         val (_, albums) = scan()
         assertNotNull(albums.first { it.album.title == "Night Drive" }.embeddedArt)
-        assertNotNull(albums.first { it.album.title == "Paper Moons" }.embeddedArt)
-        assertNotNull(albums.first { it.album.title == "Untagged" }.folderImage)
     }
 
     @Test
     fun `hidden folders are skipped and other files are reported`() {
         val (report, albums) = scan()
         assertTrue(albums.none { a -> a.album.tracks.any { "skip" in it.fileName } })
-        assertEquals(mapOf("txt" to 1), report.otherFiles)
+        assertEquals(mapOf("txt" to 1, "mp3" to 3, "wav" to 1, "ogg" to 1), report.otherFiles)
     }
 
     @Test
@@ -137,17 +126,16 @@ class FolderScanTest {
         watcher.cancel()
 
         val shelf = repo.albums.value
-        assertEquals(4, shelf.size)
+        assertEquals(1, shelf.size)
         // Albums appear one by one while scanning, not all at the end.
         assertTrue("saw $sizes", sizes.any { it in 1..3 })
         // Covers were saved and every record points at real audio.
         assertTrue(shelf.first { it.title == "Night Drive" }.coverPath?.let { File(it).exists() } == true)
-        assertTrue(shelf.first { it.title == "Untagged" }.coverPath?.let { File(it).exists() } == true)
-        assertEquals("4 albums from 7 music files in ${repo.report.value!!.folders} folders", repo.report.value!!.summary)
+        assertEquals("1 albums from 2 music files in ${repo.report.value!!.folders} folders", repo.report.value!!.summary)
         // The shelf is cached, so it's there instantly next launch.
         val again = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context), scope, lookupCoversOnline = false)
         kotlinx.coroutines.delay(300)
-        assertEquals(4, again.albums.value.size)
+        assertEquals(1, again.albums.value.size)
         scope.cancel()
     }
 

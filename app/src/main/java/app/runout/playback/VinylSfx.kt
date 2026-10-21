@@ -34,6 +34,8 @@ class VinylSfx(private val scope: CoroutineScope) {
 
     fun runout() = playOnce(Synth.runout())
 
+    fun platterDrop() = playOnce(Synth.platterDrop())
+
     fun startCrackle() {
         if (!crackleEnabled || crackleTrack != null) return
         val pcm = Synth.crackleLoop()
@@ -157,6 +159,16 @@ object Synth {
         addThump(buf, 0, 70.0, 0.18, 0.03)
         addCrackle(buf, rng, popsPerSecond = 12.0, popGain = 0.08, hissGain = 0.008)
         return toPcm(buf, fadeOutSec = 0.15)
+    }
+
+    /** A record seating on the spindle and platter mat: a soft, low thud with a faint tick. */
+    fun platterDrop(seed: Int = 31): ShortArray {
+        val rng = Random(seed)
+        val buf = buffer(0.32)
+        addClick(buf, 0, rng, 0.08)
+        addThump(buf, 0, 46.0, 0.5, 0.06)
+        addThump(buf, (0.012 * RATE).toInt(), 92.0, 0.12, 0.025)
+        return toPcm(buf, fadeOutSec = 0.12)
     }
 
     /** Two turns of the run-out groove at 33⅓ rpm (1.8 s a turn). */

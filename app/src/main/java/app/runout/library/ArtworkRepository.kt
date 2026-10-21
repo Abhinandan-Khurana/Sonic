@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -27,7 +28,11 @@ import kotlin.math.max
  * MusicBrainz asks for at most one request a second and an identifying User-Agent, so lookups are
  * serialised through a mutex with a gap between them.
  */
-class ArtworkRepository(private val context: Context) {
+class ArtworkRepository(
+    private val context: Context,
+    private val http: app.runout.net.Http? = null,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
 
     private val dir = File(context.filesDir, "covers").apply { mkdirs() }
     private val mbMutex = Mutex()
@@ -47,18 +52,28 @@ class ArtworkRepository(private val context: Context) {
         write(albumId, bmp)
     }
 
-    /** Looks the album up online. Returns null when there's no confident match. */
+    private val misses = context.getSharedPreferences("cover-misses", Context.MODE_PRIVATE)
+
+    /** Cache failed lookups for a week, keyed by metadata rather than a reusable record id. */
     suspend fun lookupOnline(albumId: String, artist: String, title: String): File? = withContext(Dispatchers.IO) {
+        cachedFile(albumId)?.let { return@withContext it }
         if (artist.isBlank() || artist == "Unknown artist" || title.isBlank()) return@withContext null
-        val groupId = mbMutex.withLock {
+        val key = LibraryScanner.stableId("$artist\u0000$title")
+        mbMutex.withLock {
+            val timestamp = now()
+            val expiry = misses.getLong(key, 0L)
+            if (expiry > timestamp && expiry - timestamp <= MISS_TTL_MS) return@withLock null
             val wait = MB_GAP_MS - (System.currentTimeMillis() - lastMbRequest)
             if (wait > 0) delay(wait)
             lastMbRequest = System.currentTimeMillis()
-            findReleaseGroup(artist, title)
-        } ?: return@withContext null
-        val bytes = httpGet("https://coverartarchive.org/release-group/$groupId/front-500") ?: return@withContext null
-        val bmp = decodeScaled(bytes) ?: return@withContext null
-        write(albumId, bmp)
+            val groupId = findReleaseGroup(artist, title)
+            val file = groupId?.let { httpGet("https://coverartarchive.org/release-group/$it/front-500") }
+                ?.let { decodeScaled(it) }?.let { write(albumId, it) }
+            misses.edit {
+                if (file == null) putLong(key, timestamp + MISS_TTL_MS) else remove(key)
+            }
+            file
+        }
     }
 
     private fun findReleaseGroup(artist: String, title: String): String? {
@@ -76,6 +91,7 @@ class ArtworkRepository(private val context: Context) {
     }
 
     private fun httpGet(url: String): ByteArray? {
+        if (http != null) return http.get(url)
         var conn: HttpURLConnection? = null
         return try {
             conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -125,6 +141,7 @@ class ArtworkRepository(private val context: Context) {
     companion object {
         const val USER_AGENT = app.runout.net.DefaultHttp.USER_AGENT
         private const val MB_GAP_MS = 1100L
+        private const val MISS_TTL_MS = 7L * 24 * 60 * 60 * 1000
         private const val MIN_SCORE = 90
 
         /** Average colour of a cover, nudged to be usable as a vinyl colour. */

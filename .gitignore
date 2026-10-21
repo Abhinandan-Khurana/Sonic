@@ -17,7 +17,6 @@ local.properties
 *.apk
 *.aab
 !release/*.apk
-!Runout-0.3.0.apk
 output.json
 *.log
 
@@ -32,3 +31,16 @@ Thumbs.db
 
 # Roborazzi test outputs (uncommitted scratch)
 app/build/outputs/roborazzi/
+
+# Native build artifacts; native sources and lockfiles are tracked.
+native/target/
+app/src/main/jniLibs/
+
+# New APKs are published as GitHub release assets.
+release/Runout-*-development.apk
+
+# Local Argent credentials and generated test artifacts.
+.argent/secrets.env
+.argent/artifacts/
+.argent/reports/
+node_modules/

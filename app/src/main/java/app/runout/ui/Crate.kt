@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -70,6 +72,8 @@ fun Crate(
     onPutBack: () -> Unit,
     onFrontSlot: (SleeveSlot) -> Unit,
     modifier: Modifier = Modifier,
+    /** Long-press on a sleeve: the record's menu. */
+    onMenu: (Album) -> Unit = {},
     initialIndex: Int = 0,
     emptyTitle: String = if (hasFolder) "No albums found" else "Choose your\nmusic folder",
     emptyDetail: String = if (hasFolder) "Tap to pick another folder" else "Each album folder becomes\na record on your shelf",
@@ -136,6 +140,30 @@ fun Crate(
                 return@Box
             }
             val center = pos.value
+            // One soft shadow on the "floor" under the front slot. It never turns with a sleeve (a
+            // shadow cast by a half-turned sleeve smears into a grey wedge mid-flick), and it only
+            // darkens as a sleeve settles square to you.
+            val settled = 1f - (abs(center - center.roundToInt()) * 2f).coerceIn(0f, 1f)
+            Canvas(
+                Modifier
+                    .align(Alignment.Center)
+                    .padding(bottom = boxHeight * 0.12f)
+                    .size(sleeve)
+                    .zIndex(-10f),
+            ) {
+                val floor = Offset(size.width / 2f, size.height * 1.02f)
+                val r = size.width * 0.62f
+                // A round soft shadow squashed flat, so it fades out evenly on every side.
+                scale(1f, 0.16f, pivot = floor) {
+                    drawCircle(
+                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                            listOf(Color.Black.copy(alpha = 0.24f * settled), Color.Transparent),
+                            center = floor, radius = r,
+                        ),
+                        radius = r, center = floor,
+                    )
+                }
+            }
             val first = (center - 6).toInt().coerceAtLeast(0)
             val last = (center + 6).toInt().coerceAtMost(albums.lastIndex)
             for (i in first..last) {
@@ -156,16 +184,21 @@ fun Crate(
                             .testTag("sleeve:${album.title}")
                             .graphicsLayer {
                                 translationX = x
-                                translationY = -10.dp.toPx() * (1f - near)
-                                rotationY = -dx.coerceIn(-1f, 1f) * 58f
-                                val s = 1f - 0.14f * near
+                                translationY = -12.dp.toPx() * (1f - near)
+                                // A slightly tighter turn than before, so the side sleeves read as standing in a crate.
+                                rotationY = -dx.coerceIn(-1f, 1f) * 52f
+                                val s = 1f - 0.16f * near
                                 scaleX = s
                                 scaleY = s
-                                cameraDistance = 14f * density.density
+                                cameraDistance = 16f * density.density
                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
                                 alpha = if (hidden) 0f else (1f - (adx - 2.4f).coerceAtLeast(0f)).coerceIn(0f, 1f)
                             }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onLongClick = { onMenu(album) },
+                            ) {
                                 if (isFront) {
                                     if (pulledId == album.id) onPutBack() else onPull(album)
                                 } else {
@@ -192,19 +225,13 @@ fun Crate(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
+                    // Short: title and artist, the format as a tiny printed tag. The licence and the
+                    // rest live in the record's details (long-press).
                     BasicText(front.title, style = Room.Title.copy(textAlign = TextAlign.Center), maxLines = 1)
-                    BasicText(
-                        listOfNotNull(front.artist, front.year?.toString()).joinToString(" · "),
-                        style = Room.LabelQuiet.copy(textAlign = TextAlign.Center),
-                        maxLines = 1,
-                    )
-                    BasicText(
-                        "${front.quality.label}   ${center.roundToInt() + 1} / ${albums.size}",
-                        style = Room.LabelQuiet.copy(textAlign = TextAlign.Center),
-                        maxLines = 1,
-                    )
-                    provenance(front)?.let {
-                        BasicText(it, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Room.Accent), maxLines = 1)
+                    BasicText(front.artist, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center), maxLines = 1)
+                    SpecTag(front.quality.label, Modifier.padding(top = 4.dp))
+                    front.unavailableReason?.let {
+                        BasicText(it, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Room.Danger), maxLines = 2)
                     }
                 }
             }

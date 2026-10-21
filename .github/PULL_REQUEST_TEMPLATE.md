@@ -1,23 +1,16 @@
-## Description
+## Problem and resulting behavior
 
-Please include a summary of the change and which issue is fixed. Include relevant motivation and context.
+Describe the concrete problem and what a user will observe after this change.
 
-Fixes # (issue)
+## Validation
 
-## Type of change
+List relevant tests, manual checks, skipped checks and remaining limitations. Include Android/ABI coverage for JNI changes and migration coverage for database changes.
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
+## Review notes
 
-## Checklist:
+- [ ] Offline FLAC playback and both download providers' sign-in gates remain intact.
+- [ ] No credentials, private messages, signing keys or local build paths are committed.
+- [ ] Documentation, schema exports and native provenance/notices are updated where relevant.
+- [ ] Relevant checks pass with zero lint errors; new warnings are addressed or explained.
 
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings or Android Lint errors
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally (`./gradlew testDebugUnitTest`)
-- [ ] No server dependencies or centralized costs were introduced
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for architecture and testing guidance.

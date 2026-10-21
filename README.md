@@ -1,339 +1,151 @@
-<div align="center">
+# RUNOUT
 
-# ◈ RUNOUT
+**A vinyl listening room for your FLAC records, on Android.** Flick through a crate of sleeves, pull a record out, drop it on a glass turntable and lower the needle. Dig for albums on Soulseek, claim free Friday Drops from the Internet Archive, and swap records with friends.
 
-### *A vinyl listening room and record-collecting app for Android*
+[**Download 0.5.1 (development)**](https://github.com/Somchandra17/runout/releases/tag/v0.5.1-dev.1) · [Build guide](docs/BUILDING.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
-**Your own albums become records you pull from a crate, drop on a glass turntable, and play in bit-perfect hi-res audio — with serverless sharing and zero running costs.**
-
-[![Platform](https://img.shields.io/badge/Platform-Android%209%2B%20(API%2028--36)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.3.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Media3](https://img.shields.io/badge/Audio-Media3%20ExoPlayer%201.9.4-FF6F00?style=flat-square)](https://developer.android.com/media/media3)
-[![Nostr](https://img.shields.io/badge/Network-Nostr%20Relay%20Mesh-9B51E0?style=flat-square)](https://nostr.com)
-[![Tests](https://img.shields.io/badge/Tests-106%20Passing%20(12%20Suites)-brightgreen?style=flat-square)](docs/BUILDING.md)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
-
-<br/>
-
-[**Download APK v0.3.0 (26.9 MB)**](release/Runout-0.3.0.apk) • [**Release Notes**](RELEASE.md) • [**Source (.zip)**](release/Runout-0.3.0-source.zip) • [**Handbook**](docs/HANDBOOK.md) • [**Architecture**](docs/ARCHITECTURE.md)
-
-<br/>
-
-```text
-    ┌────────────────────────────────────────────────────────────────────────┐
-    │  [RUNOUT · your room]                               3:42 PM · 14 LPs   │
-    │                                                                        │
-    │       ╭─────────────────────╮             ┌──────┐ ┌──────┐ ┌──────┐   │
-    │      ╱   . . . . . . . . .   ╲            │      │ │      │ │      │   │
-    │     │  .  ╭─────────────╮  .  │           │      │ │  ★   │ │      │   │
-    │     │ .  │ PICTURE DISC │  . │   ======►  │      │ │ FRONT│ │      │   │
-    │     │ .  │  ALBUM ART   │  . │            │      │ │ SLEEV│ │      │   │
-    │     │  .  ╰─────────────╯  .  │           │      │ │      │ │      │   │
-    │      ╲   . . . . . . . . .   ╱            └──────┘ └──────┘ └──────┘   │
-    │       ╰─────────────────────╯             [  CRATE · 3D PERSPECTIVE ]  │
-    │        [ GLASS DRIVE RG-1 ]                                            │
-    │                                                                        │
-    │   [A1 TRACK · ARTIST]                      [DROPS]  [FRIENDS]  [SOUND] │
-    │   01:45  33 RPM  +0.0%                     [PRESSING PLANT]            │
-    └────────────────────────────────────────────────────────────────────────┘
-```
-
-</div>
+<p align="center">
+  <img src="docs/images/screens/home.png" width="250" alt="The listening room: a glass turntable with orange keys above a crate of record sleeves, and four icon tabs" />
+  &nbsp;
+  <img src="docs/images/screens/intro.png" width="250" alt="The intro: a record spinning on a platter, its grooves glowing orange, with RUNOUT in dot-matrix letters" />
+  &nbsp;
+  <img src="docs/images/screens/login.png" width="250" alt="Sign-in: a collage of records, the app mark, the headline 'Every record you own. One room to play them.', and Soulseek ID and password fields" />
+</p>
 
 ---
 
-## The Pitch
+## The room
 
-### In One Breath
-> **A free vinyl app:** your own albums become records you pull from a crate, drop on a glass turntable and play, lossless, and share with friends, with no server behind it.
+The home screen is a listening room, not a list. Your albums stand in a crate as sleeves. Flick to dig, tap one to slide its record out, and drag the disc onto the platter. It lands with a soft thud and a haptic tick.
 
-### In 30 Seconds
-Streaming turned music weightless and endless. Runout brings back the tactile ritual of vinyl records. Pick the folder where your audio files live: each album is pressed into a physical record on your shelf, with its real cover printed on the disc. Flick through your crate, slide a record out, drop it on a see-through glass turntable, and lower the needle. 
+The turntable is the player:
+- **START/STOP** lowers or lifts the needle.
+- **◀◀ ▶▶** skip within a side. Tap the record to flip it.
+- **Hold** the platter to wind it down.
+- **Drag the tonearm** to drop the needle anywhere on the side.
 
-It plays up to **24-bit/192 kHz** through a custom 32-bit float audio engine with studio EQ, AutoEq headphone correction, and bit-perfect USB output. Every Friday, ten free Creative Commons albums drop. Swap records with friends phone-to-phone or search profiles across public Nostr relays. There is no company server: everything lives on your phone, and the app costs nothing to run.
+The deck is drawn in code with Teenage Engineering details: keys with real travel in soft anodised orange under a glass coat, engraved labels, and a small dot-matrix screen. The platter turns slowly, with strobe dots that stand still at speed. Records always play at the speed they were recorded.
 
----
+Long-press any record to send it, see its details and licence, or remove it.
 
-## ⚡ What Makes Runout Different
+<p align="center">
+  <img src="docs/images/screens/record-menu.png" width="250" alt="A record pulled from the crate, with its menu: Put back, Send with audio, Details" />
+  &nbsp;
+  <img src="docs/images/screens/settings-sound.png" width="250" alt="Sound settings: Pure and Hi-res toggles, EQ presets as small hardware keys, and a 10-band EQ with orange slider caps" />
+</p>
 
-| Principle | Streaming Apps | Runout |
-| :--- | :--- | :--- |
-| **Ownership** | Rented access; tracks vanish when licenses expire | Offline from your own storage. What you own stays yours. |
-| **The Ritual** | Infinite algorithmic queues | One record on the platter. Sides end. You flip them. |
-| **Audio Path** | Lossy AAC/Opus, resampled by Android mixer | 32-bit float DSP sink; bit-perfect USB DAC output on Android 14+. |
-| **Backend** | Corporate servers tracking listening behavior | **Zero company servers.** Identity and search run on public Nostr relays. |
-| **Sharing** | Web URLs to streaming paywalls | Self-contained `.vinyl` archives verified byte-for-byte with SHA-256. |
+**Sound:**
+- **Pure** is about processing: no EQ, ReplayGain, limiter or crackle, so the decoded samples pass untouched. Bit-perfect to a USB DAC on Android 14 and later.
+- **Hi-res output** is about the format: each file plays at its own sample rate in 32-bit float instead of being cut to 16-bit. The two combine.
+- **Audio quality:** a chip on the home screen ("24/96 → Phone speaker") opens the whole chain, Track → Runout → Output, with each step's bit depth and rate.
+- A 10-band EQ with presets, AutoEq headphone profiles, ReplayGain, a limiter, and an optional "warmth".
 
----
+## Dig
 
-## 🎧 The Listening Room & Turntable
+Search albums on your phone or across Soulseek, FLAC only. Results are whole album folders, ranked by how well the folder matches. Each shows the format and the peer as three small marks: a dot that's green when an upload slot is free, the queue, and the speed.
 
-```
-                                      [Tonearm Base]
-                                      (Height Collar)
-                                      (Anti-Skate Dial)
-                                            \
-       ┌────────────────────────┐            \ [Chrome S-Arm]
-       │   STROBE PLATTER RIM   │             \ (Law of Cosines)
-       │  4 Rows · 180 Dots/Row │              \
-       │  ....................  │               [Headshell]
-       │  :   PICTURE DISC   :  │                    \
-       │  :  (Cover on Vinyl):  │                     ▼
-       │  :         ☉        :  │                (Diamond Stylus)
-       │  :..................:  │
-       └────────────────────────┘
-       
-       [DOT-MATRIX PIXEL DISPLAY]         [TACTILE PITCH FADER]
-       ┌────────────────────────┐         ┌──┐ -8%
-       │ A2 GLASS HOURS · INES  │         │  │
-       │ 01:23   33 RPM   +0.0% │         ├──┤ [Green Zero LED]
-       │ [Silkscreen Pixel Font]│         │  │
-       └────────────────────────┘         └──┘ +8%
-```
+Tap a folder to see its full track list, laid out like the back of a sleeve, before downloading anything.
 
-- **Glass Drive RG-1 Deck:** Modeled after classic direct-drive DJ decks. Frosted liquid glass plinth with real-time optical refraction shaders (Kyant Backdrop) on Android 13+.
-- **Picture Discs:** Albums with artwork are pressed as picture discs: full-color cover turns under grooved vinyl with a stationary lighting sheen.
-- **True Tonearm Tracking Geometry:** Solved with the **Law of Cosines** so the stylus traces an exact physical arc across track gaps from lead-in to runout groove.
-- **Integrated Pixel Screen:** An 8-bit dot-matrix display (Silkscreen OFL font) scrolls track titles at 1 dot/90 ms with time, RPM, and cue readouts.
-- **Physical Gestures:**
-  - Drag the needle anywhere to seek; tap to drop at lead-in.
-  - Hold the spinning disc to brake and wind down the music; release to spin up.
-  - Flip side when Side A ends; double-tap pitch fader to reset to zero detent.
-  - Real-time synthesised needle-drop thumps, surface crackle, and runout loops.
+<p align="center">
+  <img src="docs/images/screens/dig.png" width="250" alt="Dig results for 'moon safari': album folders by Air with format tags and peer marks" />
+  &nbsp;
+  <img src="docs/images/screens/dig-preview.png" width="250" alt="A folder preview: Moon Safari (1998) by Air, FLAC 24/96, with clean track names and a Download button" />
+</p>
 
----
+## Friday Drops
 
-## 🔊 Pro Sound Architecture
+Every Friday, ten Creative Commons albums from the Internet Archive's netlabel collection, the same ten for everyone. Three lights show your claims left this week.
 
-Runout routes audio through a **custom 32-bit float audio sink** (`DspAudioSink.kt`) placed directly in front of Android's `AudioTrack`. Unlike standard players, high-resolution audio (up to 24-bit/192 kHz) is never folded down to 16-bit.
+Only albums with FLAC files are picked. Tap a drop to see its tracks, listen to thirty seconds of any of them, and claim it into your crate.
 
-```
-Incoming Audio (FLAC, WAV, MP3, ALAC)
-                 │
-                 ▼
-       32-Bit Float Normalization
-                 │
-                 ▼
-       ReplayGain (Album / Track Mode)
-                 │
-                 ▼
-       Automatic Headroom Preamp (Prevents EQ Clipping)
-                 │
-                 ▼
-       10-Band Biquad Graphic EQ (ISO Bands 31Hz - 16kHz)
-       OR AutoEq Parametric Engine (Imports ParametricEQ.txt)
-                 │
-                 ▼
-       Warmth Analog Shelf (+1.5 dB @ 110Hz / -2 dB @ 9kHz)
-                 │
-                 ▼
-       1.5ms Look-Ahead Peak Limiter (-0.3 dBFS Ceiling)
-                 │
-                 ▼
-       Pure Mode / Bit-Perfect Output (Android 14+ USB DAC)
-```
+## Friends
 
----
+Chat with other Soulseek listeners, keep a friends list with online dots, and send a record as a card. A card reads as plain text in any Soulseek client; in Runout it's a sleeve with **Find on Soulseek**.
 
-## 🌐 Serverless Nostr Mesh & Identity
+<p align="center">
+  <img src="docs/images/screens/drops.png" width="250" alt="Friday Drops: a shelf of album sleeves with three claim lights" />
+  &nbsp;
+  <img src="docs/images/screens/friends-chat.png" width="250" alt="A chat with maya, including two record cards: Night Drive and Moon Safari" />
+</p>
 
-Runout has **no accounts database and no central server**. Identity and social features are powered by public **Nostr relays**:
+## First run
 
-```
-Phone A (@abhi·7F3A)                      Public Nostr Relays
-┌────────────────────────┐              ┌──────────────────────┐
-│ Generates secp256k1 key│              │   relay.damus.io     │
-│ Signs Kind 33760 Event ├─────────────►│   nos.lol            │
-│ (Profile + 600 albums) │              │   relay.primal.net   │
-└────────────────────────┘              └──────────┬───────────┘
-                                                   │
-Phone B (Search "abhi")                            │
-┌────────────────────────┐                         │
-│ Query prefix tag: abhi ├─────────────────────────┘
-│ Validates BIP-340 sig  │
-│ Renders Friend's shelf │
-└────────────────────────┘
-```
+1. A short intro, then sign in with your **Soulseek ID**. Soulseek has no sign-up page: a new ID is created the first time you sign in with it, and the ⓘ explains how. You stay signed in; credentials are kept with Android Keystore.
+2. Rather not? **Skip, listen offline** needs only a folder of FLAC albums.
+3. Each choice moves on by itself: a download folder, whether to share a folder (with a clear warning that it becomes public), and whether to stay online in the background.
 
-- **Cryptographic Keys:** Local 256-bit private key (`nsec1...`). Back up your key to move to a new phone.
-- **BIP-340 Schnorr Signatures:** In-tree pure-Kotlin implementation verified against Bitcoin test vectors.
-- **Kind 33760 Profiles:** Replaceable signed events holding your username, display name, color theme, and shelf catalog (up to 600 albums).
-- **Tag Prefix Search:** Relays index username character prefixes, enabling instant $O(1)$ search queries without a database.
-- **Collision-Resistant Handles:** Unique 4-character public key suffix (`@abhi·7F3A`) prevents name-squatting without centralized registration.
+<p align="center">
+  <img src="docs/images/screens/setup-share.png" width="250" alt="Setup: 'Share a folder?' with a caution note that the folder becomes public, a Share a folder button and Skip" />
+  &nbsp;
+  <img src="docs/images/screens/setup-rhythm.png" width="250" alt="Setup: 'When should you stay online?' with two tappable cards, the selected one tinted" />
+</p>
 
----
+## Repair local albums
 
-## 📦 The `.vinyl` Package Format
+If albums are missing, Settings › Library › **Repair local albums** rebuilds the shelf from your folder and lists every file Runout couldn't read, with the reason (an MP3 renamed to `.flac`, a damaged or cut-off FLAC). Runout only reads your folder, so it never changes the files.
 
-Music travels between phones as a single, self-contained **`.vinyl` archive**:
+## FLAC only
 
-```text
-record.vinyl (ZIP Container)
-├── manifest.json       # Metadata, credits, tracklist, license, side splits
-├── sleeve.jpg          # High-resolution square cover art
-├── checksums.json      # SHA-256 digest of every audio file
-└── audio/              # Original, untouched audio bitstreams
-    ├── 01_track.flac
-    └── 02_track.flac
-```
+FLAC is the rule for music everywhere: scanning, imports, downloads, sharing and playback. Renaming an MP3 to `.flac` does not get it in. Artwork, record containers and the turntable's synthesised sounds are fine.
 
-- **Rights-Safe Sharing:**
-  - **Audio travels** for personal original pressings (*"I made this music"*) and Creative Commons releases.
-  - **Cards travel** for commercial albums: friends receive the 3D sleeve, vinyl design, notes, and tracklist without copyrighted audio.
-- **SHA-256 Verification:** Every incoming audio file is validated against its cryptographic checksum. Corrupted files are refused.
-- **Hardened:** Zip-slip path traversal defenses, path sanitization, and a 4.0 GB size ceiling.
+## Install
 
----
+Download the APK and its `.sha256` from the [0.5.1 release](https://github.com/Somchandra17/runout/releases/tag/v0.5.1-dev.1) and check the checksum:
 
-## 🏭 Pressing Plant & Friday Drops
-
-### The Pressing Plant
-- Assemble up to **40 tracks** from your library into balanced ~22-minute vinyl sides.
-- Procedural sleeve generator with 6 geometric styles (*Orbit, Stripes, Bloom, Grid, Sunset, Type*) or custom photos.
-- 6 vinyl formulations: *Black, Solid Colour, Clear Translucent, Splatter, Marble, and Picture Disc*.
-- Honest audio labeling (`FLAC · 24-bit · 96 kHz`, `LOSSLESS MIX`, or `MIXED`).
-
-### Friday Drops
-- **10 free albums drop every Friday** from Internet Archive's netlabel collection.
-- **Deterministic Derivation:** The calendar week number seeds a deterministic PRNG. Every phone on Earth derives the exact same 10 albums without a server.
-- **Claim Allowance:** Claim up to **3 albums per week** with direct FLAC downloads.
-
----
-
-## 🗺️ Project Structure
-
-```text
-.
-├── app/                              # Android Application Module
-│   ├── src/main/java/app/runout/
-│   │   ├── account/                  # BIP-340 Schnorr, NIP-19 Bech32, Nostr relays
-│   │   ├── drops/                    # Friday Drops deterministic engine & IA client
-│   │   ├── library/                  # SAF scanner, FLAC/MP3/WAV tag readers, covers
-│   │   ├── model/                    # Album, Track, VinylStyle, AudioQuality, Sides
-│   │   ├── net/                      # Polite HTTP client with custom User-Agent
-│   │   ├── playback/                 # MediaSessionService, Deck physics, synthesised SFX
-│   │   ├── pressing/                 # Pressing Plant & generative sleeve patterns
-│   │   ├── sharing/                  # .vinyl archive pack/unpack & SHA-256 checks
-│   │   ├── social/                   # Friends list, card parser, shelf sync
-│   │   ├── sound/                    # 32-bit float DSP sink, 10-band EQ, AutoEq, Pure
-│   │   └── ui/                       # Compose listening room, turntable, crate, panels
-│   └── src/test/                     # 12 Robolectric test suites (106 unit tests)
-├── docs/                             # Comprehensive Documentation Hub
-│   ├── HANDBOOK.md                   # Complete, unabridged project handbook
-│   ├── ARCHITECTURE.md               # Technical architecture & subsystem design
-│   ├── TURNTABLE.md                  # Glass Drive RG-1 anatomy & tonearm math
-│   ├── SOUND.md                      # 32-bit float DSP engine & filter equations
-│   ├── SHARING-AND-NOSTR.md          # Serverless Nostr identity & relay protocol
-│   ├── RECORD-FORMAT.md              # .vinyl package format specification
-│   ├── PRESSING-AND-DROPS.md         # Pressing Plant & Friday Drops algorithm
-│   ├── BUILDING.md                   # Build prerequisites, tests, and CI guide
-│   └── Runout-Project-Handbook.txt   # Original project handbook text file
-├── release/                          # Standalone Release Deliverables
-│   ├── Runout-0.3.0.apk              # Signed sideloadable APK (26.9 MB)
-│   ├── SHA256SUMS.txt                # Checksum verification file
-│   ├── RELEASE_NOTES.md              # Release highlights & changelog
-│   └── README.md                     # Installation & sideloading instructions
-├── .github/
-│   ├── workflows/ci.yml              # GitHub Actions CI (Robolectric & Lint)
-│   ├── workflows/release.yml         # Tag-driven release APK packaging
-│   └── ISSUE_TEMPLATE/               # Bug & feature report templates
-├── CHANGELOG.md                      # Keep a Changelog version history
-├── CONTRIBUTING.md                   # Contributor guide & commit conventions
-├── LICENSE                           # MIT License + third-party notices
-└── build.gradle.kts                  # Root Gradle configuration
-```
-
----
-
-## 📖 Documentation Hub
-
-| Document | Description |
-| :--- | :--- |
-| [**Project Handbook**](docs/HANDBOOK.md) | Complete guide covering philosophy, walkthrough, features, and limits. |
-| [**Architecture**](docs/ARCHITECTURE.md) | Deep dive into the DSP float sink, SAF storage, and state machines. |
-| [**Turntable Mechanics**](docs/TURNTABLE.md) | Tonearm geometry (Law of Cosines), strobe platter, and pixel display. |
-| [**Sound Engine**](docs/SOUND.md) | 32-bit float pipeline, 10-band biquad EQ, AutoEq, and bit-perfect USB. |
-| [**Nostr & Identity**](docs/SHARING-AND-NOSTR.md) | BIP-340 Schnorr signatures, relay events, and prefix search. |
-| [**`.vinyl` Specification**](docs/RECORD-FORMAT.md) | Package format, manifest schema, SHA-256 checks, and rights rules. |
-| [**Pressing & Drops**](docs/PRESSING-AND-DROPS.md) | Generative sleeve designs, vinyl formulations, and weekly drop math. |
-| [**Building & Testing**](docs/BUILDING.md) | Gradle build targets, Robolectric test suites, and live relay checks. |
-
----
-
-## 🛠️ Build from Source
-
-### Prerequisites
-- **JDK 17+** (OpenJDK 17 or 21 recommended)
-- **Android SDK** with Platform 36 (`compileSdk = 36`, `minSdk = 28`)
-
-### Build Commands
 ```bash
-# Clone the repository
-git clone https://github.com/Abhiroop1122/runout.git
-cd runout
-
-# Build Debug APK
-./gradlew assembleDebug
-
-# Build Prototype Release APK (pre-signed with debug key)
-./gradlew assembleRelease
-# Output: app/build/outputs/apk/release/app-release.apk
-
-# Run the complete Robolectric test suite (106 tests across 12 suites)
-./gradlew testDebugUnitTest
-
-# Run live integration check against public Nostr relays
-./gradlew testDebugUnitTest -Prunout.live=true
+sha256sum -c Runout-0.5.1-development.apk.sha256
 ```
 
----
+The development build installs as **Runout Dev** (`app.runout.dev`), alongside the original Runout app, with its own crate and account.
 
-## 📊 Quality & Test Suites
+0.5.1 installs over 0.5.0. It is signed with a different debug certificate from 0.4.x, so **uninstall Runout Dev 0.4.x first**. That clears only Runout Dev's own data: pick your music folder and sign in again. Your music files aren't touched. Android 9 or newer, on ARM64, ARMv7, x86-64 and x86.
 
-Runout maintains a strict testing standard with **12 test suites, 106 unit tests, and 0 Android Lint errors**:
+## Soulseek, privacy and staying connected
 
-```text
-✓ FolderScanTest         SAF document provider walking, hidden file filtering
-✓ TagReaderTest          Native FLAC/MP3/WAV binary header parsing & cover art
-✓ RecordModelTest        Vinyl side partition algorithm, audio quality attribution
-✓ DspTest                Biquad filter responses at 44.1/96/192kHz, headroom, Pure mode
-✓ AudioOutputTest        32-bit float audio sink buffer conversion, bit-identical passthrough
-✓ TurntableDeckTest      Tonearm law-of-cosines tracking arc, RPM speed, pixel screen text
-✓ SharingTest            .vinyl zip extraction, SHA-256 integrity, zip-slip defense
-✓ AccountsTest           BIP-340 Schnorr test vectors, NIP-19 Bech32, mock relay WebSockets
-✓ FriendsTest            Friend shelf synchronization, mutual record detection
-✓ PressingPlantTest      Generative sleeve patterns, track quotas, mixed-source labeling
-✓ FridayDropsTest        Deterministic week calculation, Internet Archive API parsing
-✓ ListeningRoomUiTest    Responsive Compose UI rendering in portrait & landscape
+- **What Soulseek can and can't do:**
+  - It has no password reset.
+  - An unused name creates an account, including a mistyped one.
+  - Signing in disconnects any other client using the same ID.
+  - Its protocol does not encrypt credentials or private messages.
+- **What Runout sends:** there is no Runout account server, and Soulseek credentials are never sent to the Internet Archive.
+- **Losing the network:** a temporary loss keeps your account and reconnects automatically. App-only mode pauses an idle connection in the background and resumes when you return. If the same ID connects elsewhere, automatic retries stop until you choose **Reconnect**.
+- **Sharing:** only the one folder you choose is shared, and only its validated FLAC files.
+- **Background mode:** optional. It keeps messages and sharing alive with an ongoing notification and a Disconnect action.
+- **Downloads:** they land in a folder you pick. They stay readable by other apps and survive uninstalling Runout.
+
+## Existing installations
+
+The FLAC migration keeps your original music files and backs up changed library indexes as `*.json.before-flac`. Non-FLAC music disappears from Runout, but valid FLAC tracks in mixed albums remain. Records made with the old Pressing Plant stay playable; the Pressing Plant itself is gone.
+
+Nostr connections and profile publishing no longer start. Legacy keys, friend data and `.vinyl` records stay stored locally. Nostr identities are not converted into Soulseek identities.
+
+## Build and verify
+
+The app is Kotlin, Compose and Media3. A pinned MIT Rust library handles Soulseek behind a JNI bridge, built for ARM64, ARMv7, x86-64 and x86, with Android 9+ support and 16 KiB page alignment.
+
+Requirements: JDK 21, Android SDK 36, Rust 1.91.0, and Android NDK r27d or newer. See [the build guide](docs/BUILDING.md).
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug
+cargo +1.91.0 test --manifest-path native/Cargo.toml --workspace --lib --locked
+# With an Android device or emulator attached:
+./gradlew connectedDebugAndroidTest
 ```
 
----
+Tests use local fixtures and test servers. The Android integration test runs the packaged JNI library against two real local peers: login, FLAC search, folder browsing, file transfer, shared-file descriptors, private messages and acknowledgements. It never creates a public Soulseek account. The screenshots in this README come from the Robolectric UI tests, rendered with made-up data.
 
-## 🗺️ Roadmap
+## Contributing
 
-- [x] **v0.1.0:** Listening room, SAF folder scan, 3D crate, spinning turntable, synthesized SFX.
-- [x] **v0.2.0:** 32-bit float audio sink, 10-band EQ, AutoEq import, Pure mode, Pressing Plant, Friday Drops.
-- [x] **v0.3.0:** Glass Drive RG-1 deck, picture discs, dot-matrix pixel screen, Nostr mesh accounts, SHA-256 packages.
-- [ ] **Direct WebRTC Transfers:** Browser/phone direct p2p transfers with Nostr relay handshakes.
-- [ ] **QR Code Friend Swap:** Scan personal QR code in person to swap friend cards offline.
-- [ ] **Headphone-Specific Profiles:** Auto-switching EQ curves based on connected Bluetooth/USB device.
-- [ ] **Google Play Store Release:** Production signing, Play Protect verification, rights review.
+Start with the [contributor guide](CONTRIBUTING.md), the [architecture map](docs/ARCHITECTURE.md) and the [developer notes](docs/DEVELOPMENT.md). The UI follows a recorded design interview: [`docs/design/UI-REDESIGN.md`](docs/design/UI-REDESIGN.md) lists every agreed change and its status. A [GitHub Actions template](.github/workflows-templates/README.md) builds the native libraries and runs the JVM tests and lint.
 
----
+## Distribution status
 
-## 📜 License
+This is a development build. Test builds identify themselves with Soulseek's documented experimental client version. A public production release needs an appropriate client identifier and production signing. Peer availability and network conditions affect search and transfers.
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full details.
+## License and credits
 
-- **Inter Font:** SIL Open Font License 1.1 (`app/src/main/assets/licenses/Inter-OFL.txt`)
-- **Silkscreen Pixel Font:** SIL Open Font License 1.1 (`app/src/main/assets/licenses/Silkscreen-OFL.txt`)
-- **AndroidX Media3 & Compose:** Apache License 2.0
-- **Kyant Backdrop:** Apache License 2.0
-- **OkHttp:** Apache License 2.0
+Runout is MIT licensed; original authorship is preserved in [LICENSE](LICENSE). Soulseek support vendors [soulseek-rs-lib v19.1.0](https://github.com/michel/soulseek-rs/releases/tag/v19.1.0), with its MIT notice and documented integration changes under [native/](native/README.md). Native dependency notices are bundled in the APK.
 
----
+[Seeker](https://github.com/jackBonadies/SeekerAndroid), [Soulseek.NET](https://github.com/jpdillingham/Soulseek.NET) and the [Nicotine+ protocol documentation](https://nicotine-plus.org/doc/SLSKPROTOCOL.html) informed the investigation; their GPL implementations are not copied into Runout.
 
-<div align="center">
-Built with 🎧 for the love of vinyl records by <a href="https://github.com/Abhiroop1122">Abhiroop</a>
-</div>
+Inter and Silkscreen use the SIL Open Font License. AndroidX, Media3, Compose, OkHttp and Kyant Backdrop keep their own notices. Internet Archive albums keep their credited Creative Commons licences. Soulseek downloads are not automatically marked as original or openly licensed music.

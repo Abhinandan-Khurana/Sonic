@@ -88,7 +88,7 @@ class RecordModelTest {
         assertEquals(DiscStyle.MARBLE, app.runout.ui.discLookFor(album(disc = DiscStyle.MARBLE)).style)
         assertEquals(DiscStyle.PICTURE, app.runout.ui.discLookFor(album(disc = DiscStyle.PICTURE)).style)
         assertNull(app.runout.ui.discLookFor(album()).style)
-        // A record with a cover is a picture disc: the cover turns with the platter.
+        // A cover with no chosen disc style presses a picture disc, as in the original room.
         assertEquals(DiscStyle.PICTURE, app.runout.ui.discLookFor(album().copy(coverPath = "/covers/x.jpg")).style)
         assertEquals(DiscStyle.SPLATTER, app.runout.ui.discLookFor(album(disc = DiscStyle.SPLATTER).copy(coverPath = "/covers/x.jpg")).style)
     }

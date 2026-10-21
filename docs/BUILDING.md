@@ -1,108 +1,73 @@
-# Building & Testing Runout
+# Building and testing Runout 0.4
 
-This guide outlines how to build, test, and package **Runout** from source.
+## Prerequisites
 
----
+Use Linux with Bash, JDK 21, Android SDK platform 36, Android build tools, Rust 1.91.0 through rustup, and Android NDK r27d (27.3.13750724) or newer. The Gradle wrapper supplies Gradle 8.14.3.
 
-## 1. Prerequisites
-
-Ensure your development environment meets the following requirements:
-- **Java Development Kit (JDK):** Version 17 or higher (tested on OpenJDK 17 & 21).
-- **Android SDK:**
-  - `compileSdk`: 36 (Android 16)
-  - `minSdk`: 28 (Android 9.0 Pie)
-  - `targetSdk`: 36
-- **Build Tools:** Android SDK Platform-Tools 36+
-- **Gradle:** 8.14 (managed via the included `gradlew` wrapper)
-- **Kotlin:** 2.3.21 with Compose Compiler Plugin
-
----
-
-## 2. Quick Start Commands
-
-### Clone Repository
 ```bash
-git clone https://github.com/Abhiroop1122/runout.git
-cd runout
+export JAVA_HOME=/path/to/jdk-21
+export ANDROID_HOME=/path/to/Android/Sdk
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.3.13750724"
+rustup toolchain install 1.91.0 --profile minimal
 ```
 
-### Build Debug APK
+Install SDK platform `platforms;android-36`, build tools, and the selected NDK with your SDK manager. The native script adds the four Android Rust targets using rustup. Set `CARGO` and `RUSTUP` if they are outside their normal `$HOME/.cargo/bin` locations.
+
+## Build
+
 ```bash
 ./gradlew assembleDebug
-# Output APK location:
-# app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Build Prototype Release APK
-```bash
-./gradlew assembleRelease
-# Output APK location:
-# app/build/outputs/apk/release/app-release.apk
-```
+`preBuild` invokes `scripts/build-native.sh`. Native artifacts go into `app/build/generated/soulseekJni/`, then Gradle packages them into the APK. Do not distribute an APK assembled with the native task excluded.
 
-> **Note on Signing:** Prototype release builds are pre-configured to sign with the debug key so they can be directly sideloaded onto any test phone without keystore setup.
+The script pins Rust 1.91.0 and the Cargo lockfile, targets Android API 28, and builds arm64-v8a, armeabi-v7a, x86_64 and x86. All native libraries use 16 KiB load-segment alignment. Native build artifacts and local SDK settings are ignored by Git.
 
----
+Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app, because the supplied v0.3 APK uses a different signing key. The original app's private data are never removed to install this build.
 
-## 3. Running the Test Suite
+Release APK: `./gradlew assembleRelease`, output `app/build/outputs/apk/release/app-release.apk`. As in the prototype, release signing currently uses the local debug key. Supply your production signing configuration before public release. Matching the existing app's signing key is required for an update that preserves its private data.
 
-Runout features a comprehensive test suite of **12 suites and 106 unit tests** executed via **Robolectric** (the actual Android 15 framework running on the host JVM):
+## Tests
 
 ```bash
-./gradlew testDebugUnitTest
+cargo +1.91.0 test --manifest-path native/Cargo.toml --workspace --lib --locked
+./gradlew testDebugUnitTest lintDebug
+./gradlew connectedDebugAndroidTest
 ```
 
-### Test Suite Map
+The first command runs the core and adapter's local unit tests. It intentionally excludes upstream integration suites requiring a separate Soulfind installation. Repository tests inject a transport seam, use real Room persistence and document-provider storage, and verify authentication gates, durable message acknowledgements, replay deduplication, account isolation and validated FLAC publication.
 
-| Test Suite | File Location | Key Verifications |
-| :--- | :--- | :--- |
-| **`FolderScanTest`** | `app/src/test/java/app/runout/FolderScanTest.kt` | Tests folder scanning via simulated Storage Access Framework content providers. |
-| **`TagReaderTest`** | `app/src/test/java/app/runout/TagReaderTest.kt` | Tests native parsing of FLAC, MP3, and WAV headers, streaminfo, and embedded art. |
-| **`RecordModelTest`**| `app/src/test/java/app/runout/RecordModelTest.kt` | Validates vinyl side division, double LP rules, and quality attribution. |
-| **`DspTest`** | `app/src/test/java/app/runout/DspTest.kt` | Measures biquad filter frequency responses at 44.1, 96, and 192 kHz, headroom math, and Pure mode bit identity. |
-| **`AudioOutputTest`**| `app/src/test/java/app/runout/AudioOutputTest.kt` | Tests 16-bit and 24-bit PCM passthrough through the float audio sink end-to-end. |
-| **`TurntableDeckTest`**| `app/src/test/java/app/runout/TurntableDeckTest.kt` | Validates tonearm law-of-cosines geometry, RPM math, strobe frequencies, and pixel screen text rendering. |
-| **`SharingTest`** | `app/src/test/java/app/runout/SharingTest.kt` | Tests `.vinyl` zip creation, SHA-256 integrity verification, and zip-slip path traversal rejection. |
-| **`AccountsTest`** | `app/src/test/java/app/runout/AccountsTest.kt` | Runs BIP-340 test vectors, tests local WebSocket mock relays, and validates NIP-19 key encoding. |
-| **`FriendsTest`** | `app/src/test/java/app/runout/FriendsTest.kt` | Validates friend shelf merging, mutual record detection, and card imports. |
-| **`PressingPlantTest`**| `app/src/test/java/app/runout/PressingPlantTest.kt` | Validates sleeve pattern generators, track quotas, and mixed-quality attribution. |
-| **`FridayDropsTest`**| `app/src/test/java/app/runout/FridayDropsTest.kt` | Tests deterministic week calculations against recorded Internet Archive API responses. |
-| **`ListeningRoomUiTest`**| `app/src/test/java/app/runout/ListeningRoomUiTest.kt` | Tests Compose UI layout rendering in both portrait and landscape orientations. |
+The device integration test uses the actual packaged native library and a central test server bound to device loopback. Two embedded peers search, browse, share and transfer a real FLAC fixture and exchange private messages. Public Soulseek servers and accounts are never used by these tests.
 
----
+Compose screenshots are written to `app/build/outputs/roborazzi/`. Unit reports are under `app/build/reports/tests/`; Android integration reports are under `app/build/reports/androidTests/`; lint reports are under `app/build/reports/lint-results-debug.html`.
 
-## 4. Testing Against Real Public Relays (`LiveRelayCheck`)
+The legacy `LiveRelayCheck` remains opt-in for historical Nostr code and is skipped by default. It is unrelated to the production Soulseek session.
 
-To verify live WebSocket connectivity against public Nostr relays without mocking:
+## Continuous integration
+
+[The CI template](../.github/workflows-templates/README.md) runs native tests, builds all ABIs, runs JVM tests/lint and uploads reports and APKs on Ubuntu. It is not active in this fork yet: the publishing login lacks GitHub's separate workflow-write permission. Copy the template into `.github/workflows/android.yml` using an authorized login to enable it. Device instrumentation remains an explicit check in the release process.
+
+## Android UI flows and explicit live checks
+
+Install pinned Argent 0.29.0 outside the app and use the [checked-in flows](../.argent/README.md). These cover offline navigation, guided sign-in, streaming discovery and folder-picker recovery. Inspect each flow's starting state before running it. For two emulators, assign distinct ADB and gRPC ports; an explicitly configured gRPC port needs `-grpc-use-token` for Argent's authenticated transport discovery.
 
 ```bash
-./gradlew testDebugUnitTest -Prunout.live=true
+argent flow run .argent/flows/offline-navigation.yaml --device emulator-5554
+# Requires an explicitly supplied test account, not ordinary CI:
+argent flow run .argent/flows/soulseek-setup.yaml --device emulator-5554
+argent flow run .argent/flows/live-discovery.yaml --device emulator-5554
+argent flow run .argent/flows/picker-recovery.yaml --device emulator-5554
 ```
 
-This publishes a temporary, throwaway test event to `relay.damus.io`, `nos.lol`, and `relay.primal.net` (configured to auto-expire after 10 minutes) and queries it back by username prefix.
+`DiscoveryPerformanceTest` runs on Android with 10,000 local tracks and 5,000 remote files, reporting conservative warm p95 timings to `RunoutBenchmark`. Test both API 35 and API 37 when available. Device timing excludes fixture/index construction and network time; the release report identifies the measured environment.
 
----
+`SoulseekLiveNetworkTest` skips unless explicitly enabled. Never put a real username/password in runner arguments or source. Create ignored `.argent/secrets.env` with `ARGENT_SECRET_SLSK_USERNAME` and `ARGENT_SECRET_SLSK_PASSWORD`, set mode 0600, and use the helper after installing the debug and Android test APKs:
 
-## 5. Visual Screenshot Testing (Roborazzi)
-
-Runout uses **Roborazzi** to capture and verify exact UI renders without requiring a physical device:
 ```bash
-./gradlew recordRoborazziDebug
-# Screenshots are saved to:
-# app/build/outputs/roborazzi/
+python3 scripts/check-live-soulseek.py --device emulator-5554 --seconds 900
+adb -s emulator-5554 logcat -d -s RunoutLive:I '*:S'
 ```
 
-To compare against baseline reference screenshots:
-```bash
-./gradlew verifyRoborazziDebug
-```
+The helper copies only those two values into private app storage through stdin, runs the opt-in probe and removes the device file in `finally`. An explicitly requested probe with a missing device account file fails rather than reporting a skipped success. Metrics contain connection state, counts and time to first batch; the test downloads nothing and sends no messages. Ordinary CI still uses local peers only.
 
----
-
-## 6. Android Lint Checks
-
-Run the static code analyzer:
-```bash
-./gradlew lintDebug
-```
-*Current baseline status: 0 errors.*
+Keep one client per real Soulseek ID: another emulator, Seeker or a second probe can displace the session under test. Do not run instrumentation while interacting with the same app through Argent, because instrumentation restarts its process. Remove local secrets and sign out of test devices when finished. Live account checks and published APKs must never contain test credentials.

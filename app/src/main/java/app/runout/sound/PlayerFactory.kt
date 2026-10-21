@@ -24,18 +24,20 @@ object PlayerFactory {
         outputSink: ((Context, Boolean) -> AudioSink)? = null,
     ): ExoPlayer {
         val hiRes = engine.settings.value.hiResOutput
+        val pure = engine.settings.value.pure
+        val floatOut = hiRes && !pure
         val renderers = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioOutputPlaybackParams: Boolean,
             ): AudioSink {
-                val base = outputSink?.invoke(context, hiRes) ?: DefaultAudioSink.Builder(context)
-                    .setEnableFloatOutput(hiRes)
-                    // Speed (platter hold, 45 rpm) via Android's AudioTrack, which also works in the float path.
+                val base = outputSink?.invoke(context, floatOut) ?: DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(floatOut)
+                    // Speed (the platter-hold wind-down) via Android's AudioTrack, which also works in the float path.
                     .setEnableAudioOutputPlaybackParameters(true)
                     .build()
-                return DspAudioSink(base, engine, floatOutput = hiRes)
+                return DspAudioSink(base, engine, floatOutput = floatOut)
             }
         }
         return ExoPlayer.Builder(context, renderers)

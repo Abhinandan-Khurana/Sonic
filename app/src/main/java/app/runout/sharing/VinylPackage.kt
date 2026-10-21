@@ -1,6 +1,7 @@
 package app.runout.sharing
 
 import app.runout.library.AlbumJson
+import app.runout.library.FlacPolicy
 import app.runout.model.Album
 import app.runout.social.Profile
 import app.runout.social.ShelfItem
@@ -30,6 +31,21 @@ object VinylPackage {
     private const val SLEEVE = "sleeve.jpg"
     private const val CHECKSUMS = "checksums.json"
     private const val MAX_TOTAL_BYTES = 4L * 1024 * 1024 * 1024
+    private const val MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+    private const val MAX_CHECKSUM_BYTES = 1024 * 1024
+
+    /** Zip entry sizes may be unknown or untrusted: bound the actual inflated bytes. */
+    private fun readJson(zip: ZipInputStream, limit: Int): JSONObject {
+        val bytes = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val n = zip.read(buffer, 0, minOf(buffer.size, limit - bytes.size() + 1))
+            if (n < 0) break
+            if (n > limit - bytes.size()) throw Invalid("Record metadata is too large")
+            bytes.write(buffer, 0, n)
+        }
+        return JSONObject(bytes.toString(Charsets.UTF_8.name()))
+    }
 
     enum class Kind { ALBUM, CARD, FRIEND }
 
@@ -59,15 +75,33 @@ object VinylPackage {
         shelf: List<ShelfItem> = emptyList(),
         sleeve: File? = null,
         audio: List<Pair<String, () -> InputStream?>> = emptyList(),
+        sources: List<String> = emptyList(),
     ) {
+        if (kind != Kind.ALBUM && audio.isNotEmpty()) throw Invalid("Only album records may contain audio")
+        if (kind == Kind.ALBUM && (album == null || album.tracks.isEmpty())) throw Invalid("Record has no FLAC tracks")
+        audio.forEach { (name, open) ->
+            if (!name.startsWith("audio/") || !FlacPolicy.isFlacName(name)) throw Invalid("Only FLAC audio can travel with a record")
+            val valid = open()?.use { FlacPolicy.isValid(it) } == true
+            if (!valid) throw Invalid("“${name.substringAfterLast('/')}” is not valid FLAC audio")
+        }
+        if (kind == Kind.ALBUM && album!!.tracks.any { t -> audio.none { it.first == t.fileName } })
+            throw Invalid("Record is missing audio files")
         ZipOutputStream(out).use { zip ->
             val manifest = JSONObject().apply {
                 put("format", FORMAT)
                 put("app", "Runout")
                 put("kind", kind.name)
-                put("from", from.toJson())
-                album?.let { put("album", AlbumJson.toJson(it, includeLocalPaths = false)) }
+                // Legacy profile usernames may be login identities, not public display names.
+                put("from", from.copy(username = null).toJson())
+                album?.let {
+                    put("album", AlbumJson.toJson(it, includeLocalPaths = false).apply {
+                        remove("source")
+                        remove("from")
+                        remove("notes")
+                    })
+                }
                 if (shelf.isNotEmpty()) put("shelf", JSONArray().apply { shelf.forEach { put(it.toJson()) } })
+                if (sources.isNotEmpty()) put("sources", JSONArray().apply { sources.forEach { put(it) } })
             }
             zip.putNextEntry(ZipEntry(MANIFEST))
             zip.write(manifest.toString().toByteArray())
@@ -121,12 +155,14 @@ object VinylPackage {
                 val name = entry.name
                 if (entry.isDirectory) continue
                 when {
-                    name == MANIFEST -> manifest = JSONObject(zip.readBytes().toString(Charsets.UTF_8))
-                    name == CHECKSUMS -> checksums = JSONObject(zip.readBytes().toString(Charsets.UTF_8))
+                    name == MANIFEST -> manifest = readJson(zip, MAX_MANIFEST_BYTES)
+                    name == CHECKSUMS -> checksums = readJson(zip, MAX_CHECKSUM_BYTES)
                     name == SLEEVE || name.startsWith("audio/") -> {
                         val target = File(destDir, name).canonicalFile
                         // Refuse anything that tries to write outside the record's folder.
                         if (!target.path.startsWith(canonicalDest.path + File.separator)) throw Invalid("Unsafe entry $name")
+                        if (name.startsWith("audio/") && !FlacPolicy.isFlacName(name)) throw Invalid("Only FLAC audio can be imported")
+                        if (name in audio) throw Invalid("Duplicate audio entry $name")
                         target.parentFile?.mkdirs()
                         val md = MessageDigest.getInstance("SHA-256")
                         FileOutputStream(target).use { out ->
@@ -153,7 +189,8 @@ object VinylPackage {
         if (m.optInt("format", 0) > FORMAT) throw Invalid("Made by a newer version of Runout")
         val kind = runCatching { Kind.valueOf(m.getString("kind")) }.getOrElse { throw Invalid("Unknown record kind") }
         val from = Profile.fromJson(m.getJSONObject("from"))
-        val album = m.optJSONObject("album")?.let { AlbumJson.fromJson(it) }
+        // A sender's own-music declaration is not an ownership grant to the recipient.
+        val album = m.optJSONObject("album")?.let { AlbumJson.fromJson(it).copy(owned = false) }
         val shelfJson = m.optJSONArray("shelf") ?: JSONArray()
         val shelf = (0 until shelfJson.length()).map { ShelfItem.fromJson(shelfJson.getJSONObject(it)) }
         if (kind != Kind.FRIEND && album == null) throw Invalid("Record has no album")
@@ -161,12 +198,20 @@ object VinylPackage {
             val missing = album.tracks.filter { it.fileName !in audio }
             if (missing.isNotEmpty()) throw Invalid("Record is missing ${missing.size} audio files")
         }
+        // Every extracted audio entry needs its own checksum, not just those a sender lists.
+        if (audio.isNotEmpty() && (checksums == null || audio.keys.any { !checksums.has(it) }))
+            throw Invalid("Record is missing audio checksums")
         // Every file must match the checksum it was sent with: the audio arrives bit for bit.
         checksums?.let { sums ->
             for (name in sums.keys()) {
                 val got = digests[name] ?: throw Invalid("Record is missing ${name.substringAfter('/')}")
                 if (!got.equals(sums.getString(name), ignoreCase = true)) throw Invalid("“${name.substringAfter('/')}” arrived damaged. Ask for the record to be sent again.")
             }
+        }
+        if (kind != Kind.ALBUM && audio.isNotEmpty()) throw Invalid("Only album records may contain audio")
+        if (kind == Kind.ALBUM && album!!.tracks.isEmpty()) throw Invalid("Record has no FLAC tracks")
+        audio.forEach { (name, file) ->
+            if (!FlacPolicy.isValid(file)) throw Invalid("“${name.substringAfterLast('/')}” is not valid FLAC audio")
         }
         return Contents(kind, from, album, shelf, sleeve, audio)
     }

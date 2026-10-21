@@ -2,8 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Needed to ask Android 14+ for bit-perfect USB output in Pure mode -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -11,9 +15,11 @@
     <application
         android:name=".RunoutApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="${runoutLabel}"
         android:supportsRtl="true"
         android:theme="@style/Theme.Runout">
 
@@ -68,6 +74,18 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <service
+            android:name=".soulseek.SoulseekTransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".soulseek.SoulseekOnlineService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled persistent Soulseek peer session for incoming private messages and responding to FLAC share requests; visible notification with a disconnect action." />
+        </service>
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"

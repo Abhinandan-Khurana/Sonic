@@ -4,6 +4,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
+    id("androidx.room")
 }
 
 android {
@@ -14,11 +16,17 @@ android {
         applicationId = "app.runout"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 12
+        versionName = "0.5.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["runoutLabel"] = "@string/app_name"
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            manifestPlaceholders["runoutLabel"] = "Runout Dev"
+        }
         release {
             isMinifyEnabled = false
             // Prototype builds are signed with the debug key so they install directly.
@@ -35,6 +43,9 @@ android {
         compose = true
         buildConfig = true
     }
+
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/soulseekJni"))
+    sourceSets.getByName("androidTest").assets.srcDir("src/test/resources/fixtures")
 
     testOptions {
         unitTests {
@@ -71,12 +82,17 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.12.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-process:2.9.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.room:room-ktx:2.8.5")
+    ksp("androidx.room:room-compiler:2.8.5")
 
     implementation("androidx.media3:media3-exoplayer:1.9.4")
     implementation("androidx.media3:media3-session:1.9.4")
-    // WebSockets to public Nostr relays (accounts, profiles, search)
+    // Internet Archive, artwork, and retained legacy protocol tests.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Liquid glass (Apache 2.0)
@@ -92,5 +108,23 @@ dependencies {
     testImplementation("androidx.media3:media3-test-utils-robolectric:1.9.4")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("androidx.room:room-testing:2.8.5")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
+
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
+val buildSoulseekNative by tasks.registering(Exec::class) {
+    description = "Build the pinned Soulseek core and JNI bridge for Android."
+    group = "build"
+    workingDir = rootProject.projectDir
+    commandLine("bash", rootProject.file("scripts/build-native.sh").absolutePath)
+    inputs.file(rootProject.file("scripts/build-native.sh"))
+    inputs.files(rootProject.fileTree("native") { exclude("target/**") })
+    outputs.dir(layout.buildDirectory.dir("generated/soulseekJni"))
+}
+tasks.named("preBuild").configure { dependsOn(buildSoulseekNative) }

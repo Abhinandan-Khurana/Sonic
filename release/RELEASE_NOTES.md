@@ -1,50 +1,23 @@
-Runout 0.3.0 is a major evolutionary release bringing a complete visual and mechanical overhaul of the turntable, picture discs with album artwork printed directly onto the vinyl, an 8-bit dot-matrix pixel screen, decentralized user profiles over public Nostr relays, and SHA-256 verified `.vinyl` package transfers.
+Fixes from the first phones running 0.5.0, plus an audio-quality readout on the home screen.
 
-## Downloads
+## What changed
 
-| Platform / Asset | File | Size | Checksum (SHA-256) |
-| :--- | :--- | :---: | :--- |
-| **Android 9.0 or newer** | `Runout-0.3.0.apk` | 26.9 MB | `4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2` |
-| **Source Code (.zip)** | `Runout-0.3.0-source.zip` | 1.7 MB | `3d74b07230216d9d8fb2b8cc28d9b13e605ca3a6d12b77860ffa78ccbebd8b70` |
-| **Integrity Signatures** | `SHA256SUMS.txt` | 158 B | *See checksums below* |
+- **Albums no longer vanish after a reinstall.** One unreadable `.flac` made a scan roll back to the previous, empty shelf. A partial scan now keeps everything it read and saves it.
+- **Settings › Library › Repair local albums** rebuilds the shelf from your folder and lists each file it couldn't read, with the reason: an MP3 renamed to `.flac`, a damaged FLAC, a cut-off download. Your music files are never changed.
+- **Audio quality:** a chip on the home screen ("24/96 → Phone speaker") opens the chain Track → Runout → Output, each with its spec, and a verdict such as "Bit-perfect" or "Lossless, resampled to 48 kHz".
+- **Pure vs Hi-res output, explained:** Pure is about processing (nothing touches the samples); Hi-res is about the format (each file at its own rate in 32-bit float). They combine.
+- **Friday Drops are FLAC only.** This week is picked again.
+- **Downloads with Background usage off:** "Interrupted system call" now shows as a pause with the reason, Downloads links to App info, and the download continues when you come back to Runout.
+- **Dig:** a round search key. The filters sheet and Friends' New chat sheet shade the whole page.
+- **Home:** Crackle is a switch. In landscape the tab bar is at the bottom and nothing runs into the sleeves.
+- **Sign-in:** the titles no longer slide over the record collage when the keyboard opens.
 
-New here? Follow the [install and sideloading guide](https://github.com/Abhiroop1122/runout/blob/main/docs/HANDBOOK.md#16-project-files-installing-and-building).
+## Install
 
----
+Download **Runout-0.5.1-development.apk** and verify it with the attached SHA-256 file. It installs as **Runout Dev** (`app.runout.dev`) and updates 0.5.0 in place.
 
-## What's New in 0.3.0
+Coming from **0.4.x**? Uninstall it first: 0.5.x is signed with a different debug certificate. Uninstalling clears only Runout Dev's own data. Your music files stay where they are.
 
-### The Glass Turntable ("Glass Drive RG-1")
-- Rebuilt from the ground up inspired by classic direct-drive DJ decks.
-- Plinth crafted from frosted liquid glass with real optical refraction shaders (Kyant Backdrop) on Android 13+.
-- Platter rim featuring 4 rows of 180 rotating strobe dots.
-- S-shaped chrome tonearm with counterweight, anti-skate dial, and genuine tonearm arc geometry solved via the law of cosines.
-- Tactile pitch fader with ±8% adjustment, center zero-detent indicator light, and double-tap reset.
-- Real-time synthesised mechanical audio: needle drops, surface crackle loops, and runout groove thumps.
+## Verification and limits
 
-### Picture Discs
-- Every album with artwork is pressed as a picture disc: cover art rotates smoothly under the grooved vinyl texture with a stationary lighting sheen.
-- Dynamically rendered smooth groove bands reflecting actual track positions and durations.
-
-### Integrated Dot-Matrix Pixel Screen
-- Mint-green dots on dark smoked glass driven by the Silkscreen typography engine.
-- Real-time scrolling track metadata, playback timer, RPM speed indicator, and cue readouts.
-- TalkBack screen reader accessibility integration.
-
-### Decentralized Identity via Nostr Relays
-- Completely serverless account creation with local 256-bit private keys (`nsec1...`).
-- Public profiles and shelf catalogs published as signed kind-33760 events across public Nostr relays (`relay.damus.io`, `nos.lol`, `relay.primal.net`).
-- Prefix search powered by relay tag indexing with collision prevention via 4-character key suffixes (`@abhi·7F3A`).
-
-### Checksummed `.vinyl` Record Transfers
-- Every audio file within a `.vinyl` bundle is indexed with its SHA-256 fingerprint.
-- Hostile path traversals ("zip-slip") and corrupted audio files are detected and rejected on arrival.
-
----
-
-## Checksums (SHA-256)
-
-```text
-4655cf36f067b3b5eebf0b3cb8b4cd6c1f41d464aef59d99cf155f3adb4eb5c2  Runout-0.3.0.apk
-3d74b07230216d9d8fb2b8cc28d9b13e605ca3a6d12b77860ffa78ccbebd8b70  Runout-0.3.0-source.zip
-```
+This is a debug-signed development pre-release. The native Soulseek library is the one from 0.4.6, unchanged; the native fix for interrupted reads is in the source and arrives with the next native build. See the verification report for what was and wasn't tested.

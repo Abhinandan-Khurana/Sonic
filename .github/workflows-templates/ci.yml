@@ -1,33 +1,36 @@
-name: Android CI & Test Suite
-
+name: Android and Soulseek
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  test:
-    name: Unit Tests & Robolectric
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
+    timeout-minutes: 30
+    env:
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.13750724
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
-
-      - name: Grant Execute Permission to Gradlew
-        run: chmod +x gradlew
-
-      - name: Run Robolectric Unit Tests
-        run: ./gradlew testDebugUnitTest --stacktrace
-
-      - name: Run Android Lint
-        run: ./gradlew lintDebug
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Install native and Android prerequisites
+        run: |
+          rustup toolchain install 1.91.0 --profile minimal
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.3.13750724'
+      - name: Test the native core and adapter against local fixtures
+        run: cargo +1.91.0 test --manifest-path native/Cargo.toml --workspace --lib --locked
+      - name: Build all native ABIs, verify Android tests and lint, and package APK
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runout-build-and-reports
+          path: |
+            app/build/outputs/apk/
+            app/build/reports/

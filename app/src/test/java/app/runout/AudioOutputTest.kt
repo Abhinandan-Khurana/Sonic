@@ -17,6 +17,7 @@ import app.runout.sound.DspAudioSink
 import app.runout.sound.PlayerFactory
 import app.runout.sound.ReplayGainMode
 import app.runout.sound.SoundEngine
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -128,6 +129,21 @@ class AudioOutputTest {
         // The smallest 24-bit step survives: nothing was folded down to 16-bit.
         assertTrue(got[5] != 0f)
         assertEquals("24-bit · 96 kHz → 32-bit float", engine.status.value.label)
+    }
+
+    @Test
+    fun `Pure mode copies the original PCM bytes and does not convert them`() {
+        val engine = neutral().apply { update { it.copy(pure = true, eqEnabled = true, graphic = List(10) { 6f }) } }
+        val out = CapturingOutput(context)
+        val sink = DspAudioSink(out, engine, floatOutput = false)
+        val input = pcm16(0.5f, -0.5f, 0.25f, -0.25f)
+        val original = ByteArray(input.remaining())
+        input.duplicate().get(original)
+        sink.configure(pcmFormat(C.ENCODING_PCM_16BIT, 44_100, channels = 2), 0, null)
+        assertEquals(C.ENCODING_PCM_16BIT, out.format!!.pcmEncoding)
+        assertTrue(sink.handleBuffer(input, 0, 1))
+        assertArrayEquals(original, out.bytes.toByteArray())
+        assertFalse(engine.status.value.processing)
     }
 
     @Test

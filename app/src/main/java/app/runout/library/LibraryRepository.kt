@@ -3,6 +3,7 @@ package app.runout.library
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.edit
 import app.runout.model.Album
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,10 +27,33 @@ class LibraryRepository(
     private val scanner: LibraryScanner,
     private val artwork: ArtworkRepository,
     private val scope: CoroutineScope,
-    private val lookupCoversOnline: Boolean = true,
+    private val lookupCoversOnline: Boolean = false,
 ) {
     private val prefs = context.getSharedPreferences("library", Context.MODE_PRIVATE)
     private val cacheFile = File(context.filesDir, "library.json")
+    private val coverPrefs = context.getSharedPreferences("cover-lookup", Context.MODE_PRIVATE)
+    private val _coverLookupEnabled = MutableStateFlow(coverPrefs.getBoolean("enabled", lookupCoversOnline))
+    val coverLookupEnabled: StateFlow<Boolean> = _coverLookupEnabled.asStateFlow()
+    private val _coverLookupNoticePending = MutableStateFlow(run {
+        if (!coverPrefs.contains("policy-initialized")) {
+            val existing = prefs.contains(KEY_FOLDER) || listOf("library.json", "pressings.json", "received.json", "drops.json")
+                .any { File(context.filesDir, it).exists() } ||
+                context.getSharedPreferences("soulseek-setup", Context.MODE_PRIVATE).getBoolean("onboarded", false)
+            coverPrefs.edit(commit = true) { putBoolean("policy-initialized", true); putBoolean("notice-pending", existing) }
+        }
+        coverPrefs.getBoolean("notice-pending", false)
+    })
+    val coverLookupNoticePending: StateFlow<Boolean> = _coverLookupNoticePending.asStateFlow()
+
+    fun setCoverLookupEnabled(enabled: Boolean) {
+        coverPrefs.edit { putBoolean("enabled", enabled) }
+        _coverLookupEnabled.value = enabled
+    }
+
+    fun dismissCoverLookupNotice() {
+        coverPrefs.edit { putBoolean("notice-pending", false) }
+        _coverLookupNoticePending.value = false
+    }
 
     private val _albums = MutableStateFlow<List<Album>>(emptyList())
     val albums: StateFlow<List<Album>> = _albums.asStateFlow()
@@ -47,7 +71,7 @@ class LibraryRepository(
 
     init {
         scope.launch {
-            val cached = withContext(Dispatchers.IO) { AlbumJson.readList(cacheFile) }
+            val cached = withContext(Dispatchers.IO) { AlbumJson.readValidatedList(context, cacheFile) }
             if (_albums.value.isEmpty()) _albums.value = cached
             // Cached shelf but a folder that may have changed: refresh quietly.
             if (_folder.value != null && cached.isEmpty()) rescan()
@@ -60,17 +84,25 @@ class LibraryRepository(
         }
         prefs.edit().putString(KEY_FOLDER, uri.toString()).apply()
         _folder.value = uri
-        // A different folder: start from an empty shelf so old records don't linger.
-        _albums.value = emptyList()
+        // Keep the previous shelf until the selected root has actually been listed.
         return rescan()
     }
 
-    fun rescan(): Job? {
+    /**
+     * Rebuilds the shelf from the folder alone: forgets the saved index, so albums that are gone
+     * or broken drop off, and the report lists every file that couldn't be read and why. Music
+     * files are only read, never changed.
+     */
+    fun repair(): Job? = rescan(fresh = true)
+
+    fun rescan(fresh: Boolean = false): Job? {
         val tree = _folder.value ?: return null
         scanJob?.cancel()
         val job = scope.launch {
             _scan.value = ScanState.Scanning(ScanProgress(0, 0))
             _report.value = null
+            val previous = _albums.value
+            if (fresh) _albums.value = emptyList()
             val found = mutableListOf<Album>()
             val report = try {
                 scanner.scan(
@@ -93,14 +125,23 @@ class LibraryRepository(
             } catch (e: Throwable) {
                 ScanReport(0, 0, 0, found.size, emptyMap(), error = e.message ?: e.javaClass.simpleName)
             }
-            // The scan is the truth: drop records whose folders are gone.
-            _albums.value = sortShelf(found)
             _report.value = report
+            if (report.error != null && found.isEmpty()) {
+                // Nothing was listed: keep the shelf rather than empty it.
+                _albums.value = previous
+                _scan.value = null
+                return@launch
+            }
+            // A partial scan (some files unreadable, or the listing broke off) can't prove that the
+            // albums it didn't see were removed, so keep them next to everything it did read.
+            val partial = report.error != null || report.unreadable > 0
+            _albums.value = sortShelf(if (partial && !fresh) mergePartial(previous, found) else found)
             withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
 
-            if (lookupCoversOnline) {
+            if (coverLookupEnabled.value) {
                 val missing = _albums.value.filter { it.coverPath == null }
                 missing.forEachIndexed { i, album ->
+                    if (!coverLookupEnabled.value) return@forEachIndexed
                     _scan.value = ScanState.FindingCovers(i, missing.size)
                     val file = artwork.lookupOnline(album.id, album.artist, album.title)
                     if (file != null) {
@@ -121,6 +162,21 @@ class LibraryRepository(
 
     companion object {
         private const val KEY_FOLDER = "folder"
+
+        /**
+         * A partial scan's shelf: everything it read, plus whatever it couldn't see from before.
+         * An album read only in part keeps its earlier tracks next to the ones read now.
+         */
+        fun mergePartial(previous: List<Album>, found: List<Album>): List<Album> {
+            val byId = found.associateBy { it.id }
+            val merged = found.map { now ->
+                val before = previous.firstOrNull { it.id == now.id } ?: return@map now
+                val missing = before.tracks.filter { old -> now.tracks.none { it.id == old.id } }
+                if (missing.isEmpty()) now
+                else now.copy(tracks = (now.tracks + missing).sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.fileName })))
+            }
+            return merged + previous.filter { it.id !in byId }
+        }
 
         fun sortShelf(list: List<Album>): List<Album> =
             list.sortedWith(compareBy({ it.artist.lowercase() }, { it.year ?: 0 }, { it.title.lowercase() }))

@@ -1,0 +1,24 @@
+steps:
+  - launch: app.runout.dev
+  - when: { visible: { id: onboarding-intro } }
+    steps:
+      - tap: { id: onboarding-intro }
+  - when: { visible: { id: setup-offline } }
+    steps:
+      - tap: { id: setup-offline }
+      - tap: { id: setup-finish }
+      - await: { hidden: { id: 'screen:setup' }, timeout: 5000 }
+  - await: { visible: { id: turntable } }
+  - tap: { id: 'nav:DIG' }
+  - await: { visible: { id: 'screen:search' } }
+  - tap: { id: 'action:Close' }
+  - tap: { id: 'nav:FRIENDS' }
+  - await: { visible: { id: 'panel:messages' } }
+  - tap: { id: 'action:Close' }
+  - tap: { id: 'nav:SETTINGS' }
+  - await: { visible: { id: 'settings:SOUND' } }
+  - tap: { id: 'action:Close' }
+  - tap: { id: open-downloads }
+  - await: { visible: { id: 'panel:transfers' } }
+  - tap: { id: 'action:Close' }
+  - await: { visible: { id: turntable } }

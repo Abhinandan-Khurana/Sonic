@@ -1,0 +1,13 @@
+executionPrerequisite: Runout Dev is online with an empty discovery query; this flow performs one public Soulseek search and downloads nothing.
+steps:
+  - tap: { id: 'nav:DIG' }
+  - await: { visible: { id: 'screen:search' } }
+  - tap: { id: 'field:Search albums or artists' }
+  - await: { idle: true, stableFor: 1000 }
+  - tool: keyboard
+    args: { text: Pink Floyd }
+  - tool: button
+    args: { button: back }
+  - tap: { id: submit-search }
+  - scroll-to: { target: { id: search-status } }
+  - await: { visible: { text: { matches: '.*[1-9][0-9]* ALBUM FOLDER.*' } }, timeout: 35000 }

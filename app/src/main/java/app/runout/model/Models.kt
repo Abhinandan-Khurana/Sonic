@@ -18,7 +18,7 @@ data class Track(
 )
 
 /** Where a record on the shelf came from. Decides what can be shared. */
-enum class Source { FOLDER, RECEIVED, DROP, PRESSING }
+enum class Source { FOLDER, RECEIVED, DROP, PRESSING, SOULSEEK }
 
 /** Vinyl styles for the Pressing Plant. Albums without one get theirs from their audio quality. */
 enum class DiscStyle(val label: String) {
@@ -95,6 +95,8 @@ data class Album(
     val notes: String? = null,
     /** Who sent it, for records received from friends. */
     val from: String? = null,
+    /** Local validation state; metadata remains on the shelf so access can be repaired. */
+    val unavailableReason: String? = null,
 ) {
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
 

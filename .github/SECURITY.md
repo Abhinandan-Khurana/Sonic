@@ -1,21 +1,7 @@
-# Security Policy
+# Security
 
-## Supported Versions
+Runout 0.4 is a development integration. Sensitive boundaries include the Soulseek JNI adapter and peer protocol, Android document access, credential storage, message persistence and `.vinyl` extraction. Historical v0.3 Nostr code is retained but no longer connected by the production graph.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.3.x   | :white_check_mark: |
-| < 0.3.0 | :x:                |
+Never attach passwords, private messages, account files or signing keys to a public issue. For a vulnerability, use the repository's private vulnerability reporting feature if enabled, or ask the maintainer for a private contact channel without publishing an exploit or private data.
 
----
-
-## Reporting a Vulnerability
-
-Runout implements cryptographic signatures (BIP-340 Schnorr over secp256k1), ZIP file extraction (`.vinyl`), and WebSocket networking with public Nostr relays.
-
-If you discover a security vulnerability (such as a zip-slip archive extraction issue, key leakage bug, or relay injection flaw):
-1. **Do not open a public GitHub issue.**
-2. Send an email to the repository owner or open a private GitHub security advisory.
-3. Include detailed steps to reproduce the vulnerability and proof-of-concept payloads where applicable.
-
-We will acknowledge receipt within 48 hours and work with you on a coordinated disclosure timeline.
+Please include the affected source revision, Android version, minimal reproduction and expected impact. The development build uses Soulseek's plaintext protocol; Android Keystore protects optional credentials at rest, not network traffic. See [Soulseek behavior](../docs/SOULSEEK.md) for details.

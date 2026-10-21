@@ -1,0 +1,6 @@
+executionPrerequisite: The network-offline flow left Settings › Soulseek open with the same identity; Wi-Fi and mobile data have now been restored on the test emulator.
+steps:
+  - await: { visible: { text: Connected to Soulseek }, timeout: 70000 }
+  - assert: { text: { in: { id: account-connection }, equals: Connected to Soulseek } }
+  - tap: { id: 'action:Close' }
+  - assert: { text: { in: { id: open-account }, contains: Online } }
