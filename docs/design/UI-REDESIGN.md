@@ -111,6 +111,7 @@ Answers:
   - Now: the picture turns at half speed (one turn every 3.6 s). The strobe is re-tuned to a 50 Hz flash, so the dots stand still at that speed.
   - The music still plays at its recorded speed.
 - [x] **DK-11** *(added after phase-2 review)* "can we get some grassy finish over the buttons keeping the current texture". The deck keys get a clear glass coat over their existing colours: a glossy top, a diagonal reflection and a bright rim.
+- [x] **DK-12** *(added after phase-2 review)* "that orange is way too much contrasty can you give it a fade / metallic shade". The signal orange is softened to anodised aluminium (`#E07A4F`). The START/STOP cap and the counterweight are shaded light to dark like brushed metal, and the grey keys get a matching metal sheen.
 - [x] **HM-13** *(added after phase-2 review)* A weird shadow flashed between sleeves while flicking (the owner sent a screenshot). Sleeves no longer cast their own shadows. One soft floor shadow sits under the front slot and fades in only when a sleeve settles square.
 
 ### 2.2 Crate, caption and footer

@@ -610,7 +610,7 @@ private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
         val len = (cwStart - cwEnd).getDistance()
         drawRoundRect(Color.Black.copy(alpha = 0.14f), topLeft = c - Offset(len / 2f, h * 0.036f), size = Size(len, h * 0.08f), cornerRadius = CornerRadius(h * 0.012f))
         drawRoundRect(
-            brush = Brush.verticalGradient(listOf(Color(0xFFFF8A5C), Room.Signal, Color(0xFFC9461A)), startY = c.y - h * 0.04f, endY = c.y + h * 0.04f),
+            brush = Brush.verticalGradient(listOf(Room.SignalLight, Room.Signal, Color(0xFFEA9A75), Room.SignalDark), startY = c.y - h * 0.04f, endY = c.y + h * 0.04f),
             topLeft = c - Offset(len / 2f, h * 0.04f), size = Size(len, h * 0.08f), cornerRadius = CornerRadius(h * 0.012f),
         )
         for (i in 1..5) {
@@ -649,14 +649,14 @@ private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
  * A hardware key, Teenage Engineering style: a cap sitting on a darker skirt, with real travel.
  * Pressed, the cap sinks onto the skirt and its shadow tightens.
  */
-private fun DrawScope.teKey(r: Rect, cap: Color, skirt: Color, pressed: Boolean): Rect {
+private fun DrawScope.teKey(r: Rect, cap: (Rect) -> Brush, skirt: Color, pressed: Boolean): Rect {
     val h = r.height
     val travel = h * 0.09f
     val radius = CornerRadius(h * 0.16f)
     drawRoundRect(Color.Black.copy(alpha = if (pressed) 0.10f else 0.16f), topLeft = r.topLeft + Offset(0f, travel * (if (pressed) 1.2f else 1.8f)), size = r.size, cornerRadius = radius)
     drawRoundRect(skirt, topLeft = r.topLeft + Offset(0f, travel), size = r.size, cornerRadius = radius)
     val face = Rect(r.topLeft + Offset(0f, if (pressed) travel * 0.8f else 0f), r.size)
-    drawRoundRect(cap, topLeft = face.topLeft, size = face.size, cornerRadius = radius)
+    drawRoundRect(cap(face), topLeft = face.topLeft, size = face.size, cornerRadius = radius)
     // A clear glass coat over the cap: its colour shows through untouched, with a glossy top,
     // a soft diagonal reflection and a bright rim where the light catches the edge.
     drawRoundRect(
@@ -675,9 +675,19 @@ private fun DrawScope.teKey(r: Rect, cap: Color, skirt: Color, pressed: Boolean)
     return face
 }
 
-private val KeyGrey = Color(0xFFEDEEF1)
 private val KeyGreySkirt = Color(0xFFB4B7BF)
-private val SignalSkirt = Color(0xFFB83E15)
+private val SignalSkirt = Color(0xFF9A5236)
+
+/** Brushed, anodised orange: a soft vertical sheen with a faint band of light across it. */
+private fun signalMetal(face: Rect) = Brush.linearGradient(
+    0f to Room.SignalLight, 0.35f to Room.Signal, 0.55f to Color(0xFFE88B62), 0.8f to Room.Signal, 1f to Room.SignalDark,
+    start = face.topLeft, end = Offset(face.left + face.width * 0.35f, face.bottom),
+)
+
+private fun greyMetal(face: Rect) = Brush.linearGradient(
+    0f to Color(0xFFF6F7F9), 0.5f to Color(0xFFE6E7EB), 0.75f to Color(0xFFF0F1F4), 1f to Color(0xFFD3D5DB),
+    start = face.topLeft, end = Offset(face.left + face.width * 0.35f, face.bottom),
+)
 
 private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckState, ssDown: Boolean, prevDown: Boolean, nextDown: Boolean) {
     val h = g.h
@@ -685,10 +695,10 @@ private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckS
     // Start / stop: the big orange key, with its engraved label and a status light above it.
     val ss = g.startStop
     val led = Offset(ss.left + h * 0.012f, ss.top - h * 0.028f)
-    if (playing) drawCircle(Brush.radialGradient(listOf(Room.Signal.copy(alpha = 0.55f), Color.Transparent), center = led, radius = h * 0.03f), h * 0.03f, led)
+    if (playing) drawCircle(Brush.radialGradient(listOf(Room.Signal.copy(alpha = 0.4f), Color.Transparent), center = led, radius = h * 0.03f), h * 0.03f, led)
     drawCircle(if (playing) Room.Signal else Color.Black.copy(alpha = 0.16f), h * 0.0075f, led)
     label(tm, "START · STOP", Offset(led.x + h * 0.018f, led.y - h * 0.01f), h * 0.0145f, Room.Ink.copy(alpha = 0.55f))
-    val face = teKey(ss, Room.Signal, SignalSkirt, ssDown)
+    val face = teKey(ss, ::signalMetal, SignalSkirt, ssDown)
     // Printed on the cap: play and stop symbols.
     val c = face.center
     val s = face.height * 0.18f
@@ -697,8 +707,8 @@ private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckS
 
     // Previous / next: grey keys under one engraved label.
     label(tm, "TRACK", Offset((g.prev.left + g.next.right) / 2f, g.prev.top - h * 0.032f), h * 0.0145f, Room.Ink.copy(alpha = 0.55f), centered = true)
-    val pf = teKey(g.prev, KeyGrey, KeyGreySkirt, prevDown)
-    val nf = teKey(g.next, KeyGrey, KeyGreySkirt, nextDown)
+    val pf = teKey(g.prev, ::greyMetal, KeyGreySkirt, prevDown)
+    val nf = teKey(g.next, ::greyMetal, KeyGreySkirt, nextDown)
     fun tri(c: Offset, s: Float, left: Boolean) {
         val p = Path().apply {
             if (left) { moveTo(c.x + s / 2, c.y - s / 2); lineTo(c.x - s / 2, c.y); lineTo(c.x + s / 2, c.y + s / 2) }
