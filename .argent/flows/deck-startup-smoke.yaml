@@ -1,0 +1,9 @@
+steps:
+  - echo: Restart Runout Dev; expect listening room. Inspect screenshot separately
+      for the 3D deck.
+  - launch: app.runout.dev
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: deck:startstop

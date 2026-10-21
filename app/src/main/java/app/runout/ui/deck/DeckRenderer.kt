@@ -85,7 +85,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private var settle = 0
     private var running = false
 
-    /** Called after each frame is drawn, so the room redraws and the TextureView shows it. */
+    /** Called on each frame with work to do, so the room redraws and the TextureView takes the frame. */
     var onFrame: (() -> Unit)? = null
 
     init {
@@ -307,8 +307,9 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
             renderer.render(view)
             renderer.endFrame()
             settle--
-            onFrame?.invoke()
         }
+        // Request a Compose redraw even when Filament skips a frame.
+        onFrame?.invoke()
     }
 
     private fun applyTransforms() {

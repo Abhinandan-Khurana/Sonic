@@ -5,8 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## Unreleased
+## 0.6.0 development — the 3D turntable (2026-10-22)
 
+- **The record player is now 3D:** the Runout RG-1, a white turntable with teal glass and an anodised-orange START/STOP key, drawn live with Filament over the room.
+  - The platter and the record turn in 3D. Each record's face (vinyl, the cover as the label, the gaps between tracks) is painted onto a grooved disc.
+  - The tonearm swings on its bearing, follows the side, drops into the groove and can be dragged. Tap the record to flip it, hold it to slow it.
+  - New control panel: START/STOP, ◀◀ ▶▶ and a new **eject** key, which press down on the model.
+  - The deck has its own lights and screen: an orange status lamp while a record plays, an LED strip that fills as the side plays, and a small screen with the track and time.
+  - If the phone can't draw 3D, a flat deck stands in.
+- The APK is about 22 MB larger: Filament's libraries for the four CPU types.
 - **Library:** fixed a race between the quiet refresh that runs at startup and a scan the user starts at the same time. The startup refresh cancelled the newer scan, so the shelf could stay empty — the same symptom as the "albums vanish" bug fixed in 0.5.1. The startup refresh no longer cancels a scan that is already running.
 
 ---
