@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.core.content.edit
 import app.runout.model.Album
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,13 +69,15 @@ class LibraryRepository(
     val report: StateFlow<ScanReport?> = _report.asStateFlow()
 
     private var scanJob: Job? = null
+    private val scanLock = Any()
 
     init {
         scope.launch {
             val cached = withContext(Dispatchers.IO) { AlbumJson.readValidatedList(context, cacheFile) }
             if (_albums.value.isEmpty()) _albums.value = cached
             // Cached shelf but a folder that may have changed: refresh quietly.
-            if (_folder.value != null && cached.isEmpty()) rescan()
+            val tree = _folder.value
+            if (tree != null && cached.isEmpty()) refreshQuietly(tree)
         }
     }
 
@@ -97,8 +100,25 @@ class LibraryRepository(
 
     fun rescan(fresh: Boolean = false): Job? {
         val tree = _folder.value ?: return null
-        scanJob?.cancel()
-        val job = scope.launch {
+        return synchronized(scanLock) {
+            scanJob?.cancel()
+            startScan(tree, fresh)
+        }
+    }
+
+    /**
+     * The first scan of a saved folder, started quietly. It never cancels a scan that is already
+     * running, and never starts a second one beside it: a scan started since startup owns the
+     * shelf, and cancelling it would leave the shelf empty — the "albums vanish" phone bug.
+     */
+    private fun refreshQuietly(tree: Uri): Job? = synchronized(scanLock) {
+        if (scanJob?.isActive == true) null else startScan(tree, fresh = false)
+    }
+
+    private fun startScan(tree: Uri, fresh: Boolean): Job {
+        // LAZY so that [scanJob] is set before the body can run: a scan that starts late must
+        // already be the live one when another scan asks whether anything is running.
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             _scan.value = ScanState.Scanning(ScanProgress(0, 0))
             _report.value = null
             val previous = _albums.value
@@ -154,6 +174,7 @@ class LibraryRepository(
             _scan.value = null
         }
         scanJob = job
+        job.start()
         return job
     }
 

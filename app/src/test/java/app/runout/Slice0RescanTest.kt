@@ -100,6 +100,41 @@ class Slice0RescanTest {
         } finally { scope.cancel() }
     }
 
+    @Test fun `the startup refresh does not cancel a scan the caller started`() = runBlocking {
+        // Startup wants to refresh a saved folder quietly. It must never cancel a scan that
+        // the caller started afterwards: a cancelled scan leaves the shelf empty, which is
+        // the phone bug this release set out to fix.
+        val context = Fixtures.context
+        // A slow, unreadable cache. Reading it takes long enough that startup's check for a
+        // saved folder lands after the caller's scan has started, which is the ordering that
+        // used to cancel the caller's scan. It is not a valid index, so the shelf stays empty.
+        val cache = File(context.filesDir, "library.json")
+        cache.writeText(" ".repeat(2 * 1024 * 1024))
+        val dir = File(context.cacheDir, "startup-race-root").apply { mkdirs() }
+        File(dir, "01 Opening.flac").writeBytes(Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac"))
+        val tree = FolderProvider.install(dir)
+        val gate = java.util.concurrent.CountDownLatch(1)
+        FolderProvider.block = gate
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val repo = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context), scope, lookupCoversOnline = false)
+            val job = repo.setFolder(tree)!!
+            // The scan is parked inside the provider now, so it is provably in flight while
+            // startup gets its chance to refresh.
+            delay(500)
+            // Startup has read the cache by now. Take it away so the scan can save the shelf.
+            cache.delete()
+            gate.countDown()
+            job.join()
+            assertFalse("the startup refresh cancelled the caller's scan", job.isCancelled)
+            assertEquals(1, repo.albums.value.size)
+            assertEquals(1, AlbumJson.readList(File(context.filesDir, "library.json")).size)
+        } finally {
+            FolderProvider.block = null
+            scope.cancel()
+        }
+    }
+
     @Test fun `repair forgets albums that are gone, even when a file is unreadable`() = runBlocking {
         val context = Fixtures.context
         // An index from before, holding an album this folder doesn't have.

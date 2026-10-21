@@ -117,9 +117,16 @@ class FolderProvider : DocumentsProvider() {
         private var writable = false
         const val ROOT_ID = "primary:Music"
 
+        /**
+         * When set, listing a folder waits for it. A scan parked here is provably still in
+         * flight, so a test can decide for itself when it may finish.
+         */
+        @Volatile var block: java.util.concurrent.CountDownLatch? = null
+
         fun install(folder: File, allowWrite: Boolean = false): Uri {
             root = folder
             writable = allowWrite
+            block = null
             val info = ProviderInfo().apply {
                 authority = AUTHORITY
                 exported = true
@@ -169,6 +176,9 @@ class FolderProvider : DocumentsProvider() {
         MatrixCursor(projection ?: DEFAULT).also { row(it, fileOf(documentId)) }
 
     override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): Cursor {
+        block?.let { gate ->
+            try { gate.await() } catch (e: InterruptedException) { Thread.currentThread().interrupt() }
+        }
         val c = MatrixCursor(projection ?: DEFAULT)
         fileOf(parentDocumentId).listFiles()?.sortedBy { it.name }?.forEach { row(c, it) }
         return c

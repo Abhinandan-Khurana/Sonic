@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## Unreleased
+
+- **Library:** fixed a race between the quiet refresh that runs at startup and a scan the user starts at the same time. The startup refresh cancelled the newer scan, so the shelf could stay empty — the same symptom as the "albums vanish" bug fixed in 0.5.1. The startup refresh no longer cancels a scan that is already running.
+
+---
+
 ## 0.5.1 development — fixes from the first phones (2026-10-21)
 
 - **Library:**
