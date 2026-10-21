@@ -4,8 +4,9 @@
     python3 scripts/prepare-deck-glb.py <runout_turntable_*.glb> [<runout_record.glb>]
 
 Writes app/src/main/assets/deck/turntable.glb (and record.glb when given). The source is the Runout
-RG-1 v2 model (runout_turntable_white_teal.glb and its siblings), whose node names, origins and
-measurements are described in docs/design/deck-spec.json.
+RG-1 v3 model (runout_turntable_white_teal.glb and its siblings, built in Blender by
+scripts/deck-v3 from Hermes' v2), whose node names, origins and measurements are described in
+docs/design/deck-v3-spec.json.
 
 Two changes are made:
 
@@ -50,7 +51,7 @@ def main(deck, record=None):
     materials = {m["name"]: m for m in gltf.get("materials", [])}
     screen = materials.get("Screen_Mat")
     if screen is None or "baseColorTexture" not in screen.get("pbrMetallicRoughness", {}):
-        sys.exit("Screen_Mat with a base colour texture not found: is this the RG-1 v2 model?")
+        sys.exit("Screen_Mat with a base colour texture not found: is this the RG-1 model?")
     placeholder = screen["pbrMetallicRoughness"]["baseColorTexture"]["index"]
     for name in DRAWN:
         m = materials.get(name)

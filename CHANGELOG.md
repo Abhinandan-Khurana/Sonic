@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## Unreleased — RG-1 v3
+
+- **A wider deck, controls on the right:** the turntable is redrawn as the RG-1 v3. It is wider and shallower, so it now fills the width of the screen.
+  - Its keys sit on the right in TE style: big, flush keys edge to edge for prev, next, START/STOP and eject.
+  - The tonearm, platter and record are unchanged.
+- **Red LED windows:** a long title display under the platter shows the track. A time display under the keys shows the track code and the time in 7-segment digits, with the unlit segments faintly showing. Both replace the small screen and the line of text under the player. TalkBack still reads them.
+- **The record looks the same in your hand and on the platter.** The deck now renders with true colours (linear, calibrated light) instead of a film curve, and the face no longer carries a painted highlight that turned with the platter.
+- **The gaps between tracks show on both records.** The record in your hand now draws side A's gaps; it had none. On the 3D record each gap is a smooth, glossier band in the grooves, so it catches the light.
+- **No more empty deck at launch:** a flat deck stands in while the phone builds the 3D deck's shaders. That takes seconds on an emulator.
+
+---
+
 ## 0.6.0 development — the 3D turntable (2026-10-22)
 
 - **The record player is now 3D:** the Runout RG-1, a white turntable with teal glass and an anodised-orange START/STOP key, drawn live with Filament over the room.

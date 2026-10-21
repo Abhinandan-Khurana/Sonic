@@ -15,6 +15,8 @@ import app.runout.sound.SoundEngine
 import app.runout.ui.deck.DeckCamera
 import app.runout.ui.deck.DeckModel
 import app.runout.ui.deck.V3
+import app.runout.ui.DeckLeds
+import app.runout.ui.ledLines
 import app.runout.ui.screenLines
 import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.CoroutineScope
@@ -184,6 +186,19 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `the LED windows show the track, its code and the time`() {
+        assertEquals(DeckLeds("DROP A RECORD", null, null), ledLines(DeckState()))
+        deck.load(album())
+        settle()
+        assertEquals(DeckLeds("CUE  Track 1", "A1", "0:00"), ledLines(s))
+        deck.nextTrack()
+        settle()
+        val leds = ledLines(s)
+        assertEquals("A2", leds.code)
+        assertTrue(leds.title, leds.title.endsWith("Track 2"))
+    }
+
+    @Test
     fun `the 3D deck's arm reaches across the record and rests off it`() {
         val c = DeckModel.platterCentre
         fun radius(a: Float) = DeckModel.stylus(a).let { kotlin.math.hypot(it.x - c.x, it.z - c.z) }
@@ -212,7 +227,9 @@ class TurntableDeckTest {
         }
         keys.forEach { k ->
             assertTrue("${k.node} cap inside its zone", k.centre.x in k.zoneMin.first..k.zoneMax.first && k.centre.z in k.zoneMin.second..k.zoneMax.second)
-            assertTrue("${k.node} zone clear of the platter", k.zoneMax.first < DeckModel.platterCentre.x - DeckModel.PLATTER_R)
+            // The keys sit on the right-hand module, past the platter and the tonearm's sweep.
+            assertTrue("${k.node} zone clear of the platter", k.zoneMin.first > DeckModel.platterCentre.x + DeckModel.PLATTER_R)
+            assertTrue("${k.node} zone clear of the tonearm", k.zoneMin.first > DeckModel.pivot.x + 0.5f)
         }
         for ((w, h) in listOf(380f to 245f, 1080f to 697f)) {
             val cam = DeckCamera(w, h)
@@ -222,7 +239,7 @@ class TurntableDeckTest {
                 assertTrue("$p on screen at ${w}x$h", s.x in -0.5f..w + 0.5f && s.y in -0.5f..h + 0.5f)
             }
             // A finger on the record's face finds the same point in the model.
-            val p = V3(0.7f, DeckModel.RECORD_Y, 0.3f)
+            val p = V3(DeckModel.platterCentre.x + 0.7f, DeckModel.RECORD_Y, 0.3f)
             val back = cam.onPlane(cam.project(p), DeckModel.RECORD_Y)!!
             assertEquals(p.x, back.x, 1e-3f)
             assertEquals(p.z, back.z, 1e-3f)

@@ -24,14 +24,14 @@ data class V3(val x: Float, val y: Float, val z: Float) {
 
 /**
  * One of the deck's keys: its glTF node, the centre of its cap and the cap's size, and its touch
- * zone on the control panel ([zoneMin]–[zoneMax] in x and z). The caps are a few millimetres
- * apart on a phone, so each key answers for its share of the panel rather than its cap alone.
+ * zone on the key tray ([zoneMin]–[zoneMax] in x and z). The caps sit edge to edge, so each key
+ * answers up to the middle of the gap around it.
  */
 data class DeckKey(val node: String, val centre: V3, val width: Float, val depth: Float, val zoneMin: Pair<Float, Float>, val zoneMax: Pair<Float, Float>)
 
 /**
  * The Runout RG-1 turntable (assets/deck/turntable.glb), in model units, from its spec
- * (docs/design/deck-spec.json). Moving parts are separate nodes whose origins sit where they turn:
+ * (docs/design/deck-v3-spec.json). Moving parts are separate nodes whose origins sit where they turn:
  * the platter on its spindle axis, the tonearm on its bearing, each key at the top of its cap. The
  * record (assets/deck/record.glb) is a disc whose top face is at its origin.
  *
@@ -44,9 +44,10 @@ object DeckModel {
     const val LED_STATUS = "LED_Status"
     const val LED_STRIP = "LED_Strip"
     const val SCREEN = "Screen_Display"
+    const val SCREEN_TIME = "Screen_Time"
 
     /** Where the platter turns: its axis at the top of the felt mat. */
-    val platterOrigin = V3(0.255f, 0.57f, 0f)
+    val platterOrigin = V3(-1.2575f, 0.57f, 0f)
     val platterCentre = V3(platterOrigin.x, 0f, platterOrigin.z)
     const val PLATTER_R = 1.19f
     /** The record's face, lying on the mat (the disc is 0.018 thick). */
@@ -54,29 +55,38 @@ object DeckModel {
     const val RECORD_R = 1.13f
 
     /** The tonearm's bearing, and the stylus as modelled: parked on the rest, needle up. */
-    val pivot = V3(1.535f, 0.75f, -0.96f)
-    private val stylusAtRest = V3(1.7785619f, 0.643f, 0.8346232f)
+    val pivot = V3(0.0225f, 0.75f, -0.96f)
+    private val stylusAtRest = V3(0.2660619f, 0.643f, 0.8346232f)
     /** How far the arm drops to put the needle in the groove. */
     const val NEEDLE_DROP = 0.055f
 
-    // The panel below the screen, split between the keys at the midpoints between them.
-    private const val PANEL_LEFT = -2.0f
-    private const val PANEL_RIGHT = -1.15f
-    private const val PANEL_MID = -1.575f
-    val startStop = DeckKey("Key_StartStop", V3(-1.575f, 0.534f, -0.11f), 0.55f, 0.32f, PANEL_LEFT to -0.6f, PANEL_RIGHT to 0.255f)
-    val prev = DeckKey("Key_Prev", V3(-1.74f, 0.524f, 0.62f), 0.26f, 0.22f, PANEL_LEFT to 0.255f, PANEL_MID to 0.7625f)
-    val next = DeckKey("Key_Next", V3(-1.41f, 0.524f, 0.62f), 0.26f, 0.22f, PANEL_MID to 0.255f, PANEL_RIGHT to 0.7625f)
-    val eject = DeckKey("Key_Eject", V3(-1.575f, 0.524f, 0.905f), 0.22f, 0.16f, PANEL_LEFT to 0.7625f, PANEL_RIGHT to 1.2f)
+    // The key tray on the right-hand module: prev | next, then START/STOP, then eject, front to back
+    // reversed (z grows towards the front). Zones meet in the middle of the 0.018 gaps.
+    private const val TRAY_LEFT = 0.7525f
+    private const val TRAY_RIGHT = 2.3925f
+    private const val TRAY_MID = 1.5725f
+    val prev = DeckKey("Key_Prev", V3(1.168f, 0.522f, -0.67f), 0.791f, 0.62f, TRAY_LEFT to -1.0f, TRAY_MID to -0.351f)
+    val next = DeckKey("Key_Next", V3(1.977f, 0.522f, -0.67f), 0.791f, 0.62f, TRAY_MID to -1.0f, TRAY_RIGHT to -0.351f)
+    val startStop = DeckKey("Key_StartStop", V3(1.5725f, 0.522f, 0.118f), 1.6f, 0.92f, TRAY_LEFT to -0.351f, TRAY_RIGHT to 0.587f)
+    val eject = DeckKey("Key_Eject", V3(1.5725f, 0.522f, 0.846f), 1.6f, 0.5f, TRAY_LEFT to 0.587f, TRAY_RIGHT to 1.116f)
     val keys = listOf(startStop, prev, next, eject)
     /** How far a key goes down when pressed: a couple of millimetres on the real thing. */
     const val KEY_TRAVEL = 0.018f
 
-    val ledStatus = V3(-1.22f, 0.479f, -0.16f)
-    val screenCentre = V3(-1.575f, 0.458f, -0.77f)
+    val ledStatus = V3(0.83f, 0.479f, -1.14f)
+
+    /**
+     * The red LED windows along the front: the title display under the platter and the time display
+     * under the keys, corner to corner. Both show one 1024×256 texture: the title fills its top
+     * half, the time the left [TIME_U] of its bottom half.
+     */
+    val titleWindow = Pair(V3(-2.3775f, 0.4735f, 1.315f), V3(0.3725f, 0.4735f, 1.659f))
+    val timeWindow = Pair(V3(0.7725f, 0.4735f, 1.315f), V3(2.3725f, 0.4735f, 1.659f))
+    const val TIME_U = 0.5813953f
 
     /** What the camera frames: the deck and its soft shadow, so the shadow never gets cut off. */
-    val viewMin = V3(-2.386f, -0.002f, -1.541f)
-    val viewMax = V3(2.386f, 0.843f, 1.541f)
+    val viewMin = V3(-2.7725f, -0.002f, -1.54f)
+    val viewMax = V3(2.7725f, 0.843f, 1.96f)
 
     // ---- Tonearm ------------------------------------------------------------------------------
 

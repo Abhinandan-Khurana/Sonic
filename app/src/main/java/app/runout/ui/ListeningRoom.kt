@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -86,6 +87,7 @@ import app.runout.drops.DropsRepository
 import app.runout.library.ScanReport
 import app.runout.library.ScanState
 import app.runout.model.Album
+import app.runout.model.SideSplitter
 import app.runout.model.Source
 import app.runout.playback.DeckState
 import app.runout.social.Friend
@@ -376,7 +378,8 @@ fun RoomScreen(
                         .padding(start = 16.dp, end = 16.dp, top = 80.dp, bottom = 110.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    turntable(Modifier.fillMaxWidth().weight(0.42f), Alignment.Center)
+                    // The deck runs almost edge to edge, past the room's side margins.
+                    turntable(Modifier.requiredWidth(screenW - 8.dp).weight(0.42f), Alignment.Center)
                     Spacer(Modifier.height(10.dp))
                     crate(Modifier.fillMaxWidth().weight(0.58f))
                 }
@@ -414,6 +417,8 @@ fun RoomScreen(
             val cover by rememberCover(pulled)
             val look = remember(pulled.id) { discLookFor(pulled) }
             val fallback = remember(pulled.id) { fallbackColor(pulled) }
+            // Side A's gaps between tracks, as the record will show them on the platter.
+            val gaps = remember(pulled.id) { SideSplitter.split(pulled.tracks).firstOrNull()?.trackBoundaries() ?: emptyList() }
 
             val baseD = s.rect.width * 0.94f
             val pc = platterCenter
@@ -487,7 +492,7 @@ fun RoomScreen(
                     look = look,
                     label = cover,
                     labelFallback = fallback,
-                    trackBoundaries = emptyList(),
+                    trackBoundaries = gaps,
                     sideText = sideText,
                     qualityText = qualityText,
                 )

@@ -87,7 +87,8 @@ fun fallbackColor(album: Album?): Color {
 
 /**
  * Draws a record: grooves, the smooth gaps between tracks, the label (the album cover, turning
- * with the platter), the label print and a light sheen that stays still while the record spins.
+ * with the platter), the label print and, with [sheen], a light sheen that stays still while the
+ * record spins.
  */
 fun DrawScope.drawRecord(
     center: Offset,
@@ -99,6 +100,7 @@ fun DrawScope.drawRecord(
     trackBoundaries: List<Float>,
     sideText: TextLayoutResult?,
     qualityText: TextLayoutResult?,
+    sheen: Boolean = true,
 ) {
     // Body
     drawCircle(look.base.copy(alpha = look.alpha), radius, center)
@@ -169,18 +171,27 @@ fun DrawScope.drawRecord(
         drawCircle(grooveColor.copy(alpha = a), r, center, style = Stroke(hair))
     }
 
-    // Gaps between tracks show as smooth bands, like on a real record.
+    // Gaps between tracks show as smooth bands, like on a real record: darker than the grooves
+    // either side, with a fine bright edge where the grooves stop. The 3D disc's surface maps
+    // (deck/RecordMaps) put its glossy bands at the same radii.
     val playOuter = radius * 0.95f
     val playInner = radius * 0.43f
+    val band = radius * 0.014f
+    val pictured = look.style == DiscStyle.PICTURE && label != null
     trackBoundaries.forEach { f ->
         val r = playOuter - (playOuter - playInner) * f
-        val pictured = look.style == DiscStyle.PICTURE && label != null
-        drawCircle(look.base.copy(alpha = if (look.alpha < 1f || pictured) 0.35f else 1f), r, center, style = Stroke(radius * 0.011f))
-        drawCircle(Color.White.copy(alpha = 0.08f), r, center, style = Stroke(hair))
+        if (look.alpha < 1f || pictured) {
+            drawCircle(Color.Black.copy(alpha = 0.30f), r, center, style = Stroke(band))
+        } else {
+            drawCircle(look.base, r, center, style = Stroke(band))
+            drawCircle(Color.Black.copy(alpha = 0.22f), r, center, style = Stroke(band))
+        }
+        drawCircle(Color.White.copy(alpha = 0.16f), r + band / 2f, center, style = Stroke(hair))
+        drawCircle(Color.White.copy(alpha = 0.10f), r - band / 2f, center, style = Stroke(hair))
     }
 
     // Light catching the grooves: drawn without rotation, so it stays put as the record turns.
-    rotate(-38f, center) {
+    if (sheen) rotate(-38f, center) {
         drawCircle(
             brush = Brush.sweepGradient(
                 0f to Color.Transparent,

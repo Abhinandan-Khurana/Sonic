@@ -1,23 +1,25 @@
 /*
  * THE VINYL PLAYER — the turntable in the room.
  *
- * It's a 3D model (assets/deck/turntable.glb, the Runout RG-1 in white + teal), drawn by Filament
+ * It's a 3D model (assets/deck/turntable.glb, the Runout RG-1 v3 in white + teal), drawn by Filament
  * in ui/deck/DeckRenderer.kt. This file is the Compose side: the deck's physics (platter spin-up and
  * wind-down, the tonearm's travel), touch (drag the arm, tap the record to flip it, hold it to slow
- * it, the keys START/STOP, ◀◀ ▶▶ and eject), what the deck shows (its screen, the status lamp, the
- * LED strip's progress) and a readable line of text under the player.
+ * it, the keys on the right: prev, next, START/STOP and eject), what the deck shows (the red LED
+ * title and time windows, the status lamp, the LED strip's progress).
  *
  * Map:
  *   DeckActions          what a press on the deck asks the player to do
  *   RPM_33_DEG           how fast the platter turns on screen
- *   screenLines()        the track and status, for the deck's screen and the line under it
+ *   screenLines()        the track and status, as TalkBack reads the LED windows
+ *   ledLines()           what the deck's LED windows show
  *   Turntable()          the composable: physics, the 3D view (or its flat stand-in), touch, keys
  *   recordFace()         paints the record's face (RecordArt.drawRecord) into the 3D disc's texture
  *
  * Where the parts are in the model, the tonearm's arc and the camera: ui/deck/DeckModel.kt, from
- * docs/design/deck-spec.json. Rendering, lights, the screen and LEDs: ui/deck/DeckRenderer.kt. The
- * record's look: RecordArt.kt. To change the model: scripts/prepare-deck-glb.py <source.glb>, then
- * update DeckModel from the new spec.
+ * docs/design/deck-v3-spec.json. Rendering, lights, the screen and LEDs: ui/deck/DeckRenderer.kt. The
+ * record's look: RecordArt.kt, its grooves and track gaps in 3D: ui/deck/RecordMaps.kt. To change
+ * the model: scripts/deck-v3 (Blender), scripts/prepare-deck-glb.py <source.glb>, then update
+ * DeckModel from the new spec.
  */
 package app.runout.ui
 
@@ -103,7 +105,10 @@ import app.runout.ui.deck.DeckCamera
 import app.runout.ui.deck.DeckKey
 import app.runout.ui.deck.DeckModel
 import app.runout.ui.deck.DeckRenderer
+import app.runout.ui.deck.RecordMaps
 import app.runout.ui.deck.V3
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.cos
@@ -133,11 +138,10 @@ interface DeckActions {
  */
 const val RPM_33_DEG = 100f
 
-/** Width to height of the 3D view (the text line under it is extra). */
-private const val VIEW_ASPECT = 1.55f
-private val SCREEN_LINE = 22.dp
+/** Width to height of the 3D view. */
+private const val VIEW_ASPECT = 1.72f
 
-/** What's on the deck, as the two parts of the line under the player. */
+/** What's on the deck, in two parts: for TalkBack, read over the LED windows. */
 fun screenLines(deck: DeckState): Pair<String, String> {
     val album = deck.album ?: return "RUNOUT · DROP A RECORD ON THE PLATTER" to "NO RECORD"
     val track = deck.currentTrack
@@ -151,6 +155,22 @@ fun screenLines(deck: DeckState): Pair<String, String> {
         else -> time
     }
     return title to status
+}
+
+/** What the deck's LED windows show: [title] across the long one, [code] and [time] in the short one (null leaves them dark). */
+data class DeckLeds(val title: String, val code: String?, val time: String?)
+
+fun ledLines(deck: DeckState): DeckLeds {
+    val album = deck.album ?: return DeckLeds("DROP A RECORD", null, null)
+    val name = deck.currentTrack?.title ?: album.title
+    val s = deck.trackPositionMs / 1000
+    val time = "%d:%02d".format(s / 60, s % 60)
+    val title = when {
+        deck.sideFinished -> "SIDE ${deck.side?.letter} END"
+        !deck.needleDown -> "CUE  $name"
+        else -> name
+    }
+    return DeckLeds(title, deck.trackCode, time)
 }
 
 @Composable
@@ -215,8 +235,14 @@ fun Turntable(
     val face = remember(deck.album?.id, deck.side, cover) {
         deck.album?.let { if (use3d) recordFace(it, cover, boundaries, deck.side?.letter?.toString(), textMeasurer) else null }
     }
+    LaunchedEffect(renderer) { if (renderer != null) withContext(Dispatchers.Default) { RecordMaps.warmUp() } }
     LaunchedEffect(renderer, face, deck.album == null) {
-        renderer?.setRecord(if (deck.album == null) null else face?.asAndroidBitmap())
+        val r = renderer ?: return@LaunchedEffect
+        r.setRecord(if (deck.album == null) null else face?.asAndroidBitmap())
+        if (deck.album == null || face == null) return@LaunchedEffect
+        // Then the grooves and the smooth bands between this side's tracks, under the painted gaps.
+        val maps = withContext(Dispatchers.Default) { RecordMaps.normal(boundaries) to RecordMaps.roughness(boundaries) }
+        r.setRecordSurface(maps.first, maps.second)
     }
 
     // Pause rendering while the app is in the background.
@@ -243,23 +269,22 @@ fun Turntable(
 
     // The status lamp, the LED strip and the deck's own screen.
     val playing = deck.album != null && deck.needleDown && !deck.held
-    val (line1, line2) = screenLines(deck)
     LaunchedEffect(renderer, playing) { renderer?.setStatusLamp(playing) }
     val stripStep = if (deck.album == null) 0 else (deck.fraction * 64).toInt()
     LaunchedEffect(renderer, stripStep, playing) { renderer?.setStrip(stripStep / 64f, playing) }
-    LaunchedEffect(renderer, line1, line2) {
-        val code = deck.album?.let { deck.trackCode }
-        val top = if (code == null) line2 else "$code  $line2".replace("$code  CUE $code", "CUE $code")
-        val bottom = deck.album?.let { deck.currentTrack?.title ?: it.title } ?: "DROP A RECORD ON"
-        renderer?.setScreen(top, bottom)
-    }
+    val leds = ledLines(deck)
+    LaunchedEffect(renderer, leds) { renderer?.setScreen(leds.title, leds.code, leds.time) }
     // A frame drawn by Filament shows once the room redraws around it.
     var frames by remember { mutableIntStateOf(0) }
-    LaunchedEffect(renderer) { renderer?.onFrame = { frames++ } }
-    val pixelFont = remember { runCatching { FontFamily(Font("fonts/silkscreen.ttf", context.assets)) }.getOrDefault(FontFamily.Monospace) }
+    // Until the 3D deck's first frames are through, the flat deck stands in for it.
+    var shown3d by remember { mutableStateOf(false) }
+    LaunchedEffect(renderer) {
+        renderer?.onFrame = { frames++ }
+        renderer?.onReady = { shown3d = true }
+    }
 
     BoxWithConstraints(modifier, contentAlignment = contentAlignment) {
-        val w = min(maxWidth, (maxHeight - SCREEN_LINE) * VIEW_ASPECT)
+        val w = min(maxWidth, maxHeight * VIEW_ASPECT)
         val h = w / VIEW_ASPECT
         val density = LocalDensity.current
         val cam = remember(w, h, density) { with(density) { DeckCamera(w.toPx(), h.toPx()) } }
@@ -290,10 +315,10 @@ fun Turntable(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
-                } else {
-                    // The JVM tests have no GPU: a flat stand-in in the same places.
-                    FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer)
                 }
+                // The JVM tests have no GPU, and a phone takes a moment to get the 3D deck going: a
+                // flat stand-in in the same places.
+                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer)
                 // The drop target over the model. Reading [frames] here redraws the room each time
                 // Filament finishes a frame, so the TextureView's newest picture is what shows.
                 Canvas(Modifier.fillMaxSize()) {
@@ -357,24 +382,30 @@ fun Turntable(
                 KeyArea(cam, DeckModel.prev, "Previous track", "deck:prev", keySources.getValue(DeckModel.prev)) { actions.previousTrack() }
                 KeyArea(cam, DeckModel.next, "Next track", "deck:next", keySources.getValue(DeckModel.next)) { actions.nextTrack() }
                 KeyArea(cam, DeckModel.eject, "Eject the record", "deck:eject", keySources.getValue(DeckModel.eject), enabled = deck.album != null) { actions.eject() }
-            }
-            // What used to be the dot-matrix screen: one line under the player.
-            val (l1, l2) = screenLines(deck)
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(SCREEN_LINE)
-                    .padding(horizontal = 6.dp)
-                    .testTag("deck:screen")
-                    .semantics(mergeDescendants = true) { contentDescription = "$l1. $l2" },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val style = Room.Label.copy(fontFamily = pixelFont, fontSize = 8.sp, letterSpacing = 0.6.sp, color = Room.Ink.copy(alpha = 0.72f))
-                BasicText(l1.uppercase(), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                BasicText(l2, style = style.copy(color = if (deck.needleDown && !deck.held) Room.Signal else style.color), maxLines = 1, modifier = Modifier.padding(start = 10.dp))
+                // The LED windows, for TalkBack and the tests: what they show, in words.
+                val (l1, l2) = screenLines(deck)
+                ScreenArea(cam, "$l1. $l2")
             }
         }
     }
+}
+
+/** The two LED windows' outline on the screen, read out as [description]. */
+@Composable
+private fun BoxScope.ScreenArea(cam: DeckCamera, description: String) {
+    val density = LocalDensity.current
+    val (a, _) = DeckModel.titleWindow
+    val (_, b) = DeckModel.timeWindow
+    val corners = listOf(a.x, b.x).flatMap { x -> listOf(a.z, b.z).map { z -> cam.project(V3(x, a.y, z)) } }
+    val left = corners.minOf { it.x }
+    val top = corners.minOf { it.y }
+    Box(
+        Modifier
+            .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
+            .size(with(density) { (corners.maxOf { it.x } - left).toDp() }, with(density) { (corners.maxOf { it.y } - top).toDp() })
+            .testTag("deck:screen")
+            .semantics { contentDescription = description },
+    )
 }
 
 /** A key's touch zone (its share of the control panel), projected onto the screen, with a haptic click. */
@@ -410,7 +441,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(c
 }
 
 /**
- * The deck drawn flat, for the JVM tests (Robolectric has no GPU for Filament): the plinth's top,
+ * The deck drawn flat, for the JVM tests (Robolectric has no GPU for Filament) and while the 3D
+ * deck starts: the plinth's top,
  * the platter, the record and the arm, each projected with the same camera as the 3D view, so
  * touch lands in the same places.
  */
@@ -424,11 +456,12 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
             moveTo(pts[0].x, pts[0].y); pts.drop(1).forEach { lineTo(it.x, it.y) }; close()
         }
         val top = 0.468f
-        drawPath(outline(top, -2.075f, -1.07f, -1.34f, 1.34f), Color(0xFFE9ECEC))
-        drawPath(outline(top, -1.06f, 2.075f, -1.34f, 1.34f), Color(0xFFEEF0F0))
+        drawPath(outline(top, -2.5725f, 0.5625f, -1.34f, 1.76f), Color(0xFFEEF0F0))
+        drawPath(outline(top, 0.5725f, 2.5725f, -1.34f, 1.76f), Color(0xFFE9ECEC))
+        listOf(DeckModel.titleWindow, DeckModel.timeWindow).forEach { (a, b) -> drawPath(outline(top, a.x, b.x, a.z, b.z), Color(0xFF1A0A08)) }
         val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
         val ppu = cam.pixelsPerUnit(DeckModel.platterCentre)
-        drawCircle(Color(0xFF16B8AD).copy(alpha = 0.45f), ppu * DeckModel.PLATTER_R, c)
+        drawCircle(Color(0xFF3F5D5A), ppu * DeckModel.PLATTER_R, c)
         if (deck.album != null) {
             drawRecord(c, ppu * DeckModel.RECORD_R, rotation, look, cover, labelFallback, boundaries, null, null)
         }
@@ -438,7 +471,7 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
         drawLine(Color(0xFFB9C2C6), pivot, stylus, ppu * 0.05f)
         DeckModel.keys.forEach { k ->
             val a = k.centre
-            drawPath(outline(a.y, a.x - k.width / 2, a.x + k.width / 2, a.z - k.depth / 2, a.z + k.depth / 2), if (k == DeckModel.startStop) Room.Signal else Color(0xFF7FB8B0))
+            drawPath(outline(a.y, a.x - k.width / 2, a.x + k.width / 2, a.z - k.depth / 2, a.z + k.depth / 2), if (k == DeckModel.startStop) Color(0xFFD0805F) else Color(0xFF86A6A1))
         }
     }
 }
@@ -466,6 +499,8 @@ private fun recordFace(album: Album, cover: ImageBitmap?, boundaries: List<Float
             trackBoundaries = boundaries,
             sideText = sideText,
             qualityText = qualityText,
+            // The 3D disc is lit for real: a painted highlight would turn with the platter.
+            sheen = false,
         )
     }
     return image

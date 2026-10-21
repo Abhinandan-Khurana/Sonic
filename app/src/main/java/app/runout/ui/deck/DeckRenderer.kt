@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.os.Build
 import android.view.Choreographer
@@ -62,15 +63,18 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private val keyEntities = DeckModel.keys.associateWith { deck.getFirstEntityByName(it.node) }
     private val statusLamp = materialOf(DeckModel.LED_STATUS)
     private val strip = materialOf(DeckModel.LED_STRIP)
-    private val screen = materialOf(DeckModel.SCREEN)
+    /** The title and time windows share one material in the model; gltfio may still split it. */
+    private val screens = listOfNotNull(materialOf(DeckModel.SCREEN), materialOf(DeckModel.SCREEN_TIME)).distinct()
     private val sun = EntityManager.get().create()
     private val fill = EntityManager.get().create()
+    private val glint = EntityManager.get().create()
     private val ambient: IndirectLight
     private val sampler = TextureSampler(TextureSampler.MinFilter.LINEAR_MIPMAP_LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE)
     private val flatSampler = TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE)
-    private var recordTexture: Texture? = null
+    private var faceTexture: Texture? = null
+    private var surfaceTextures: List<Texture> = emptyList()
     private var recordShown = false
-    private val screenPixels = Bitmap.createBitmap(256, 64, Bitmap.Config.ARGB_8888)
+    private val screenPixels = Bitmap.createBitmap(1024, 256, Bitmap.Config.ARGB_8888)
     private val screenTexture = flatTexture(screenPixels)
     private val stripPixels = Bitmap.createBitmap(256, 8, Bitmap.Config.ARGB_8888)
     private val stripTexture = flatTexture(stripPixels)
@@ -87,6 +91,9 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
 
     /** Called on each frame with work to do, so the room redraws and the TextureView takes the frame. */
     var onFrame: (() -> Unit)? = null
+    /** Called once, when the deck is on screen. */
+    var onReady: (() -> Unit)? = null
+    private var drawn = 0
 
     init {
         view.scene = scene
@@ -95,39 +102,49 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         view.antiAliasing = View.AntiAliasing.FXAA
         view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply { enabled = true; sampleCount = 4 }
         view.ambientOcclusionOptions = view.ambientOcclusionOptions.apply { enabled = true; radius = 0.25f; intensity = 0.8f }
-        view.colorGrading = ColorGrading.Builder().toneMapper(ToneMapper.Filmic()).build(engine)
+        // Linear, at an exposure of 1, with the lights below summing to 1 on a surface facing up: a
+        // record lying on the platter shows its face in the very colours the room paints it in your
+        // hand. A film curve would shift them as it lands.
+        view.colorGrading = ColorGrading.Builder().toneMapper(ToneMapper.Linear()).build(engine)
+        camera.setExposure(1f)
         renderer.clearOptions = renderer.clearOptions.apply {
             clear = true
             clearColor = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
         }
 
-        // A soft studio: a high key light from the front left, a dimmer fill from the right, and an
-        // even ambient so the white body never falls into grey.
         LightManager.Builder(LightManager.Type.SUN)
             .color(1f, 0.98f, 0.95f)
-            .intensity(95_000f)
+            .intensity(SUN)
             .direction(0.35f, -1f, -0.45f)
             .sunAngularRadius(2.4f)
             .castShadows(true)
             .build(engine, sun)
         LightManager.Builder(LightManager.Type.DIRECTIONAL)
             .color(0.92f, 0.95f, 1f)
-            .intensity(28_000f)
+            .intensity(FILL)
             .direction(-0.6f, -0.5f, -0.2f)
             .build(engine, fill)
+        // Low from behind the deck, so its mirror image off the record comes back to the camera:
+        // the grooves glint and the smooth bands between tracks show. Barely lights anything else.
+        LightManager.Builder(LightManager.Type.DIRECTIONAL)
+            .color(1f, 1f, 1f)
+            .intensity(GLINT)
+            .direction(0.1f, -0.9f, 0.42f)
+            .build(engine, glint)
         ambient = IndirectLight.Builder()
             .irradiance(1, floatArrayOf(1f, 1f, 1f))
-            .intensity(32_000f)
+            .intensity(AMBIENT)
             .build(engine)
         scene.indirectLight = ambient
         scene.addEntity(sun)
         scene.addEntity(fill)
+        scene.addEntity(glint)
 
         scene.addEntities(deck.entities)
         val rm = engine.renderableManager
         // Solid parts cast and catch shadows. Decals, lights, the screen and the baked shadow lie a
         // hair above a surface: casting would print a grey box under each, catching gives acne.
-        val flat = setOf("Prints", "Shadow_Plane", "Screen_Glass", "Screen_Display", DeckModel.LED_STRIP, DeckModel.LED_STATUS)
+        val flat = setOf("Prints", "Shadow_Plane", "Screen_Glass", DeckModel.SCREEN, DeckModel.SCREEN_TIME, DeckModel.LED_STRIP, DeckModel.LED_STATUS)
         (deck.entities + record.entities).forEach { e ->
             if (!rm.hasComponent(e)) return@forEach
             val i = rm.getInstance(e)
@@ -138,15 +155,15 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
                 val m = rm.getMaterialInstanceAt(i, p)
                 // A key's printed glyph is a second see-through layer on a see-through cap: draw it last.
                 if (m.name == "Prints_Mat") rm.setBlendOrderAt(i, p, 1)
-                // The baked occlusion counted the label decals as solid, leaving a dark box under
-                // each label. Keep only a trace of it until the bake is redone without them.
-                if (m.name in BAKED_AO && m.material.hasParameter("aoStrength")) m.setParameter("aoStrength", AO_STRENGTH)
             }
         }
         // The screen and the strip are drawn by the app: start them dark.
-        screen?.let { useTexture(it, screenTexture, "baseColorMap", "emissiveMap") }
+        screens.forEach {
+            useTexture(it, screenTexture, "baseColorMap", "emissiveMap")
+            it.setParameter("emissiveFactor", 1f, 1f, 1f)
+        }
         strip?.let { useTexture(it, stripTexture, "emissiveMap") }
-        setScreen("", "")
+        setScreen("", null, null)
         setStrip(0f, false)
         setStatusLamp(false)
         applyTransforms()
@@ -239,22 +256,85 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         dirty = true
     }
 
-    /** The deck's little screen: two lines in the pixel font, green on near black. */
-    fun setScreen(top: String, bottom: String) {
+    /**
+     * The red LED windows along the front: [title] in the pixel font across the long one; the track
+     * [code] and the [time] ("m:ss", or null for none) in seven-segment digits in the short one,
+     * the unlit segments faintly showing, as on a real display.
+     */
+    fun setScreen(title: String, code: String?, time: String?) {
         val c = Canvas(screenPixels)
-        c.drawColor(android.graphics.Color.rgb(10, 14, 12))
+        c.drawColor(android.graphics.Color.BLACK)
         val p = Paint().apply {
-            isAntiAlias = false
+            isAntiAlias = true
             typeface = pixelFont
-            textSize = 22f
-            color = android.graphics.Color.rgb(170, 255, 205)
+            textSize = 62f
+            letterSpacing = 0.04f
+            color = LED_ON
         }
-        c.drawText(fit(top, p, 244f), 6f, 26f, p)
-        p.color = android.graphics.Color.rgb(120, 200, 160)
-        c.drawText(fit(bottom, p, 244f), 6f, 55f, p)
+        c.drawText(fit(title, p, 1024f - 2 * 36f), 36f, 64f + 22f, p)
+        if (code != null) c.drawText(fit(code, p, 140f), 36f, 128f + 64f + 22f, p)
+        drawTime(c, time)
         TextureHelper.setBitmap(engine, screenTexture, 0, screenPixels)
-        screen?.let { glow(it, 2.5f) }
+        screens.forEach { glow(it, 1.6f) }
         dirty = true
+    }
+
+    /** "m:ss" as four seven-segment digits and a colon, at the right of the time window's part of the texture. */
+    private fun drawTime(c: Canvas, time: String?) {
+        val digits = time?.filter { it.isDigit() }?.padStart(4, '0')?.takeLast(4)
+        val unit = 128f
+        val w = 0.36f * unit
+        val h = 0.62f * unit
+        val t = 0.075f * unit
+        val gap = 0.13f * unit
+        val colon = 0.22f * unit
+        val region = DeckModel.TIME_U * screenPixels.width
+        var x = region - 36f - (4 * w + 2 * gap + colon)
+        val bottom = 128f + 64f + h / 2f
+        val on = Paint().apply { isAntiAlias = true; color = LED_ON }
+        val off = Paint().apply { isAntiAlias = true; color = LED_GHOST }
+        for (i in 0 until 4) {
+            val lit = digits?.get(i)?.let { SEGMENTS.getValue(it) } ?: ""
+            for (seg in "abcdefg") c.drawPath(segment(seg, x, bottom, w, h, t), if (seg in lit) on else off)
+            x += w + if (i == 1) 0f else gap
+            if (i == 1) {
+                for (fy in floatArrayOf(0.3f, 0.7f)) {
+                    val cy = bottom - h * fy
+                    val cx = x + colon / 2f + SLANT * (bottom - cy)
+                    c.drawRect(cx - t / 2f, cy - t / 2f, cx + t / 2f, cy + t / 2f, if (digits != null) on else off)
+                }
+                x += colon
+            }
+        }
+    }
+
+    /** One segment of a digit whose bottom-left corner is at ([x], [bottom]), leaning right as it rises. */
+    private fun segment(seg: Char, x: Float, bottom: Float, w: Float, h: Float, t: Float): Path {
+        val g = t * 0.12f
+        val mid = bottom - h / 2f
+        val top = bottom - h
+        val (x0, y0, x1, y1) = when (seg) {
+            'a' -> listOf(x + g, top, x + w - g, top)
+            'g' -> listOf(x + g, mid, x + w - g, mid)
+            'd' -> listOf(x + g, bottom, x + w - g, bottom)
+            'f' -> listOf(x, mid - g, x, top + g)
+            'b' -> listOf(x + w, mid - g, x + w, top + g)
+            'e' -> listOf(x, bottom - g, x, mid + g)
+            else -> listOf(x + w, bottom - g, x + w, mid + g)
+        }
+        val half = t / 2f
+        val pts = if (y0 == y1) {
+            listOf(x0 to y0, x0 + half to y0 - half, x1 - half to y0 - half, x1 to y0, x1 - half to y0 + half, x0 + half to y0 + half)
+        } else {
+            listOf(x0 to y0, x0 + half to y0 - half, x0 + half to y1 + half, x0 to y1, x0 - half to y1 + half, x0 - half to y0 - half)
+        }
+        return Path().apply {
+            pts.forEachIndexed { i, (px, py) ->
+                val sx = px + SLANT * (bottom - py)
+                if (i == 0) moveTo(sx, py) else lineTo(sx, py)
+            }
+            close()
+        }
     }
 
     private fun fit(text: String, p: Paint, width: Float): String {
@@ -263,28 +343,47 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         return t
     }
 
-    /** The record's face (vinyl, label, track gaps), or null for an empty platter. */
+    /** The record's [face] (vinyl, label, track gaps), or null for an empty platter. */
     fun setRecord(face: Bitmap?) {
         if (face == null) {
             if (recordShown) { scene.removeEntities(record.entities); recordShown = false; dirty = true }
             return
         }
-        val levels = 1 + (31 - Integer.numberOfLeadingZeros(maxOf(face.width, face.height)))
-        val texture = Texture.Builder()
-            .width(face.width)
-            .height(face.height)
-            .levels(levels)
-            .sampler(Texture.Sampler.SAMPLER_2D)
-            .format(Texture.InternalFormat.SRGB8_A8)
-            .usage(Texture.Usage.DEFAULT or Texture.Usage.GEN_MIPMAPPABLE)
-            .build(engine)
-        TextureHelper.setBitmap(engine, texture, 0, face)
-        texture.generateMipmaps(engine)
-        record.instance.materialInstances.forEach { it.setParameter("baseColorMap", texture, sampler) }
-        recordTexture?.let { engine.destroyTexture(it) }
-        recordTexture = texture
+        val t = mipmapped(face, srgb = true)
+        record.instance.materialInstances.forEach { it.setParameter("baseColorMap", t, sampler) }
+        faceTexture?.let { engine.destroyTexture(it) }
+        faceTexture = t
         if (!recordShown) { scene.addEntities(record.entities); recordShown = true }
         dirty = true
+    }
+
+    /** The record's grooves and glossy bands between tracks, from [RecordMaps]. */
+    fun setRecordSurface(normal: Bitmap, roughness: Bitmap) {
+        val n = mipmapped(normal, srgb = false)
+        val r = mipmapped(roughness, srgb = false)
+        record.instance.materialInstances.forEach {
+            if (it.material.hasParameter("normalMap")) it.setParameter("normalMap", n, sampler)
+            if (it.material.hasParameter("normalScale")) it.setParameter("normalScale", 1f)
+            if (it.material.hasParameter("metallicRoughnessMap")) it.setParameter("metallicRoughnessMap", r, sampler)
+        }
+        surfaceTextures.forEach { engine.destroyTexture(it) }
+        surfaceTextures = listOf(n, r)
+        dirty = true
+    }
+
+    private fun mipmapped(b: Bitmap, srgb: Boolean): Texture {
+        val levels = 1 + (31 - Integer.numberOfLeadingZeros(maxOf(b.width, b.height)))
+        val texture = Texture.Builder()
+            .width(b.width)
+            .height(b.height)
+            .levels(levels)
+            .sampler(Texture.Sampler.SAMPLER_2D)
+            .format(if (srgb) Texture.InternalFormat.SRGB8_A8 else Texture.InternalFormat.RGBA8)
+            .usage(Texture.Usage.DEFAULT or Texture.Usage.GEN_MIPMAPPABLE)
+            .build(engine)
+        TextureHelper.setBitmap(engine, texture, 0, b)
+        texture.generateMipmaps(engine)
+        return texture
     }
 
     fun resume() {
@@ -307,6 +406,9 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
             renderer.render(view)
             renderer.endFrame()
             settle--
+            // The first frames wait on the GPU building its shaders (seconds on an emulator), and
+            // Filament skips frames until they're done. A few frames through means it's showing.
+            if (++drawn == READY_FRAMES) onReady?.invoke()
         }
         // Request a Compose redraw even when Filament skips a frame.
         onFrame?.invoke()
@@ -356,10 +458,12 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     fun destroy() {
         pause()
         onFrame = null
+        onReady = null
         uiHelper.detach()
         if (recordShown) scene.removeEntities(record.entities)
         scene.removeEntities(deck.entities)
-        recordTexture?.let { engine.destroyTexture(it) }
+        faceTexture?.let { engine.destroyTexture(it) }
+        surfaceTextures.forEach { engine.destroyTexture(it) }
         engine.destroyTexture(screenTexture)
         engine.destroyTexture(stripTexture)
         loader.destroyAsset(deck)
@@ -370,6 +474,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         loader.destroy()
         engine.destroyEntity(sun)
         engine.destroyEntity(fill)
+        engine.destroyEntity(glint)
         engine.destroyIndirectLight(ambient)
         engine.destroyRenderer(renderer)
         engine.destroyView(view)
@@ -382,8 +487,24 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     companion object {
         private const val SETTLE_FRAMES = 3
         private const val WARM_UP_FRAMES = 30
-        private val BAKED_AO = setOf("Chassis_Mat", "Trim_Mat", "Rubber_Mat")
-        private const val AO_STRENGTH = 0.3f
+        private const val READY_FRAMES = 4
+
+        // A high key light from the front left, a dimmer fill from the right, a glint from behind
+        // and an even ambient, scaled so they sum to 1 on an upward face (Lambert: Σ light·cos/π
+        // + ambient).
+        private const val SUN = 1.40f
+        private const val FILL = 0.41f
+        private const val GLINT = 0.35f
+        private const val AMBIENT = 0.47f
+
+        private val LED_ON = android.graphics.Color.rgb(255, 46, 20)
+        private val LED_GHOST = android.graphics.Color.rgb(42, 7, 5)
+        /** How far a seven-segment digit leans, in x per unit of height. */
+        private const val SLANT = 0.10f
+        private val SEGMENTS = mapOf(
+            '0' to "abcdef", '1' to "bc", '2' to "abged", '3' to "abgcd", '4' to "fgbc",
+            '5' to "afgcd", '6' to "afgedc", '7' to "abc", '8' to "abcdefg", '9' to "abcdfg",
+        )
 
         /**
          * Whether Filament's native code can run here. Off under Robolectric (the JVM tests), where
