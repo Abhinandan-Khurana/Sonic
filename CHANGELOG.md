@@ -38,12 +38,13 @@ certificate as the `v0.5.1-dev.1` development pre-release it was promoted from.
 
 ### Release archive
 
-Every development build from 0.4.0 to 0.5.0 is kept as a GitHub pre-release, with its APK, its
+Every development build from 0.4.0 to 0.6.0 is kept as a GitHub pre-release, with its APK, its
 checksum and its verification report attached, so each step of the work can be inspected and
 installed on its own:
 
 | Tag | Build |
 | :--- | :--- |
+| `v0.6.0-dev.1` | The RG-1 3D turntable |
 | `v0.5.0-dev.1` | The redesigned listening room |
 | `v0.4.6-dev.1` | The original glass room restored |
 | `v0.4.5-dev.1` | The glass room returns |

@@ -7,11 +7,13 @@ kept as a pre-release beside it.
 | Kind | Tag | Assets |
 | :--- | :--- | :--- |
 | **Release** | `v0.5.1` | `Runout-0.5.1.apk`, `Runout-0.5.1.apk.sha256`, `Runout-0.5.1-VERIFICATION.md` |
-| **Development pre-releases** | `v0.4.0-dev.1` … `v0.5.0-dev.1` | `Runout-<version>-development.apk`, its `.sha256`, and a verification report |
+| **Development pre-releases** | `v0.4.0-dev.1` … `v0.6.0-dev.1` | `Runout-<version>-development.apk`, its `.sha256`, and a verification report |
 
-This folder keeps the checksum and verification report for the current release, and the
-[release notes](RELEASE_NOTES.md) for the next build. Everything older stays attached to its own
-GitHub release. APK binaries are release assets, never files in Git.
+This folder keeps the checksum and verification report for the **newest build**, which may be a
+development pre-release ahead of the current release (`0.6.0-dev.1` here, while `0.5.1` is the
+release). It also keeps the [release notes](RELEASE_NOTES.md) for the next build. Every published
+version's files stay attached to its own GitHub release. APK binaries are release assets, never
+files in Git.
 
 The universal APK supports Android 9 or newer and all four Android ABIs. It installs as **Runout
 Dev** (`app.runout.dev`) alongside the signed `app.runout` build from

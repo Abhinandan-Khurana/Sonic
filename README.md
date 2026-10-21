@@ -285,6 +285,7 @@ data.
 | Version | Kind | Notes |
 | :--- | :--- | :--- |
 | **0.5.1** | **Current release** | Fixes from the first phones; the audio-quality readout. |
+| [0.6.0](https://github.com/Abhiroop1122/runout/releases/tag/v0.6.0-dev.1) | Development | The RG-1 3D turntable, rendered with Filament. |
 | [0.5.0](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.0-dev.1) | Development | The redesigned listening room. |
 | [0.4.6](https://github.com/Abhiroop1122/runout/releases/tag/v0.4.6-dev.1) | Development | The original glass room restored. |
 | [0.4.5](https://github.com/Abhiroop1122/runout/releases/tag/v0.4.5-dev.1) | Development | The glass room returns. |
