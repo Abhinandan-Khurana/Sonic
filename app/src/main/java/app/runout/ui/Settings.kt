@@ -78,7 +78,7 @@ fun SettingsPanel(
                     style = Room.LabelQuiet,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                BasicText("Inter and Silkscreen: SIL Open Font License. Backdrop, Media3 and AndroidX: Apache 2.0. Soulseek core: MIT.", style = Room.LabelQuiet)
+                BasicText("Inter and Silkscreen: SIL Open Font License. Backdrop, Media3, AndroidX and Filament (the 3D turntable): Apache 2.0. Soulseek core: MIT.", style = Room.LabelQuiet)
             }
         }
     }

@@ -189,7 +189,8 @@ class SoulseekRepositoryTest {
         val files = folder.walkTopDown().filter { it.isFile }.toList()
         val saved = files.single { it.name.endsWith(".flac") }
         assertArrayEquals(flac, saved.readBytes())
-        assertTrue(files.any { it.name == "record.vinyl" })
+        // The download record is written just after the transfer is marked complete.
+        await("download record") { folder.walkTopDown().any { it.isFile && it.name == "record.vinyl" } }
         repo.logout().join()
         assertTrue(saved.exists())
         assertEquals(1, repo.downloadAlbums.value.size)

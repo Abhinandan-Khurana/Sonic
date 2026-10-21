@@ -1,0 +1,525 @@
+{
+  "units": "gltf",
+  "bounds": {
+    "min": [
+      -2.075,
+      0.0,
+      -1.34
+    ],
+    "max": [
+      2.075,
+      0.843,
+      1.34
+    ]
+  },
+  "platter": {
+    "centre": [
+      0.255,
+      0.0
+    ],
+    "radius": 1.1900001,
+    "flatMatRadius": 1.15,
+    "matTopY": 0.57,
+    "spindleTopY": 0.625,
+    "spindleRadius": 0.022
+  },
+  "tonearm": {
+    "pivot": [
+      1.535,
+      0.75,
+      -0.96
+    ],
+    "stylusTipAtRest": [
+      1.7785619,
+      0.643,
+      0.8346232
+    ],
+    "armLengthXZ": 1.8110756
+  },
+  "keys": {
+    "startStop": {
+      "centre": [
+        -1.5750000476837158,
+        0.5339999794960022,
+        -0.10999999940395355
+      ],
+      "size": [
+        0.55,
+        0.32
+      ],
+      "travel": 0.002
+    },
+    "prev": {
+      "centre": [
+        -1.7400000095367432,
+        0.5239999890327454,
+        0.6200000047683716
+      ],
+      "size": [
+        0.26,
+        0.22
+      ],
+      "travel": 0.002
+    },
+    "next": {
+      "centre": [
+        -1.409999966621399,
+        0.5239999890327454,
+        0.6200000047683716
+      ],
+      "size": [
+        0.26,
+        0.22
+      ],
+      "travel": 0.002
+    },
+    "eject": {
+      "centre": [
+        -1.5750000476837158,
+        0.5239999890327454,
+        0.9049999713897705
+      ],
+      "size": [
+        0.22,
+        0.16
+      ],
+      "travel": 0.002
+    }
+  },
+  "ledStatus": {
+    "centre": [
+      -1.2200000286102295,
+      0.4790000021457672,
+      -0.1599999964237213
+    ]
+  },
+  "ledStrip": {
+    "from": [
+      -2.0,
+      0.469,
+      1.268
+    ],
+    "to": [
+      2.0,
+      0.469,
+      1.268
+    ],
+    "uvAxis": "U along length"
+  },
+  "screen": {
+    "centre": [
+      -1.5750000476837158,
+      0.4580000042915344,
+      -0.7699999809265137
+    ],
+    "size": [
+      1.0,
+      0.25
+    ],
+    "uv": "0..1, U left-right, V top-bottom"
+  },
+  "materials": {
+    "Screen_Mat": "baseColorTexture: 256x64 #101418; emissiveFactor linear [0.624,0.807,0.723], strength 1",
+    "LED_Status_Mat": "orange #FF8A4C; emissiveFactor [1,0.254152,0.072272]",
+    "LED_Strip_Mat": "warm white #FFE9D6; emissiveFactor [1,0.814847,0.672443]"
+  },
+  "triangles": 12944,
+  "fileBytes": {
+    "white_teal": 1168652,
+    "dark": 1168912,
+    "mono_white": 1168660
+  },
+  "lod1": {
+    "white_teal": {
+      "triangles": 10260,
+      "fileBytes": 1026300
+    },
+    "dark": {
+      "triangles": 10260,
+      "fileBytes": 1027120
+    },
+    "mono_white": {
+      "triangles": 10260,
+      "fileBytes": 1026480
+    }
+  },
+  "shadow": {
+    "planeBounds": {
+      "min": [
+        -2.38625,
+        -0.002,
+        -1.541
+      ],
+      "max": [
+        2.38625,
+        -0.002,
+        1.541
+      ]
+    },
+    "alphaMaximum": 0.45098039215686275,
+    "uv": {
+      "U": "left to right",
+      "V": "back to front"
+    }
+  },
+  "camera": {
+    "tiltFromVerticalDegrees": 25,
+    "horizontalFovDegrees": 30
+  },
+  "record": {
+    "schemaVersion": 1,
+    "asset": "runout_record.glb",
+    "units": "gltf",
+    "coordinateFrame": {
+      "up": "+Y",
+      "front": "+Z",
+      "right": "+X"
+    },
+    "node": "Record",
+    "material": "Record_Mat",
+    "origin": [
+      0,
+      0,
+      0
+    ],
+    "bounds": {
+      "min": [
+        -1.1299999952316284,
+        -0.017999999225139618,
+        -1.1299999952316284
+      ],
+      "max": [
+        1.1299999952316284,
+        0.0010000000474974513,
+        1.1299999952316284
+      ]
+    },
+    "radius": 1.130000059248703,
+    "nominalRadius": 1.13,
+    "topFaceY": 0.0,
+    "bottomY": -0.017999999225139618,
+    "nominalThickness": 0.018,
+    "maximumThickness": 0.01899999927263707,
+    "leadInRim": {
+      "topY": 0.0010000000474974513,
+      "plateauRadiusRange": [
+        1.128,
+        1.129
+      ],
+      "smoothLeadInWidthMinimum": 0.002
+    },
+    "spindleHole": {
+      "radius": 0.027999999100561366,
+      "diameter": 0.05599999820112273,
+      "minimumInscribedRadius": 0.027996250962149496,
+      "deckSpindleRadius": 0.022,
+      "minimumRadialClearance": 0.005996250962149497
+    },
+    "uv": {
+      "min": [
+        2.109898922242337e-09,
+        0.0
+      ],
+      "max": [
+        1.0,
+        1.0
+      ],
+      "U": "(x + radius) / (2 * radius), left to right",
+      "V": "(z + radius) / (2 * radius), back to front",
+      "maxMeasuredMappingError": 4.407710729736891e-08,
+      "edge": "same planar outer-ring mapping"
+    },
+    "grooves": {
+      "radiusRange": [
+        0.3729,
+        1.0960999999999999
+      ],
+      "normalScale": 0.4,
+      "radialPitch": 0.0065,
+      "smoothLabelRadius": 0.3729,
+      "smoothOuterBandWidth": 0.03390000000000004
+    },
+    "materialFactors": {
+      "metallicFactor": 0,
+      "roughnessFactor": 1,
+      "effectiveMetallic": 0,
+      "roughnessGrooves": 0.4196078431372549,
+      "roughnessBands": 0.2784313725490196
+    },
+    "triangles": 3072,
+    "exportedVertices": 3096,
+    "geometricVertices": 1536,
+    "primitiveCount": 1,
+    "meshCount": 1,
+    "textures": {
+      "albedo": {
+        "dimensions": [
+          64,
+          64
+        ],
+        "embeddedBytes": 136,
+        "sha256": "1e773917a58b76a30e3e84a4f3c6d7253857d3620c2b52d823f4fcdf6b4ad095"
+      },
+      "normal": {
+        "dimensions": [
+          2048,
+          2048
+        ],
+        "embeddedBytes": 554275,
+        "sha256": "58f0274eda0f36262d4996e839494e1eeb37b1ed31466f479d1d46ad91e7c83d",
+        "channelMin": [
+          112,
+          112,
+          254
+        ],
+        "channelMax": [
+          144,
+          144,
+          255
+        ]
+      },
+      "metallicRoughness": {
+        "dimensions": [
+          2048,
+          2048
+        ],
+        "embeddedBytes": 11503,
+        "sha256": "28b6d73258f4e59785eb897b1468933cc5c57e5ce513ae5c6aa410a41b323fae",
+        "effectiveRoughnessValues": [
+          0.2784313725490196,
+          0.4196078431372549
+        ],
+        "effectiveMetallicMax": 0.0
+      }
+    },
+    "placement": {
+      "recordNodeWorldY": "matTopY + nominalThickness",
+      "forMatTopY057": 0.588,
+      "topWorldY": 0.588,
+      "rimWorldY": 0.589,
+      "deckSpindleTopY": 0.625,
+      "spindleAboveNominalRecordTop": 0.03700000000000003,
+      "note": "Top-origin geometry extends below origin. Placing origin directly at matTopY would sink the record."
+    },
+    "files": {
+      "runout_record.glb": {
+        "bytes": 735080,
+        "sha256": "1555a06555be467265dbaf2521e306dd934c2ef1676d08036c051baef7ebb0a5"
+      },
+      "runout_record.blend": {
+        "bytes": 682126,
+        "sha256": "c5d8fb6a821d70d05c973e1910a630f263170f58a74b31638f3183cbc5a27beb"
+      }
+    },
+    "buildCommand": "python /home/som/Downloads/modular_turntable_v2/build/record.py",
+    "recommendedPlacement": [
+      0.255,
+      0.588,
+      0.0
+    ],
+    "stylusAfterLoweringY": 0.588
+  },
+  "studioEnvironment": {
+    "file": "studio_env/studio.hdr",
+    "dimensions": [
+      1024,
+      512
+    ],
+    "type": "neutral analytic Radiance RGBE",
+    "ktxGenerated": false,
+    "reason": "Filament cmgen not installed"
+  },
+  "previews": [
+    {
+      "file": "previews/white_teal_top.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1612214,
+      "transparent": true
+    },
+    {
+      "file": "previews/white_teal_app.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1462973,
+      "transparent": true
+    },
+    {
+      "file": "previews/white_teal_app_leds.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1461417,
+      "transparent": true
+    },
+    {
+      "file": "previews/white_teal_hero_three_quarter.png",
+      "size": [
+        2400,
+        1547
+      ],
+      "bytes": 2161512,
+      "transparent": true
+    },
+    {
+      "file": "previews/white_teal_hero_app_record.png",
+      "size": [
+        2400,
+        1547
+      ],
+      "bytes": 3419430,
+      "transparent": true
+    },
+    {
+      "file": "previews/dark_top.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1576838,
+      "transparent": true
+    },
+    {
+      "file": "previews/dark_app.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1447742,
+      "transparent": true
+    },
+    {
+      "file": "previews/dark_app_leds.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1446826,
+      "transparent": true
+    },
+    {
+      "file": "previews/dark_hero_three_quarter.png",
+      "size": [
+        2400,
+        1547
+      ],
+      "bytes": 2166100,
+      "transparent": true
+    },
+    {
+      "file": "previews/dark_hero_app_record.png",
+      "size": [
+        2400,
+        1547
+      ],
+      "bytes": 3388776,
+      "transparent": true
+    },
+    {
+      "file": "previews/mono_white_top.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1605444,
+      "transparent": true
+    },
+    {
+      "file": "previews/mono_white_app.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1458869,
+      "transparent": true
+    },
+    {
+      "file": "previews/mono_white_app_leds.png",
+      "size": [
+        1600,
+        1032
+      ],
+      "bytes": 1456735,
+      "transparent": true
+    },
+    {
+      "file": "previews/mono_white_hero_three_quarter.png",
+      "size": [
+        2400,
+        1547
+      ],
+      "bytes": 2153046,
+      "transparent": true
+    },
+    {
+      "file": "previews/mono_white_hero_app_record.png",
+      "size": [
+        2400,
+        1547
+      ],
+      "bytes": 3405636,
+      "transparent": true
+    }
+  ],
+  "materialDefinitions": {
+    "LED_Status_Mat": {
+      "doubleSided": true,
+      "emissiveFactor": [
+        1,
+        0.2541520893573761,
+        0.07227185368537903
+      ],
+      "name": "LED_Status_Mat",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1,
+          0.2541520893573761,
+          0.07227185368537903,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.4000000059604645
+      }
+    },
+    "LED_Strip_Mat": {
+      "doubleSided": true,
+      "emissiveFactor": [
+        1,
+        0.8148465752601624,
+        0.672443151473999
+      ],
+      "name": "LED_Strip_Mat",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1,
+          0.8148465752601624,
+          0.672443151473999,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.4000000059604645
+      }
+    },
+    "Screen_Mat": {
+      "doubleSided": true,
+      "emissiveFactor": [
+        0.6240000128746033,
+        0.8069999814033508,
+        0.7229999899864197
+      ],
+      "name": "Screen_Mat",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 4
+        },
+        "metallicFactor": 0,
+        "roughnessFactor": 0.3499999940395355
+      }
+    }
+  }
+}
