@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -516,16 +517,44 @@ fun RoomScreen(
             RecordDetails(record, roomBackdrop, onDismiss = { detailsFor = null })
         }
 
-        // Panels
-        val open = panel
+        // What each place holds. Dig and Friends get their own full page; the rest slide up as glass.
+        val panelContent = @Composable { shown: Panel ->
+            when (shown) {
+                Panel.DIG -> {
+                    NetworkNote(state, actions)
+                    val preview = state.folderPreview
+                    if (preview != null) FolderPreview(preview, state, actions) { peer ->
+                        actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); panel = Panel.FRIENDS
+                    } else DiscoveryScreen(state, actions, onAccount = openAccount, onCue = { panel = null })
+                }
+                Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount)
+                Panel.FRIENDS -> {
+                    if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
+                    SoulseekMessagesPanel(state, actions, onAccount = openAccount)
+                }
+                Panel.SETTINGS -> SettingsPanel(
+                    state, actions, settings, { settings = it },
+                    onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
+                )
+                Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions)
+            }
+        }
+
+        // Sheets
+        val open = panel?.takeIf { !it.fullPage }
         val sheetWidth = (screenW * 0.46f).coerceIn(340.dp, 520.dp)
         Box(Modifier.fillMaxSize().zIndex(10f)) {
             AnimatedVisibility(open != null, enter = fadeIn(), exit = fadeOut()) {
+                // Only catches taps while a sheet is open: during its fade-out the room's tabs must
+                // take the next tap straight away.
                 Box(
                     Modifier
                         .fillMaxSize()
                         .background(Color.Black.copy(alpha = 0.06f))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { closePanel() },
+                        .then(
+                            if (open != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { closePanel() }
+                            else Modifier,
+                        ),
                 )
             }
             AnimatedVisibility(
@@ -541,33 +570,24 @@ fun RoomScreen(
                     backdrop = roomBackdrop,
                     portrait = portrait,
                     width = sheetWidth,
-                    // Dig and Friends get the taller sheet: they hold a list plus a keyboard.
-                    height = screenH * (if (shown == Panel.DIG || shown == Panel.FRIENDS) 0.86f else 0.74f),
+                    height = screenH * 0.74f,
                     onClose = { closePanel() },
-                    // Dig scrolls its own lazy results list.
-                    scroll = shown != Panel.DIG,
-                ) {
-                    when (shown) {
-                        Panel.DIG -> {
-                            NetworkNote(state, actions)
-                            val preview = state.folderPreview
-                            if (preview != null) FolderPreview(preview, state, actions) { peer ->
-                                actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); panel = Panel.FRIENDS
-                            } else DiscoveryScreen(state, actions, onAccount = openAccount, onCue = { panel = null })
-                        }
-                        Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount)
-                        Panel.FRIENDS -> {
-                            if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
-                            SoulseekMessagesPanel(state, actions, onAccount = openAccount)
-                        }
-                        Panel.SETTINGS -> SettingsPanel(
-                            state, actions, settings, { settings = it },
-                            onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
-                        )
-                        Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions)
-                    }
-                }
+                ) { panelContent(shown) }
             }
+        }
+
+        // Full pages
+        val page = panel?.takeIf { it.fullPage }
+        AnimatedVisibility(
+            visible = page != null,
+            enter = slideInVertically { it / 10 } + fadeIn(),
+            exit = slideOutVertically { it / 10 } + fadeOut(),
+            modifier = Modifier.zIndex(11f),
+        ) {
+            var shown by remember { mutableStateOf(page ?: Panel.DIG) }
+            if (page != null) shown = page
+            // Dig scrolls its own lazy list; Friends' content scrolls inside the page.
+            FullPage(shown.title, onClose = { closePanel() }, scroll = shown != Panel.DIG) { panelContent(shown) }
         }
 
         // Onboarding: its own full screen, on first launch or when Soulseek setup is asked for again.
@@ -740,6 +760,32 @@ private fun PanelSheet(
         // The glass keeps its size; its contents shrink above the keyboard.
         val body = Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime)
         Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
+    }
+}
+
+/**
+ * A place with its own whole screen (Dig, Friends): the room's light, a title and Close at the top,
+ * and the content filling the rest above the keyboard.
+ */
+@Composable
+private fun FullPage(title: String, onClose: () -> Unit, scroll: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
+        RoomBackground(Modifier.fillMaxSize(), portrait = true)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .windowInsetsPadding(WindowInsets.ime)
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicText(title, style = Room.Title.copy(fontSize = 24.sp, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f).testTag("panel-title"))
+                TextAction("Close", onClose, color = Room.Ink)
+            }
+            val body = Modifier.fillMaxWidth().weight(1f)
+            Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
+        }
     }
 }
 

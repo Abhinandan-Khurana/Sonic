@@ -11,7 +11,12 @@ enum class SearchSource(val label: String) { ALL("All sources"), LOCAL("On this 
 enum class SearchKind(val label: String) { ALL("All"), SONGS("Songs"), ALBUMS("Albums") }
 enum class SearchSort(val label: String) { MATCH("Best match"), AVAILABILITY("Availability"), QUALITY("Quality") }
 enum class SearchQuality(val label: String) { ANY("Any quality"), CD("16-bit"), HI_RES("24-bit+"), UNKNOWN("Unknown") }
-data class DiscoveryOptions(val source: SearchSource = SearchSource.ALL, val kind: SearchKind = SearchKind.ALL, val sort: SearchSort = SearchSort.MATCH, val quality: SearchQuality = SearchQuality.ANY, val availableOnly: Boolean = false)
+/**
+ * Dig searches albums only, meaning album folders on Soulseek and albums on this device, from one
+ * source at a time. [kind] stays for older callers but defaults to albums, which is all the
+ * screen offers.
+ */
+data class DiscoveryOptions(val source: SearchSource = SearchSource.SOULSEEK, val kind: SearchKind = SearchKind.ALBUMS, val sort: SearchSort = SearchSort.MATCH, val quality: SearchQuality = SearchQuality.ANY, val availableOnly: Boolean = false)
 data class LocalMatch(val album: Album, val track: Track?, val score: Int) {
     val id = if (track == null) "album:${album.id}" else "track:${album.id}:${track.id}"
 }
@@ -23,6 +28,33 @@ data class RemoteAlbum(val username: String, val directory: String, val tracks: 
     val speed = tracks.maxOfOrNull { it.uploadSpeed } ?: 0
     val bits = tracks.mapNotNull { it.bitDepth }.minOrNull()
     val rate = tracks.mapNotNull { it.sampleRate }.minOrNull()
+    private val names = folderNames(directory)
+    /** The album as people would say it, read from the folder name. */
+    val album = names.second
+    /** The artist, from "Artist - Album" or the folder above, when there is one worth showing. */
+    val parent = names.first
+    val bytes = tracks.sumOf { it.size }
+}
+
+private val genericFolders = setOf("music", "flac", "albums", "album", "downloads", "download", "complete", "shared", "share", "mp3", "audio", "lossless", "hi-res", "hires", "24bit", "music library")
+private val leadingYear = Regex("^[\\[(]?(19|20)\\d{2}[\\])]?\\s*[-–.]?\\s*")
+private val trailingTags = Regex("\\s*[\\[(][^\\])]*(flac|24|16|bit|khz|web|cd|vinyl|remaster|deluxe)[^\\])]*[\\])]\\s*$", RegexOption.IGNORE_CASE)
+
+/**
+ * (artist, album) from a shared folder path. "Air - Moon Safari (1998) [FLAC]" reads as
+ * (Air, Moon Safari (1998)); a bare "Moon Safari" under "Air" reads the artist from the folder
+ * above, unless that is a generic name like "Music".
+ */
+fun folderNames(directory: String): Pair<String?, String> {
+    val name = directory.substringAfterLast('/').trim().ifBlank { return null to "Shared FLAC" }
+    val above = directory.substringBeforeLast('/', "").substringAfterLast('/').trim()
+        .takeIf { it.isNotBlank() && !it.startsWith("@@") && it.lowercase(Locale.ROOT) !in genericFolders }
+    val split = name.indexOf(" - ")
+    return if (split > 0) {
+        val artist = name.substring(0, split).trim()
+        val album = name.substring(split + 3).replace(leadingYear, "").replace(trailingTags, "").trim().ifBlank { name }
+        artist to album
+    } else above to name.replace(trailingTags, "").trim().ifBlank { name }
 }
 data class DiscoveryState(
     val query: String = "",

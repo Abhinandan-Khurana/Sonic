@@ -67,11 +67,14 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** The room's glass sheets. Those [inStrip] get a tab in the room; Downloads opens from the ↓ count. */
-enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true) {
-    DIG("Dig", "Dig"),
+/**
+ * The room's places. Those [inStrip] get a tab; Downloads opens from the ↓ count. [fullPage] ones
+ * take the whole screen; the rest slide up as glass sheets.
+ */
+enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true, val fullPage: Boolean = false) {
+    DIG("Dig", "Dig", fullPage = true),
     DROPS("Friday Drops", "Drops"),
-    FRIENDS("Friends", "Friends"),
+    FRIENDS("Friends", "Friends", fullPage = true),
     SETTINGS("Settings", "Settings"),
     DOWNLOADS("Downloads", "Downloads", inStrip = false),
 }

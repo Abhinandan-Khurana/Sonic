@@ -77,16 +77,17 @@ class RunoutFlowTest {
         compose.onNodeWithTag("panel:transfers").assertIsDisplayed()
         compose.onNodeWithTag("action:Close").performClick()
     }
-    @Test fun `a song found on this device goes on the platter cued, and only the deck plays it`() {
+    @Test fun `an album found on this device goes on the platter cued, and only the deck plays it`() {
         val track=Track("t2","content://test/02.flac","Lowlight",2,1,60_000)
         val album=Album("night","Night Drive","Vela Park",2023,"",listOf(Track("t1","content://test/01.flac","Opening",1,1,60_000),track),AudioQuality("FLAC"))
-        val hit=LocalMatch(album,track,1)
-        val discovery=DiscoveryState("Lowlight",DiscoveryOptions(source=SearchSource.LOCAL),local=listOf(hit))
+        // A song match still surfaces its album: Dig shows albums only.
+        val discovery=DiscoveryState("Lowlight",DiscoveryOptions(source=SearchSource.LOCAL),local=listOf(LocalMatch(album,track,1)))
         val actions=RecordingActions()
         compose.setContent { DiscoveryScreen(state().copy(discovery=discovery),actions,{}, {}) }
-        compose.onNodeWithText("Play song").assertDoesNotExist()
-        compose.onNodeWithTag("cue-local:${hit.id}").performScrollTo().performClick()
-        assertEquals(listOf("cue:Night Drive:t2"),actions.log)
+        // Only the search field says "Lowlight": no song row.
+        compose.onAllNodesWithText("Lowlight").assertCountEquals(1)
+        compose.onNodeWithTag("cue-local:album:night").performScrollTo().performClick()
+        assertEquals(listOf("cue:Night Drive:null"),actions.log)
         assertTrue(actions.log.none {it=="startStop"||it=="needleDrop"})
     }
     @Test fun `album preview must finish and have a destination before a folder can be downloaded`() {
@@ -95,16 +96,23 @@ class RunoutFlowTest {
         compose.onNodeWithTag("confirm-folder").assertIsNotEnabled()
         compose.onNodeWithText("Choose download folder").assertIsDisplayed()
     }
-    @Test fun `discovery uses the complete album group rather than page fragments`() {
+    @Test fun `discovery shows whole album folders and a tap on one opens its preview`() {
         val files=(1..201).map {SoulseekSearchResult("peer","Artist/Album/${it.toString().padStart(3,'0')} Song.flac",100)}
         val options=DiscoveryOptions(source=SearchSource.SOULSEEK)
         val status=SoulseekSearchStatus("request","Album",SearchPhase.COMPLETE)
         val discovery=DiscoveryState("Album",options,remote=remoteAlbums("Album",files,options),online=status)
         val actions=RecordingActions()
         compose.setContent { DiscoveryScreen(state().copy(discovery=discovery,soulseekSession=SoulseekSession(SoulseekConnection.CONNECTED,"listener")),actions,{}, {}) }
-        compose.onNodeWithTag("screen:search").performScrollToNode(hasText("peer · 201 matching tracks"))
-        compose.onNodeWithText("peer · 201 matching tracks").assertIsDisplayed()
-        compose.onNodeWithText("Preview album folder").performClick()
+        // Albums only: no song/album switch and no "all sources".
+        compose.onNodeWithText("Songs").assertDoesNotExist()
+        compose.onNodeWithText("All sources").assertDoesNotExist()
+        compose.onNodeWithText("FLAC · 201 TRACKS", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Preview album folder").assertDoesNotExist()
+        compose.onNodeWithTag("preview-folder:peer\u0000Artist/Album").performClick()
         assertTrue(actions.log.any {it.startsWith("soulseekFolder:")})
+        // Filters & sort live behind a floating key.
+        compose.onNodeWithTag("search-filters").performClick()
+        compose.onNodeWithTag("search-filter-card").assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/17_dig_results.png")
     }
 }

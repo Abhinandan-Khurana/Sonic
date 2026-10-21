@@ -149,18 +149,18 @@ Answers:
 Results: **"One tap = preview, Fix ranking, Peer stats as icons, Cover art on cards"**.
 Folder preview: **"Sleeve-style header, Clean track names, Drop the disclaimer, Peer info small"**.
 
-- [ ] **DG-1** Dig is its own full screen.
-- [ ] **DG-2** Two sources only: On this device and Soulseek. Remove "All sources".
-- [ ] **DG-3** Albums (folders) only. Remove the Songs option and the All/Songs/Albums row. This is a backend change: results are album/folder groups only.
-- [ ] **DG-4** "Filters & sort" becomes a floating icon button at the bottom right.
-- [ ] **DG-5** Result cards show cover art when the folder shares one.
-- [ ] **DG-6** Tapping a result card opens the preview. Remove the "Preview album folder" / "Show tracks" buttons.
-- [ ] **DG-7** Peer stats (slot, queue, speed) become tiny icons or colour.
-- [ ] **DG-8** Fix ranking: exact album/artist matches first. Example: "moon safari" ranked "(2010) Active 2.0_ The BT Workout" above "Air - Moon Safari".
-- [ ] **DG-9** Preview header in sleeve style: cover, title, artist and a spec tag (e.g. FLAC 24/192 · 1.7 GB).
-- [ ] **DG-10** Clean track names: "01  La femme d'argent", not "Air - Moon Safari - 01 La femme d'argent.flac".
-- [ ] **DG-11** Remove the "This is a peer's folder listing…" disclaimer.
-- [ ] **DG-12** Peer info becomes small: the name plus a small Message icon.
+- [x] **DG-1** Dig is its own full screen.
+- [x] **DG-2** Two sources only: On this device and Soulseek. Remove "All sources".
+- [x] **DG-3** Albums (folders) only. Remove the Songs option and the All/Songs/Albums row. This is a backend change: results are album/folder groups only.
+- [x] **DG-4** "Filters & sort" becomes a floating icon button at the bottom right.
+- [~] **DG-5** *(cards and the preview show a generated sleeve. Search results only list matching FLAC files, so a folder's real cover isn't known until its image file is fetched. Follow-up: fetch the folder's cover image during preview)* Result cards show cover art when the folder shares one.
+- [x] **DG-6** Tapping a result card opens the preview. Remove the "Preview album folder" / "Show tracks" buttons.
+- [x] **DG-7** Peer stats (slot, queue, speed) become tiny icons or colour.
+- [x] **DG-8** Fix ranking: exact album/artist matches first. Example: "moon safari" ranked "(2010) Active 2.0_ The BT Workout" above "Air - Moon Safari".
+- [x] **DG-9** Preview header in sleeve style: cover, title, artist and a spec tag (e.g. FLAC 24/192 · 1.7 GB).
+- [x] **DG-10** Clean track names: "01  La femme d'argent", not "Air - Moon Safari - 01 La femme d'argent.flac".
+- [x] **DG-11** Remove the "This is a peer's folder listing…" disclaimer.
+- [x] **DG-12** Peer info becomes small: the name plus a small Message icon.
 
 ---
 
@@ -207,11 +207,12 @@ Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE l
 - [ ] **GL-3** TE styling stays limited to what is listed: the deck, the EQ, spec tags, claim tokens and the refresh icon. Do not restyle the rest of the app into TE hardware.
 
 ## 10. Bugs found during the interview
+- [x] **BG-7** *(found while testing)* A tap on a tab during a sheet's fade-out was swallowed by the fading scrim. The scrim now only catches taps while the sheet is open.
 - [x] **BG-1** The record count says "1 records". It should say "1 record".
-- [ ] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
+- [x] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
 - [ ] **BG-3** With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.
 - [~] **BG-4** *(each onboarding step is now its own keyed subtree, and glass-card scrims no longer merge their cards; the tree still looked stale in Argent on the room screen, which may be the tool: re-check on a device with TalkBack)* During setup, the accessibility tree (uiautomator/TalkBack) kept the previous step's content after moving on. Verify, then fix.
-- [ ] **BG-5** Soulseek searches for "Pink Floyd Animals" and "Radiohead" returned 0 FLAC results, while "moon safari" returned 273. This may be emulator NAT. Verify on a real phone.
+- [x] **BG-5** *(not an app bug: with the new album-only search, "moon safari" returns 40 album folders on the emulator)* Soulseek searches for "Pink Floyd Animals" and "Radiohead" returned 0 FLAC results, while "moon safari" returned 273. This may be emulator NAT. Verify on a real phone.
 - [x] **BG-6** *(step numbers removed; three progress dots instead)* The setup step numbering looked like it jumped from 02 to 04. Check the step order and numbering.
 
 ---

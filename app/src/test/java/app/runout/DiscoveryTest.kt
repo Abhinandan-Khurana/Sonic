@@ -27,8 +27,10 @@ class DiscoveryTest {
     @Test fun `match wins over resolution and availability breaks ties without losing unknown metadata`() {
         val exact = SoulseekSearchResult("queued","Artist/Album/01 Moonlight.flac",100,bitDepth=16,sampleRate=44100,freeSlots=0,queueLength=10)
         val hi = SoulseekSearchResult("fast","Artist/Other/Moonlight Remix.flac",100,bitDepth=24,sampleRate=96000,freeSlots=1,uploadSpeed=1000000)
-        assertEquals("queued",remoteAlbums("Moonlight",listOf(hi,exact),DiscoveryOptions()).first().username)
-        assertEquals("fast",remoteAlbums("Moonlight",listOf(hi,exact),DiscoveryOptions(sort=SearchSort.QUALITY)).first().username)
+        // Track-level matching (the backend still supports it; Dig itself asks for albums).
+        val songs = DiscoveryOptions(kind = SearchKind.SONGS)
+        assertEquals("queued",remoteAlbums("Moonlight",listOf(hi,exact),songs).first().username)
+        assertEquals("fast",remoteAlbums("Moonlight",listOf(hi,exact),songs.copy(sort=SearchSort.QUALITY)).first().username)
         val unknown=SoulseekSearchResult("unknown","Album/Moonlight.flac",100)
         assertEquals(listOf("unknown"),remoteAlbums("Moonlight",listOf(hi,exact,unknown),DiscoveryOptions(quality=SearchQuality.UNKNOWN)).map {it.username})
         assertEquals(listOf("fast"),remoteAlbums("Moonlight",listOf(hi,exact),DiscoveryOptions(availableOnly=true)).map {it.username})
