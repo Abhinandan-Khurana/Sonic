@@ -32,6 +32,7 @@ class RunoutFlowTest {
         // The intro plays, then hands over to the sign-in by itself.
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/10_setup_login.png")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/login.png")
         compose.onNodeWithTag("setup-offline").performClick()
         compose.onNodeWithTag("setup-finish").assertIsDisplayed().performClick()
         compose.waitForIdle()
@@ -45,6 +46,9 @@ class RunoutFlowTest {
         compose.mainClock.advanceTimeBy(2_200)
         compose.onNodeWithTag("onboarding-intro").assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/13_intro.png")
+        // Later on: the grooves lit and RUNOUT typing out (for the README).
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/intro.png")
         compose.onNodeWithTag("onboarding-intro").performClick()
         compose.mainClock.autoAdvance=true
         compose.waitForIdle()

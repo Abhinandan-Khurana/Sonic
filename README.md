@@ -1,51 +1,124 @@
 # RUNOUT
 
-A vinyl listening room for Android, with offline FLAC playback, Soulseek music discovery and private messages, and Internet Archive Friday Drops.
+**A vinyl listening room for your FLAC records, on Android.** Flick through a crate of sleeves, pull a record out, drop it on a glass turntable and lower the needle. Dig for albums on Soulseek, claim free Friday Drops from the Internet Archive, and swap records with friends.
 
-## Version 0.4.1 — development build
+[**Download 0.5.0 (development)**](https://github.com/Somchandra17/runout/releases/tag/v0.5.0-dev.1) · [Build guide](docs/BUILDING.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
-Runout keeps the retro vinyl player home and adds **Home, Library, Discover and Messages**, with downloads and account status always within reach. Guided setup offers offline listening first, then explains download storage, optional FLAC sharing and background connection choices.
+<p align="center">
+  <img src="docs/images/screens/home.png" width="250" alt="The listening room: a glass turntable with orange keys above a crate of record sleeves, and four icon tabs" />
+  &nbsp;
+  <img src="docs/images/screens/intro.png" width="250" alt="The intro: a record spinning on a platter, its grooves glowing orange, with RUNOUT in dot-matrix letters" />
+  &nbsp;
+  <img src="docs/images/screens/login.png" width="250" alt="Sign-in: a collage of records, the app mark, the headline 'Every record you own. One room to play them.', and Soulseek ID and password fields" />
+</p>
 
-Search your local songs, albums and artists as you type. Submit an online search to stream Soulseek FLAC matches as peers respond. Switch between songs and albums, rank by match, availability or quality, and preview a peer's complete folder before downloading it. The search and connection work takes reference from Seeker's approach; Runout retains its own Kotlin UI and MIT native implementation.
+---
 
-- **Play offline without signing in.** Choose your FLAC music folder, browse your crate, and use the turntable, DSP, EQ, and Pure mode.
-- **Use your Soulseek account online.** Search FLAC tracks, download individual files or an album folder, and send private messages by username.
-- **Keep Internet Archive.** Friday Drops still offers the same weekly collection and three claims per week. Soulseek sign-in is required to claim; albums without FLAC consume no allowance.
-- **Keep your files.** Choose a writable download folder. Completed FLAC files remain accessible outside Runout and survive uninstalling the app.
-- **Share only when you choose.** Select a folder and enable FLAC sharing. The rest of your device library is not published automatically.
-- **Optional stay-online mode.** Incoming private messages and sharing can remain available in the background with an ongoing notification and Disconnect action.
+## The room
 
-FLAC-only applies to music throughout scanning, imports, downloads, sharing and playback. Artwork, record containers and the turntable's synthesized effects remain supported. Renaming an MP3 to `.flac` does not make it acceptable.
+The home screen is a listening room, not a list. Your albums stand in a crate as sleeves. Flick to dig, tap one to slide its record out, and drag the disc onto the platter. It lands with a soft thud and a haptic tick.
 
-[Download the development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.1-dev.1/Runout-0.4.1-development.apk) · [Soulseek behavior and architecture](docs/SOULSEEK.md) · [Build instructions](docs/BUILDING.md) · [Documentation index](docs/README.md)
+The turntable is the player:
+- **START/STOP** lowers or lifts the needle.
+- **◀◀ ▶▶** skip within a side. Tap the record to flip it.
+- **Hold** the platter to wind it down.
+- **Drag the tonearm** to drop the needle anywhere on the side.
 
-<img src="docs/images/home.png" width="270" alt="The Runout listening room: glass turntable above the record crate, with the Dig, Drops, Friends and Settings tabs" />
+The deck is drawn in code with Teenage Engineering details: keys with real travel in soft anodised orange under a glass coat, engraved labels, and a small dot-matrix screen. The platter turns slowly, with strobe dots that stand still at speed. Records always play at the speed they were recorded.
 
-## First use
+Long-press any record to send it, see its details and licence, or remove it.
 
-1. On first launch, choose **Listen offline** or **Set up Soulseek**. Offline listening needs only a local FLAC folder.
-2. For online features, sign in with your Soulseek ID. There is no sign-up page: a new ID is created the first time you sign in with it (the ⓘ on the sign-in explains). You stay signed in; credentials are kept with Android Keystore.
-3. Setup walks through a download folder, optional sharing folder and app-only/background connection mode. Sharing choices and the selected share folder are remembered separately for each account.
-4. Use **Discover** for local/online search and **Friday Drops** for Internet Archive. Downloads from both providers require a connected Soulseek account.
-5. Preview an album folder to see its complete FLAC listing before confirming the download. Use the header's download button for progress, pause/resume and retry.
+<p align="center">
+  <img src="docs/images/screens/record-menu.png" width="250" alt="A record pulled from the crate, with its menu: Put back, Send with audio, Details" />
+  &nbsp;
+  <img src="docs/images/screens/settings-sound.png" width="250" alt="Sound settings: Pure and Hi-res toggles, EQ presets as small hardware keys, and a 10-band EQ with orange slider caps" />
+</p>
 
-Temporary connection loss keeps your account and automatically reconnects. App-only mode pauses an idle connection after Runout goes into the background and resumes it when you return. Opening a folder picker preserves your account; if Android interrupts the network, Runout reconnects when you return. Connecting the same ID in another client pauses automatic retries to avoid repeatedly disconnecting that client; use **Reconnect** when ready.
+**Sound:**
+- **Pure** passes the decoder's output straight through: bit-perfect to a USB DAC on Android 14 and later.
+- **Hi-res output** plays each file at its own sample rate in 32-bit float.
+- A 10-band EQ with presets, AutoEq headphone profiles, ReplayGain, a limiter, and an optional "warmth".
 
-Soulseek has no password reset. An unused username creates an account, including a mistyped existing name. Signing in disconnects another client using the same account. Its protocol does not encrypt credentials or private messages. Runout has no separate account server and never sends Soulseek credentials to Internet Archive.
+## Dig
+
+Search albums on your phone or across Soulseek, FLAC only. Results are whole album folders, ranked by how well the folder matches. Each shows the format and the peer as three small marks: a dot that's green when an upload slot is free, the queue, and the speed.
+
+Tap a folder to see its full track list, laid out like the back of a sleeve, before downloading anything.
+
+<p align="center">
+  <img src="docs/images/screens/dig.png" width="250" alt="Dig results for 'moon safari': album folders by Air with format tags and peer marks" />
+  &nbsp;
+  <img src="docs/images/screens/dig-preview.png" width="250" alt="A folder preview: Moon Safari (1998) by Air, FLAC 24/96, with clean track names and a Download button" />
+</p>
+
+## Friday Drops
+
+Every Friday, ten Creative Commons albums from the Internet Archive's netlabel collection, the same ten for everyone. Three lights show your claims left this week.
+
+Tap a drop to see its FLAC tracks, listen to thirty seconds of any of them, and claim it into your crate. Albums with no FLAC say so and don't use a claim.
+
+## Friends
+
+Chat with other Soulseek listeners, keep a friends list with online dots, and send a record as a card. A card reads as plain text in any Soulseek client; in Runout it's a sleeve with **Find on Soulseek**.
+
+<p align="center">
+  <img src="docs/images/screens/drops.png" width="250" alt="Friday Drops: a shelf of album sleeves with three claim lights" />
+  &nbsp;
+  <img src="docs/images/screens/friends-chat.png" width="250" alt="A chat with maya, including two record cards: Night Drive and Moon Safari" />
+</p>
+
+## First run
+
+1. A short intro, then sign in with your **Soulseek ID**. Soulseek has no sign-up page: a new ID is created the first time you sign in with it, and the ⓘ explains how. You stay signed in; credentials are kept with Android Keystore.
+2. Rather not? **Skip, listen offline** needs only a folder of FLAC albums.
+3. Each choice moves on by itself: a download folder, whether to share a folder (with a clear warning that it becomes public), and whether to stay online in the background.
+
+<p align="center">
+  <img src="docs/images/screens/setup-share.png" width="250" alt="Setup: 'Share a folder?' with a caution note that the folder becomes public, a Share a folder button and Skip" />
+  &nbsp;
+  <img src="docs/images/screens/setup-rhythm.png" width="250" alt="Setup: 'When should you stay online?' with two tappable cards, the selected one tinted" />
+</p>
+
+## FLAC only
+
+FLAC is the rule for music everywhere: scanning, imports, downloads, sharing and playback. Renaming an MP3 to `.flac` does not get it in. Artwork, record containers and the turntable's synthesised sounds are fine.
+
+## Install
+
+Download the APK and its `.sha256` from the [0.5.0 release](https://github.com/Somchandra17/runout/releases/tag/v0.5.0-dev.1) and check the checksum:
+
+```bash
+sha256sum -c Runout-0.5.0-development.apk.sha256
+```
+
+The development build installs as **Runout Dev** (`app.runout.dev`), alongside the original Runout app, with its own crate and account.
+
+0.5.0 is signed with a different debug certificate from 0.4.x, so **uninstall Runout Dev 0.4.x first**. That clears only Runout Dev's own data: pick your music folder and sign in again. Your music files aren't touched. Android 9 or newer, on ARM64, ARMv7, x86-64 and x86.
+
+## Soulseek, privacy and staying connected
+
+- **What Soulseek can and can't do:**
+  - It has no password reset.
+  - An unused name creates an account, including a mistyped one.
+  - Signing in disconnects any other client using the same ID.
+  - Its protocol does not encrypt credentials or private messages.
+- **What Runout sends:** there is no Runout account server, and Soulseek credentials are never sent to the Internet Archive.
+- **Losing the network:** a temporary loss keeps your account and reconnects automatically. App-only mode pauses an idle connection in the background and resumes when you return. If the same ID connects elsewhere, automatic retries stop until you choose **Reconnect**.
+- **Sharing:** only the one folder you choose is shared, and only its validated FLAC files.
+- **Background mode:** optional. It keeps messages and sharing alive with an ongoing notification and a Disconnect action.
+- **Downloads:** they land in a folder you pick. They stay readable by other apps and survive uninstalling Runout.
 
 ## Existing installations
 
-The migration keeps original music files and backs up changed library indexes as `*.json.before-flac`. Non-FLAC music disappears from Runout; valid FLAC tracks in mixed albums remain available. Existing valid FLAC downloads keep working offline.
+The FLAC migration keeps your original music files and backs up changed library indexes as `*.json.before-flac`. Non-FLAC music disappears from Runout, but valid FLAC tracks in mixed albums remain. Records made with the old Pressing Plant stay playable; the Pressing Plant itself is gone.
 
-Nostr connections, profile publication and online Nostr account screens are no longer started. Legacy keys, friend data and `.vinyl` records remain locally stored. Nostr identities are not converted into Soulseek identities.
-
-The development APK is named **Runout Dev** and uses application ID `app.runout.dev`, so it installs alongside the existing Runout app without replacing or erasing it. Its private crate and account are separate. The normal release application ID remains `app.runout`; updating an existing release still requires its original signing key.
+Nostr connections and profile publishing no longer start. Legacy keys, friend data and `.vinyl` records stay stored locally. Nostr identities are not converted into Soulseek identities.
 
 ## Build and verify
 
-The Android app stays Kotlin/Compose and Media3. A pinned MIT Rust library handles Soulseek behind a JNI bridge. Native libraries are built for ARM64, ARMv7, x86-64 and x86 with Android 9+ compatibility and 16 KiB page alignment.
+The app is Kotlin, Compose and Media3. A pinned MIT Rust library handles Soulseek behind a JNI bridge, built for ARM64, ARMv7, x86-64 and x86, with Android 9+ support and 16 KiB page alignment.
 
-Requirements: JDK 21, Android SDK 36, Rust 1.91.0, and Android NDK r27d or newer. See [the build guide](docs/BUILDING.md) for setup.
+Requirements: JDK 21, Android SDK 36, Rust 1.91.0, and Android NDK r27d or newer. See [the build guide](docs/BUILDING.md).
 
 ```bash
 ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -54,20 +127,20 @@ cargo +1.91.0 test --manifest-path native/Cargo.toml --workspace --lib --locked
 ./gradlew connectedDebugAndroidTest
 ```
 
-Tests use local fixtures and test servers. The Android integration test runs the packaged JNI library against two real local peers, checking login, FLAC search, folder browsing, file transfer, shared-file descriptors, private messages and acknowledgements. It never creates a public Soulseek account.
+Tests use local fixtures and test servers. The Android integration test runs the packaged JNI library against two real local peers: login, FLAC search, folder browsing, file transfer, shared-file descriptors, private messages and acknowledgements. It never creates a public Soulseek account. The screenshots in this README come from the Robolectric UI tests, rendered with made-up data.
 
 ## Contributing
 
-See the [contributor guide](CONTRIBUTING.md), [architecture map](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md) for source boundaries, local test fixtures, database migrations and native maintenance. A [GitHub Actions template](.github/workflows-templates/README.md) builds the native libraries and runs JVM tests/lint. It is ready to enable with a GitHub login that can write workflows; the current publishing login lacks that permission.
+Start with the [contributor guide](CONTRIBUTING.md), the [architecture map](docs/ARCHITECTURE.md) and the [developer notes](docs/DEVELOPMENT.md). The UI follows a recorded design interview: [`docs/design/UI-REDESIGN.md`](docs/design/UI-REDESIGN.md) lists every agreed change and its status. A [GitHub Actions template](.github/workflows-templates/README.md) builds the native libraries and runs the JVM tests and lint.
 
 ## Distribution status
 
-This is a development integration. Test builds identify themselves with Soulseek's documented experimental client version. A public production release needs an appropriate client minor identifier and production signing. Ordinary automated tests use local fixtures; explicit public-network session/search checks are recorded separately in the release verification report. Peer availability and network conditions affect search and transfer success.
+This is a development build. Test builds identify themselves with Soulseek's documented experimental client version. A public production release needs an appropriate client identifier and production signing. Peer availability and network conditions affect search and transfers.
 
 ## License and credits
 
-Runout remains MIT licensed; original authorship is preserved in [LICENSE](LICENSE). Soulseek support vendors [soulseek-rs-lib v19.1.0](https://github.com/michel/soulseek-rs/releases/tag/v19.1.0), with its MIT notice and documented integration changes under [native/](native/README.md). Native dependency notices are bundled in the APK.
+Runout is MIT licensed; original authorship is preserved in [LICENSE](LICENSE). Soulseek support vendors [soulseek-rs-lib v19.1.0](https://github.com/michel/soulseek-rs/releases/tag/v19.1.0), with its MIT notice and documented integration changes under [native/](native/README.md). Native dependency notices are bundled in the APK.
 
-The supplied [Seeker](https://github.com/jackBonadies/SeekerAndroid), [Soulseek.NET](https://github.com/jpdillingham/Soulseek.NET), and [Nicotine+ protocol documentation](https://nicotine-plus.org/doc/SLSKPROTOCOL.html) informed the investigation; their GPL implementations are not copied into Runout.
+[Seeker](https://github.com/jackBonadies/SeekerAndroid), [Soulseek.NET](https://github.com/jpdillingham/Soulseek.NET) and the [Nicotine+ protocol documentation](https://nicotine-plus.org/doc/SLSKPROTOCOL.html) informed the investigation; their GPL implementations are not copied into Runout.
 
-Inter and Silkscreen use the SIL Open Font License. AndroidX, Media3, Compose, OkHttp and Kyant Backdrop retain their respective notices. Internet Archive albums retain their credited Creative Commons licenses. Soulseek downloads are not automatically marked as original or openly licensed music.
+Inter and Silkscreen use the SIL Open Font License. AndroidX, Media3, Compose, OkHttp and Kyant Backdrop keep their own notices. Internet Archive albums keep their credited Creative Commons licences. Soulseek downloads are not automatically marked as original or openly licensed music.

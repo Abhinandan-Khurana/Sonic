@@ -35,5 +35,7 @@ class DigRankingTest {
         assertEquals("02" to "Sexy Boy", cleanTrackName("02. Sexy Boy.flac", "Moon Safari", "Air", 2))
         assertEquals("03" to "All I Need", cleanTrackName("03 - Air - All I Need.flac", "Moon Safari", "Air", 3))
         assertEquals("04" to "Kelly Watch the Stars", cleanTrackName("Kelly Watch the Stars.flac", "Moon Safari", "Air", 4))
+        // The folder carries a year the file names don't.
+        assertEquals("01" to "La femme d'argent", cleanTrackName("Air - Moon Safari - 01 La femme d'argent.flac", "Air - Moon Safari (1998)", "Air", 1))
     }
 }

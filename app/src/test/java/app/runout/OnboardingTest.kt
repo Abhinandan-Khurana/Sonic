@@ -55,6 +55,7 @@ class OnboardingTest {
         compose.waitForIdle()
         compose.onNodeWithTag("setup-share").assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/15_setup_share.png")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/setup-share.png")
         compose.onNodeWithText("public", substring = true).assertIsDisplayed()
 
         compose.onNodeWithTag("setup-share").performClick()
@@ -72,6 +73,7 @@ class OnboardingTest {
         compose.onNodeWithTag("setup-share-skip").performClick()
         assertEquals(false, actions.sharing)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/16_setup_rhythm.png")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/setup-rhythm.png")
         compose.onNodeWithText("Use background mode").assertDoesNotExist()
         compose.onNodeWithTag("rhythm:background").performClick()
         assertEquals(true, actions.background)

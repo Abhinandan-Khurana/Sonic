@@ -315,6 +315,7 @@ private fun MessageKey(enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+private val innerNumber = Regex("\\s[-–]\\s+(\\d{1,3})(?:\\s*[-_.)]\\s*|\\s+)")
 private val leadingNumber = Regex("^\\s*(?:cd\\s*\\d+\\s*[-_. ]\\s*)?(\\d{1,3})(?:\\s*[-_.)]\\s*|\\s+)")
 
 /**
@@ -328,7 +329,13 @@ internal fun cleanTrackName(fileName: String, album: String, artist: String?, fa
     for (p in prefixes) {
         if (name.startsWith(p, ignoreCase = true)) name = name.substring(p.length).trimStart(' ', '-', '_', '.', '–')
     }
-    val m = leadingNumber.find(name)
+    var m = leadingNumber.find(name)
+    // Still "Album - 01 Title" (e.g. the folder had a year the file doesn't)? Take it from the
+    // last " - NN " in the name.
+    if (m == null) innerNumber.findAll(name).lastOrNull()?.let { inner ->
+        name = name.substring(inner.range.first + inner.value.indexOf(inner.groupValues[1]))
+        m = leadingNumber.find(name)
+    }
     val number = m?.groupValues?.get(1)?.padStart(2, '0') ?: fallbackNumber.toString().padStart(2, '0')
     if (m != null) name = name.substring(m.range.last + 1)
     // "Artist - Title" left over after the number: keep the title.

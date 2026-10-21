@@ -1,5 +1,13 @@
 package app.runout
 
+import app.runout.discovery.remoteAlbums
+
+import app.runout.discovery.SearchSource
+
+import app.runout.discovery.DiscoveryState
+
+import app.runout.discovery.DiscoveryOptions
+
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
@@ -209,6 +217,118 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("menu:Details").performClick()
         compose.onNodeWithTag("record-details").assertIsDisplayed()
         compose.onNodeWithText("CC BY 4.0", substring = true).assertExists()
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // README screenshots: realistic (but made-up) data, rendered to build/outputs/roborazzi/readme/.
+
+    private fun readme(name: String) = compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/$name.png")
+
+    private fun flac(user: String, path: String, mb: Int, bits: Int = 16, rate: Int = 44_100, free: Int = 1, queue: Long = 0, speed: Long = 4_000_000) =
+        SoulseekSearchResult(user, path, mb * 1_048_576L, bitDepth = bits, sampleRate = rate, freeSlots = free, queueLength = queue, uploadSpeed = speed)
+
+    private val moonSafari = listOf(
+        "La femme d'argent", "Sexy Boy", "All I Need", "Kelly Watch the Stars", "Talisman",
+        "Remember", "You Make It Easy", "Ce matin-là", "New Star in the Sky", "Le voyage de Pénélope",
+    )
+
+    @Test
+    fun `readme shots of the room`() {
+        portrait()
+        still("readme-tmp", state(deck = playing()), crateIndex = 1)
+        readme("home")
+    }
+
+    @Test
+    fun `readme shot of the record menu`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
+        readme("record-menu")
+    }
+
+    @Test
+    fun `readme shots of Dig`() {
+        portrait()
+        val results = moonSafari.mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/${(i + 1).toString().padStart(2, '0')} $t.flac", 30, 24, 96_000, speed = 9_600_000) } +
+            moonSafari.take(10).mapIndexed { i, t -> flac("blinkacre", "Shares/Air/Moon Safari/Air - Moon Safari - ${(i + 1).toString().padStart(2, '0')} $t.flac", 27, queue = 182, speed = 2_500_000) } +
+            listOf(flac("orbit", "FLAC/Air - Premiers Symptomes/03 Brakes On.flac", 22, free = 0, queue = 40, speed = 600_000)) +
+            moonSafari.take(4).mapIndexed { i, t -> flac("lowlight", "Music/Air - 1998 - Moon Safari [WEB]/0${i + 1} $t.flac", 41, 24, 48_000, speed = 7_000_000) }
+        val options = DiscoveryOptions(source = SearchSource.SOULSEEK)
+        val discovery = DiscoveryState("moon safari", options, remote = remoteAlbums("moon safari", results, options), online = SoulseekSearchStatus("r", "moon safari", SearchPhase.COMPLETE))
+        compose.setContent { RoomScreen(state().copy(discovery = discovery), RecordingActions(), initialPanel = Panel.DIG) }
+        compose.waitForIdle()
+        readme("dig")
+    }
+
+    @Test
+    fun `readme shot of a folder preview`() {
+        portrait()
+        val files = moonSafari.mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/Air - Moon Safari - ${(i + 1).toString().padStart(2, '0')} $t.flac", 30, 24, 96_000) }
+        val preview = SoulseekFolderPreview("r", "jules", "Music/Air - Moon Safari (1998)", files, loading = false)
+        compose.setContent { RoomScreen(state().copy(folderPreview = preview), RecordingActions(), initialPanel = Panel.DIG) }
+        compose.waitForIdle()
+        readme("dig-preview")
+    }
+
+    @Test
+    fun `readme shot of a chat with a record card`() {
+        portrait()
+        val now = 1_792_540_000_000L
+        val night = albums.first { it.title == "Night Drive" }
+        val messages = listOf(
+            SoulseekMessage("1", "maya", "found anything good this week?", now - 600_000, outgoing = false, state = SoulseekMessageState.RECEIVED, read = true),
+            SoulseekMessage("2", "maya", "this one has been on the platter all day", now - 540_000, outgoing = true, state = SoulseekMessageState.SENT),
+            SoulseekMessage("3", "maya", app.runout.ui.RecordCard.of(night).encode(), now - 530_000, outgoing = true, state = SoulseekMessageState.SENT),
+            SoulseekMessage("4", "maya", app.runout.ui.RecordCard("Air", "Moon Safari", "FLAC · 24-bit · 96 kHz").encode(), now - 120_000, outgoing = false, state = SoulseekMessageState.RECEIVED, read = true),
+        )
+        val s = state(contacts = listOf(SoulseekContact("maya", true), SoulseekContact("ro", false))).copy(
+            soulseekConversations = listOf(SoulseekConversation("maya", messages, 0)),
+            soulseekConversation = "maya",
+        )
+        compose.setContent { RoomScreen(s, RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.waitForIdle()
+        readme("friends-chat")
+    }
+
+    @Test
+    fun `readme shots of Settings and Drops`() {
+        portrait()
+        compose.setContent { RoomScreen(state(sound = SoundSettings(eqEnabled = true)), RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.SOUND) }
+        compose.waitForIdle()
+        readme("settings-sound")
+    }
+
+    @Test
+    fun `readme shot of Friday Drops`() {
+        portrait()
+        // Netlabel-ish placeholder sleeves: a two-tone gradient, a sun and a few bands.
+        fun sleeve(id: String): String {
+            val seed = id.hashCode() and 0x7fffffff
+            val hue = (seed % 360).toFloat()
+            val bmp = android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(bmp)
+            val top = android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.45f, 0.95f))
+            val bottom = android.graphics.Color.HSVToColor(floatArrayOf((hue + 50f) % 360f, 0.7f, 0.45f))
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, 600f, top, bottom, android.graphics.Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, 600f, 600f, paint)
+            paint.shader = null; paint.color = android.graphics.Color.argb(230, 255, 214, 160)
+            c.drawCircle(200f + seed % 200, 260f, 110f, paint)
+            paint.color = android.graphics.Color.argb(90, 255, 255, 255)
+            for (i in 0 until 5) c.drawRect(0f, 420f + i * 28f, 600f, 432f + i * 28f, paint)
+            val f = java.io.File(Fixtures.context.cacheDir, "readme-sleeves/$id.png").apply { parentFile?.mkdirs() }
+            java.io.FileOutputStream(f).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            return f.absolutePath
+        }
+        val actions = object : RecordingActions() {
+            override suspend fun dropCover(item: app.runout.drops.DropItem): String = sleeve(item.identifier)
+        }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
+        compose.waitForIdle()
+        readme("drops")
     }
 
     @Test
