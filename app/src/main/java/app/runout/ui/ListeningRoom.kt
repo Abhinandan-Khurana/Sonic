@@ -257,7 +257,7 @@ fun RoomScreen(
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
     var settings by remember { mutableStateOf(initialSettings) }
-    // First launch opens setup as a glass sheet over the room; it can be reviewed later from Settings.
+    // First launch opens onboarding over the room; Soulseek setup can be opened again later.
     var setupOpen by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
     var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
     val openSetup = { setupStart = 1; setupOpen = true; panel = null }
@@ -273,6 +273,8 @@ fun RoomScreen(
         if (state.folderPreview != null && panel == null) panel = Panel.DIG
     }
     val disc = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    // The room's entrance after onboarding: 1 is fully in.
+    val entry = remember { Animatable(1f) }
     // How high the disc is held (its scale), and how far it has turned since it left the sleeve.
     val lift = remember { Animatable(1f) }
     val spin = remember { Animatable(0f) }
@@ -315,7 +317,17 @@ fun RoomScreen(
             disc.animateTo(start + pullOut(s), spring(dampingRatio = 0.58f, stiffness = 260f))
         }
 
-        Box(Modifier.fillMaxSize().layerBackdrop(roomBackdrop)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val e = entry.value
+                    val sc = 0.92f + 0.08f * e
+                    scaleX = sc; scaleY = sc
+                    alpha = e.coerceIn(0f, 1f)
+                }
+                .layerBackdrop(roomBackdrop),
+        ) {
             RoomBackground(Modifier.fillMaxSize().layerBackdrop(backdrop), portrait)
 
             val nearPlatter = dragging && platterCenter?.let { (disc.value + rootOrigin - it).getDistance() < platterRadius * 0.95f } == true
@@ -558,35 +570,23 @@ fun RoomScreen(
             }
         }
 
-        // Setup: the same glass sheet, over the room, on first launch or when asked for.
+        // Onboarding: its own full screen, on first launch or when Soulseek setup is asked for again.
+        // Finishing drops you into the room, which pops in behind the fading greeting.
         val firstRun = !state.onboardingComplete
-        Box(Modifier.fillMaxSize().zIndex(12f)) {
-            AnimatedVisibility(setupOpen, enter = fadeIn(), exit = fadeOut()) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.06f))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { if (!firstRun) setupOpen = false },
-                )
-            }
-            AnimatedVisibility(
-                visible = setupOpen,
-                enter = if (portrait) slideInVertically { it } + fadeIn() else slideInHorizontally { it } + fadeIn(),
-                exit = if (portrait) slideOutVertically { it } + fadeOut() else slideOutHorizontally { it } + fadeOut(),
-                modifier = Modifier.align(if (portrait) Alignment.BottomCenter else Alignment.CenterEnd),
-            ) {
-                PanelSheet(
-                    title = if (firstRun) "Welcome to your room" else "Soulseek setup",
-                    backdrop = roomBackdrop,
-                    portrait = portrait,
-                    width = sheetWidth,
-                    height = screenH * 0.86f,
-                    onClose = null,
-                    scroll = false,
-                ) {
-                    SetupScreen(state, actions, setupStart) { actions.finishOnboarding(); setupOpen = false }
-                }
-            }
+        AnimatedVisibility(setupOpen, enter = fadeIn(tween(200)), exit = fadeOut(tween(320)), modifier = Modifier.zIndex(12f)) {
+            SetupScreen(
+                state, actions, setupStart,
+                onFinish = {
+                    actions.finishOnboarding()
+                    setupOpen = false
+                    scope.launch {
+                        entry.snapTo(0f)
+                        entry.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 220f))
+                    }
+                },
+                intro = firstRun && setupStart == 0,
+                onClose = if (firstRun) null else ({ setupOpen = false }),
+            )
         }
 
         state.albums.firstOrNull { it.id == removeId }?.let { record ->

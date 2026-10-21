@@ -37,6 +37,9 @@ class Slice0WelcomeTest {
         }
         compose.onNodeWithTag("setup-offline").performClick()
         compose.onNodeWithTag("setup-finish").performClick()
+        // The greeting pops in, then hands over to the room.
+        compose.onNodeWithTag("setup-welcome").assertExists()
+        compose.waitForIdle()
         assertEquals(1, finishes)
     }
 }

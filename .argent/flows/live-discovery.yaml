@@ -1,6 +1,5 @@
 executionPrerequisite: Runout Dev is online with an empty discovery query; this flow performs one public Soulseek search and downloads nothing.
 steps:
-  - scroll-to: { target: { id: 'nav:DIG' } }
   - tap: { id: 'nav:DIG' }
   - await: { visible: { id: 'screen:search' } }
   - tap: { id: 'field:Search songs, albums or artists' }

@@ -20,51 +20,51 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done and verified.
 
 Intro story picked: **"Needle drop"**. Format: **"Compose code"**.
 
-- [ ] **ON-1** Intro vector animation, about 3 s:
+- [x] **ON-1** Intro vector animation, about 3 s:
   - a sleeve slides in;
   - the disc slides out and lands on a platter;
   - the tonearm swings in and the needle drops;
   - the grooves glow TE orange;
   - "RUNOUT" types out in dot-matrix.
   It is built as self-contained Compose code (no new dependency) and can be skipped.
-- [ ] **ON-2** Show the app name on the welcome. The home screen still shows no app name.
-- [ ] **ON-3** Remove "Drop the needle."
-- [ ] **ON-4** Connect Soulseek comes first. Listen offline comes second.
-- [ ] **ON-5** Flatter, cleaner choices with less text and less clutter.
+- [x] **ON-2** Show the app name on the welcome. The home screen still shows no app name.
+- [x] **ON-3** Remove "Drop the needle."
+- [x] **ON-4** Connect Soulseek comes first. Listen offline comes second.
+- [x] **ON-5** Flatter, cleaner choices with less text and less clutter.
 
 ### 1.2 Offline folder step ("Bring your own records")
 > "keep as it is"
 
-- [ ] **ON-6** Keep the content. It only moves into the full-screen onboarding layout (`ON-10`, `ON-11`).
+- [x] **ON-6** Keep the content. It only moves into the full-screen onboarding layout (`ON-10`, `ON-11`).
 
 ### 1.3 Login
 > "remap the whole login flow like after that vector intro drop into login UI like spotify: Following the design lang ofc. And if there is no option to give Create an ID so Just Welcome then Souldseek ID a small info button if the user presses that then it will tell about the login process and sign up proceess of soulsleek client its like there is no sign up page and if they dont have soulseek account just try entring the id if prompts wrong its already taken try with another one! and Rememeber my sign-in should not be optional its an app so we can just keep them sign in."
 
 The owner attached a screenshot of Spotify's welcome screen as the reference. Placement of "Listen offline": **"Small text link"**.
 
-- [ ] **ON-7** After the intro, show a Spotify-style login in Runout's design language (light glass and blue accent, NOT Spotify's dark/green). Borrow only the structure:
+- [x] **ON-7** After the intro, show a Spotify-style login in Runout's design language (light glass and blue accent, NOT Spotify's dark/green). Borrow only the structure:
   - hero artwork at the top: a collage of records and sleeves;
   - the app mark;
   - one big headline;
   - stacked full-width controls.
-- [ ] **ON-8** Remove the "Sign in / Create an ID" tabs. The screen shows a welcome, then a "Soulseek ID" field with a small ⓘ, then the password and Connect.
+- [x] **ON-8** Remove the "Sign in / Create an ID" tabs. The screen shows a welcome, then a "Soulseek ID" field with a small ⓘ, then the password and Connect.
   - The ⓘ explains that Soulseek has no sign-up page.
   - To make an account, enter the ID you want and it is created on first login.
   - If the app says the password is wrong, that ID is already taken: try another one.
-- [ ] **ON-9** Remove the "Remember my sign-in" toggle. Users always stay signed in, with credentials in Android Keystore as today.
-- [ ] **ON-9b** "Listen offline" becomes a small, quiet text link at the bottom.
+- [x] **ON-9** Remove the "Remember my sign-in" toggle. Users always stay signed in, with credentials in Android Keystore as today.
+- [x] **ON-9b** "Listen offline" becomes a small, quiet text link at the bottom.
 
 ### 1.4 Download folder step ("02 / Keep your records")
 > "Bring all the things near to bottom so that its easier for one hand use and there should not be continue button there is no need of that after choosing the download fodler it should go to the next step. and also its better when the onboarding section have the full screen or seperate screen."
 
-- [ ] **ON-10** The whole onboarding becomes its own full screen (intro, login and steps). It is no longer a glass sheet over the room.
-- [ ] **ON-11** Content and actions sit near the bottom of the screen, for one-handed use.
-- [ ] **ON-12** No Continue button. Picking the folder moves on automatically. Keep a quiet way to choose later.
+- [x] **ON-10** The whole onboarding becomes its own full screen (intro, login and steps). It is no longer a glass sheet over the room.
+- [x] **ON-11** Content and actions sit near the bottom of the screen, for one-handed use.
+- [x] **ON-12** No Continue button. Picking the folder moves on automatically. Keep a quiet way to choose later.
 
 ### 1.5 Share step ("03 / Give something back")
 > "after the later step it should be just prompted as in button and with a caution logo and descriptin as the folder is getting shared. and a small skip button,"
 
-- [ ] **ON-13** Show a simple prompt:
+- [x] **ON-13** Show a simple prompt:
   - one "Share a folder" button with a caution icon;
   - a short description saying the chosen folder becomes public to Soulseek users;
   - a small Skip button.
@@ -73,13 +73,13 @@ The owner attached a screenshot of Spotify's welcome screen as the reference. Pl
 ### 1.6 Stay-online step ("04 / Choose your rhythm")
 > "those cards are good but i will prefer insted of selecting a button inside a card just change the color of the card which user will be selecting and remove that continue button."
 
-- [ ] **ON-14** Keep the two cards. Remove the in-card buttons ("Selected" / "Use background mode"). The whole card is the tap target, and the selected card shows by its colour.
-- [ ] **ON-15** No Continue button. Tapping a card selects it and moves on.
+- [x] **ON-14** Keep the two cards. Remove the in-card buttons ("Selected" / "Use background mode"). The whole card is the tap target, and the selected card shows by its colour.
+- [x] **ON-15** No Continue button. Tapping a card selects it and moves on.
 
 ### 1.7 Finish ("Ready to spin")
 > "this feels way to static: It does not need to show what user have selected just greet and with a popping in animaiton drop to the home page"
 
-- [ ] **ON-16** No summary card. Greet the user, then play a "pop in" animation into the home room.
+- [x] **ON-16** No summary card. Greet the user, then play a "pop in" animation into the home room.
 
 ---
 
@@ -210,9 +210,9 @@ Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE l
 - [x] **BG-1** The record count says "1 records". It should say "1 record".
 - [ ] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
 - [ ] **BG-3** With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.
-- [ ] **BG-4** During setup, the accessibility tree (uiautomator/TalkBack) kept the previous step's content after moving on. Verify, then fix.
+- [~] **BG-4** *(each onboarding step is now its own keyed subtree, and glass-card scrims no longer merge their cards; the tree still looked stale in Argent on the room screen, which may be the tool: re-check on a device with TalkBack)* During setup, the accessibility tree (uiautomator/TalkBack) kept the previous step's content after moving on. Verify, then fix.
 - [ ] **BG-5** Soulseek searches for "Pink Floyd Animals" and "Radiohead" returned 0 FLAC results, while "moon safari" returned 273. This may be emulator NAT. Verify on a real phone.
-- [ ] **BG-6** The setup step numbering looked like it jumped from 02 to 04. Check the step order and numbering.
+- [x] **BG-6** *(step numbers removed; three progress dots instead)* The setup step numbering looked like it jumped from 02 to 04. Check the step order and numbering.
 
 ---
 

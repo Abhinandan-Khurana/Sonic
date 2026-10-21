@@ -71,7 +71,7 @@ private fun SignInNotice(onAccount: () -> Unit) {
 }
 
 @Composable
-fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -> Unit) {
+fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -> Unit, onSignIn: () -> Unit = {}) {
     val session = state.soulseekSession
     Column(Modifier.fillMaxWidth().testTag("panel:account")) {
         BasicText("Your local FLAC library is yours to play without an account.", style = Room.Title.copy(fontSize = 14.sp))
@@ -86,23 +86,9 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
             if(!session.connected) Pill("Reconnect",actions::reconnectSoulseek,enabled = session.state != SoulseekConnection.RECONNECTING)
             Pill("Sign out", actions::signOutSoulseek)
         } else {
-            var username by rememberSaveable(state.soulseekSavedUsername) { mutableStateOf(state.soulseekSavedUsername.orEmpty()) }
-            // Passwords deliberately do not enter saved instance state.
-            var password by remember { mutableStateOf("") }
-            var keep by rememberSaveable { mutableStateOf(false) }
-            Field(username, { username = it.take(30) }, "Soulseek username")
-            Field(password, { password = it }, "Soulseek password", secret = true)
-            val validName = SoulseekPolicy.validUsername(username)
-            if (username.isNotEmpty() && !validName) BasicText("Use 1–30 printable ASCII characters without spaces at either end.", style = Room.LabelQuiet.copy(color = Color(0xFFAD3A22)))
-            ToggleRow("Remember my sign-in", "Save credentials securely on this phone.", keep, { keep = it })
-            val connecting = session.state == SoulseekConnection.CONNECTING
-            Pill(if (connecting) "Connecting…" else "Sign in or create Soulseek account", {
-                actions.signInSoulseek(username, password, keep)
-                password = ""
-            }, active = true, enabled = validName && password.isNotEmpty() && !connecting)
-            if (state.soulseekSavedUsername != null) Pill("Reconnect as ${state.soulseekSavedUsername}", actions::signInSavedSoulseek, modifier = Modifier.padding(top = 8.dp), enabled = !connecting)
+            // One sign-in for the whole app: the same screen as onboarding, always remembered.
+            Pill("Sign in with Soulseek", onSignIn, modifier = Modifier.padding(top = 8.dp).testTag("account-sign-in"), active = true)
             Pill("Continue offline", onOffline, modifier = Modifier.padding(top = 8.dp))
-            BasicText("An unused username creates a Soulseek account when you connect, including if you mistype an existing name. Check your username before continuing. Soulseek has no password reset. Signing in here disconnects another client using the same account.", style = Room.LabelQuiet, modifier = Modifier.padding(top = 10.dp))
         }
         NetworkNote(state, actions)
         SectionTitle("Keep your downloads")

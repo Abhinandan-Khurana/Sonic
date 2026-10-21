@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertContentDescriptionContains
@@ -297,19 +298,28 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `Soulseek account checks credentials and offers offline playback`() {
+    fun `Settings sends you to the one sign-in, which checks the ID and always keeps you signed in`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
-        compose.onNodeWithTag("field:Soulseek username").performTextInput("अ")
-        compose.onNodeWithTag("field:Soulseek password").performTextInput("test password")
-        compose.onNodeWithText("Sign in or create Soulseek account").performScrollTo().performClick()
-        assertTrue(actions.log.none { it.startsWith("soulseekSignIn") })
-        compose.onNodeWithTag("field:Soulseek username").performScrollTo().performTextClearance()
-        compose.onNodeWithTag("field:Soulseek username").performTextInput("Abhi_99")
-        compose.onNodeWithText("Sign in or create Soulseek account").performScrollTo().performClick()
-        assertTrue(actions.log.toString(), actions.log.contains("soulseekSignIn:Abhi_99:false"))
-        compose.onNodeWithText("Continue offline").performScrollTo().performClick()
-        compose.onNodeWithTag("panel:account").assertDoesNotExist()
+        // No second sign-in form and no "Remember me": Settings opens the same login as onboarding.
+        compose.onNodeWithText("Remember my sign-in").assertDoesNotExist()
+        compose.onNodeWithTag("account-sign-in").performScrollTo().performClick()
+        compose.onNodeWithTag("screen:setup").assertIsDisplayed()
+        compose.onNodeWithTag("field:Soulseek ID").performTextInput("अ")
+        compose.onNodeWithTag("field:Password").performTextInput("test password")
+        compose.onNodeWithTag("submit-soulseek").assertIsNotEnabled()
+        compose.onNodeWithTag("field:Soulseek ID").performTextClearance()
+        compose.onNodeWithTag("field:Soulseek ID").performTextInput("Abhi_99")
+        compose.onNodeWithTag("field:Password").performTextInput("test password")
+        compose.onNodeWithTag("submit-soulseek").performClick()
+        assertTrue(actions.log.toString(), actions.log.contains("soulseekSignIn:Abhi_99:true"))
+        // The ⓘ explains that there is no sign-up page.
+        compose.onNodeWithTag("soulseek-id-info").performClick()
+        compose.onNodeWithText("Soulseek has no sign-up page", substring = true).assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/12_login.png")
+        compose.onNodeWithTag("soulseek-id-help-close").performClick()
+        compose.onNodeWithTag("setup-close").performClick()
+        compose.onNodeWithTag("screen:setup").assertDoesNotExist()
     }
 
     @Test

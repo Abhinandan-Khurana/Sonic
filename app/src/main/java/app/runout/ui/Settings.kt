@@ -32,7 +32,7 @@ fun SettingsPanel(
             SettingsSection.SOUND -> SoundPanel(state.sound, state.output, actions)
             SettingsSection.ACCOUNT -> {
                 ConnectionNotice(state, actions, onSetup)
-                SoulseekAccountPanel(state, actions, onOffline)
+                SoulseekAccountPanel(state, actions, onOffline, onSignIn = onSetup)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Pill("Downloads", onDownloads, Modifier.testTag("settings-downloads"))
                     Pill("Review Soulseek setup", onSetup, Modifier.testTag("settings-setup"))

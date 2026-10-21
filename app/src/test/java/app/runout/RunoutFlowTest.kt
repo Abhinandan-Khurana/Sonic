@@ -25,11 +25,13 @@ import org.robolectric.annotation.GraphicsMode
 class RunoutFlowTest {
     @get:Rule val compose=createComposeRule()
     private fun state()=RoomState(emptyList(),false,null,DeckState(),false,"12:00")
-    @Test fun `first launch offers offline listening in a sheet over the room without requesting an account`() {
+    @Test fun `first launch plays the intro, then offers offline listening without requesting an account`() {
         val actions=RecordingActions()
         compose.setContent { RoomScreen(state().copy(onboardingComplete=false),actions) }
         compose.onNodeWithTag("turntable").assertExists()
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/10_setup_sheet.png")
+        // The intro plays, then hands over to the sign-in by itself.
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/10_setup_login.png")
         compose.onNodeWithTag("setup-offline").performClick()
         compose.onNodeWithTag("setup-finish").assertIsDisplayed().performClick()
         compose.waitForIdle()
@@ -37,8 +39,20 @@ class RunoutFlowTest {
         compose.onNodeWithTag("turntable").assertIsDisplayed()
         assertTrue(actions.log.none {it.startsWith("soulseekSignIn")})
     }
+    @Test fun `the intro plays first and a tap skips it`() {
+        compose.mainClock.autoAdvance=false
+        compose.setContent { RoomScreen(state().copy(onboardingComplete=false),RecordingActions()) }
+        compose.mainClock.advanceTimeBy(2_200)
+        compose.onNodeWithTag("onboarding-intro").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/13_intro.png")
+        compose.onNodeWithTag("onboarding-intro").performClick()
+        compose.mainClock.autoAdvance=true
+        compose.waitForIdle()
+        compose.onNodeWithTag("onboarding-intro").assertDoesNotExist()
+        compose.onNodeWithTag("submit-soulseek").assertExists()
+    }
     @Test fun `connected setup can go back to the welcome choice without looping into sign in`() {
-        compose.setContent { SetupScreen(state().copy(soulseekSession=SoulseekSession(SoulseekConnection.CONNECTED,"listener")),RecordingActions(),2,{}) }
+        compose.setContent { SetupScreen(state().copy(soulseekSession=SoulseekSession(SoulseekConnection.CONNECTED,"listener")),RecordingActions(),2) {} }
         compose.onNodeWithTag("setup-back").performClick()
         compose.onNodeWithTag("setup-offline").assertIsDisplayed()
     }
