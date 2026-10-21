@@ -15,16 +15,16 @@ Search your local songs, albums and artists as you type. Submit an online search
 - **Share only when you choose.** Select a folder and enable FLAC sharing. The rest of your device library is not published automatically.
 - **Optional stay-online mode.** Incoming private messages and sharing can remain available in the background with an ongoing notification and Disconnect action.
 
-FLAC-only applies to music throughout scanning, imports, downloads, sharing, pressing and playback. Artwork, record containers and the turntable's synthesized effects remain supported. Renaming an MP3 to `.flac` does not make it acceptable.
+FLAC-only applies to music throughout scanning, imports, downloads, sharing and playback. Artwork, record containers and the turntable's synthesized effects remain supported. Renaming an MP3 to `.flac` does not make it acceptable.
 
 [Download the development APK](https://github.com/Somchandra17/runout/releases/download/v0.4.1-dev.1/Runout-0.4.1-development.apk) · [Soulseek behavior and architecture](docs/SOULSEEK.md) · [Build instructions](docs/BUILDING.md) · [Documentation index](docs/README.md)
 
-<img src="docs/images/home.png" width="270" alt="The Runout listening room: glass turntable above the record crate, with the Dig, Drops, Friends, Pressing Plant and Settings pills" />
+<img src="docs/images/home.png" width="270" alt="The Runout listening room: glass turntable above the record crate, with the Dig, Drops, Friends and Settings tabs" />
 
 ## First use
 
 1. On first launch, choose **Listen offline** or **Set up Soulseek**. Offline listening needs only a local FLAC folder.
-2. For online features, sign in with your Soulseek ID or choose **Create an ID**. Optional remembered sign-in uses Android Keystore.
+2. For online features, sign in with your Soulseek ID. There is no sign-up page: a new ID is created the first time you sign in with it (the ⓘ on the sign-in explains). You stay signed in; credentials are kept with Android Keystore.
 3. Setup walks through a download folder, optional sharing folder and app-only/background connection mode. Sharing choices and the selected share folder are remembered separately for each account.
 4. Use **Discover** for local/online search and **Friday Drops** for Internet Archive. Downloads from both providers require a connected Soulseek account.
 5. Preview an album folder to see its complete FLAC listing before confirming the download. Use the header's download button for progress, pause/resume and retry.

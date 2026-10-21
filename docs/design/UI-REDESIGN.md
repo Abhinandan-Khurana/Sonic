@@ -182,7 +182,7 @@ Answers: **"Full screen like Dig, Chat list first, Share records in chat, Friend
 ## 6. Pressing Plant
 > "remove this whole module."
 
-- [~] **PP-1** *(code and tests removed; docs still to update)* Remove the tab, the screen, pressing creation, and their tests and docs.
+- [x] **PP-1** *(code, tests and docs removed: HANDBOOK, PRESSING-AND-DROPS, README, Handsoff)* Remove the tab, the screen, pressing creation, and their tests and docs.
 - [x] **PP-2** Do not delete user data: records that were already pressed stay playable and removable.
 
 ## 7. Settings
@@ -203,14 +203,14 @@ Answers: **"Controls as icons, Shorter copy"**. Downloads stays a sheet.
 Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE look everywhere".
 
 - [x] **GL-1** *(deck keys, tabs, pills, toggles, TE keys, menu rows, onboarding buttons, result cards, disc pickup/landing)* Haptics on keys, toggles, tab switches, and disc pickup/landing.
-- [ ] **GL-2** Portrait first. Landscape must keep working but is not redesigned now.
-- [ ] **GL-3** TE styling stays limited to what is listed: the deck, the EQ, spec tags, claim tokens and the refresh icon. Do not restyle the rest of the app into TE hardware.
+- [x] **GL-2** *(checked on the emulator: landscape keeps the deck left, the tab bar top right and the crate right)* Portrait first. Landscape must keep working but is not redesigned now.
+- [x] **GL-3** *(TE styling is used on the deck, the EQ faders and preset keys, the download and listen keys, spec tags, claim lights and the refresh key; other screens keep the room's glass and blue)* TE styling stays limited to what is listed: the deck, the EQ, spec tags, claim tokens and the refresh icon. Do not restyle the rest of the app into TE hardware.
 
 ## 10. Bugs found during the interview
 - [x] **BG-7** *(found while testing)* A tap on a tab during a sheet's fade-out was swallowed. The scrim only catches taps while the sheet is open, a closing sheet stops catching taps, and the exit is quicker (180 ms). A tap within about 150 ms of Close can still land on the departing sheet.
 - [x] **BG-1** The record count says "1 records". It should say "1 record".
 - [x] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
-- [ ] **BG-3** With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.
+- [~] **BG-3** *(on the emulator a hardware keyboard is attached, so no on-screen keyboard appears and Back closes Dig. On a phone the keyboard takes the first Back by default. Verify on a real phone)* With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.
 - [~] **BG-4** *(each onboarding step is now its own keyed subtree, and glass-card scrims no longer merge their cards; the tree still looked stale in Argent on the room screen, which may be the tool: re-check on a device with TalkBack)* During setup, the accessibility tree (uiautomator/TalkBack) kept the previous step's content after moving on. Verify, then fix.
 - [x] **BG-5** *(not an app bug: with the new album-only search, "moon safari" returns 40 album folders on the emulator)* Soulseek searches for "Pink Floyd Animals" and "Radiohead" returned 0 FLAC results, while "moon safari" returned 273. This may be emulator NAT. Verify on a real phone.
 - [x] **BG-6** *(step numbers removed; three progress dots instead)* The setup step numbering looked like it jumped from 02 to 04. Check the step order and numbering.

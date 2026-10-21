@@ -16,7 +16,7 @@ steps:
   - await: { visible: { id: 'panel:messages' } }
   - tap: { id: 'action:Close' }
   - tap: { id: 'nav:SETTINGS' }
-  - await: { visible: { id: 'panel:sound' } }
+  - await: { visible: { id: 'settings:SOUND' } }
   - tap: { id: 'action:Close' }
   - tap: { id: open-downloads }
   - await: { visible: { id: 'panel:transfers' } }

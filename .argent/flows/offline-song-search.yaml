@@ -2,15 +2,15 @@ executionPrerequisite: Runout is in the room with an empty discovery query. The 
 steps:
   - await: { visible: { id: open-account } }
   - tap: { id: 'nav:DIG' }
-  - await: { visible: { id: 'field:Search songs, albums or artists' } }
+  - await: { visible: { id: 'field:Search albums or artists' } }
   - tap: { text: On this device }
-  - tap: { id: 'field:Search songs, albums or artists' }
+  - tap: { id: 'field:Search albums or artists' }
   - await: { idle: true, stableFor: 1000 }
   - tool: keyboard
     args: { text: Opening }
   - tool: button
     args: { button: back }
-  - scroll-to: { target: { text: Put on the platter } }
+  - await: { visible: { text: Put on the platter } }
   - tap: { text: Put on the platter }
   - await: { visible: { id: 'deck:screen' } }
   - assert: { text: { in: { id: 'deck:screen' }, contains: Opening } }

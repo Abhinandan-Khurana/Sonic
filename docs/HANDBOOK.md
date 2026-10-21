@@ -50,7 +50,6 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 - **A collecting app, not a streaming app:** You only play what you own: your folder, drops you claimed, records friends sent you, and records you pressed yourself.
 - **The turntable is the interface:** Modelled on the classic DJ direct-drive deck: strobe-dotted platter, S-shaped tonearm, start/stop, track skip and a tiny pixel screen showing the track. Records play at the speed they were recorded at. Drop the needle anywhere to jump in the side. Hold the record to slow it down. Flip it when side A ends.
 - **Sound is taken seriously:** Hi-res output in 32-bit float, a 10-band EQ, headphone correction profiles, loudness levelling, a limiter, and a Pure mode that sends the music untouched (bit-perfect to a USB DAC on Android 14+).
-- **The Pressing Plant:** Make your own record: pick tracks, design the sleeve, choose splatter, marble, clear or picture-disc vinyl.
 - **Serverless sharing:** A record travels as a single `.vinyl` file over Quick Share, Telegram, WhatsApp or Drive, checked byte for byte on arrival.
 - **Free, no ads, and costs nothing to run.**
 
@@ -103,7 +102,6 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 ### The Four Panels
 - **Drops:** This Friday's ten free albums; claim three.
 - **Friends:** Your account and handle, search people by username, open their profiles and shelves.
-- **Pressing Plant:** Make your own record.
 - **Sound:** Pure mode, hi-res output, EQ, ReplayGain, limiter, warmth.
 
 ### Sending a Record
@@ -185,13 +183,9 @@ Pull a record out of the crate and press **"Send with audio"** (for your own mus
 - **Rights-Safe Sharing Rule `[BUILT]`:** Audio travels only for personal original pressings and CC albums. Commercial albums travel as metadata cards.
 - **Integrity Verification `[BUILT]`:** Every audio byte checked against SHA-256 fingerprint; zip-slip and malformed archives rejected.
 
-### 4.7 Pressing Plant: Make Your Own Vinyl
+### 4.7 Pressing Plant (removed)
 
-- **Custom Pressings `[BUILT]`:**
-  - Up to 40 tracks from your shelf.
-  - Algorithmic sleeve generator (6 patterns: Orbit, Stripes, Bloom, Grid, Sunset, Type) or custom image.
-  - Vinyl formulations: Black, Solid Colour, Clear, Splatter, Marble, Picture Disc.
-  - Label and liner notes editor.
+The Pressing Plant was removed in the UI redesign. Records pressed with it earlier stay in the crate, playable and removable.
 
 ### 4.8 Friday Drops
 
@@ -266,7 +260,6 @@ Runout maintains a strict testing regime with **12 test suites, 106 tests, and 0
 | `SharingTest` | `.vinyl` zip creation, SHA-256 verification, zip-slip defense |
 | `AccountsTest` | BIP-340 Schnorr test vectors, Nostr relay WebSocket protocol |
 | `FriendsTest` | Social graph, friend card parsing, mutual shelf overlap |
-| `PressingPlantTest` | Algorithmic sleeve rendering, track duration limits |
 | `FridayDropsTest` | Deterministic week shuffling, Internet Archive API parsing |
 | `ListeningRoomUiTest` | Compose UI layout in portrait and landscape orientations |
 
@@ -276,7 +269,7 @@ Runout maintains a strict testing regime with **12 test suites, 106 tests, and 0
 
 - **Friday Drops:** 10 albums per week, 3 claimable, deterministic weekly seed
 - **Side Durations:** ~22 minutes per side; double LPs split into Sides A/B/C/D
-- **Turntable Speeds:** 33⅓ RPM (1.0×), 45 RPM (1.35×), Pitch fader ±8%
+- **Turntable speed:** records always play at their recorded speed. The on-screen platter turns at half of 33⅓ rpm (one turn in 3.6 s), with a strobe that stands still at that speed.
 - **Audio Precision:** Up to 24-bit/192 kHz, 32-bit floating-point processing
 - **EQ Architecture:** 10 bands (31 Hz – 16 kHz), ±12 dB adjustment, AutoEq support
 - **Safety Ceiling:** Look-ahead limiter holding peaks below −0.3 dBFS

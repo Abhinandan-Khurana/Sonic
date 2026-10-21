@@ -2,7 +2,7 @@ executionPrerequisite: Runout Dev is online with an empty discovery query; this 
 steps:
   - tap: { id: 'nav:DIG' }
   - await: { visible: { id: 'screen:search' } }
-  - tap: { id: 'field:Search songs, albums or artists' }
+  - tap: { id: 'field:Search albums or artists' }
   - await: { idle: true, stableFor: 1000 }
   - tool: keyboard
     args: { text: Pink Floyd }
@@ -10,4 +10,4 @@ steps:
     args: { button: back }
   - tap: { id: submit-search }
   - scroll-to: { target: { id: search-status } }
-  - await: { visible: { text: { matches: '.*[1-9][0-9]* MATCHING FLAC FILES.*' } }, timeout: 35000 }
+  - await: { visible: { text: { matches: '.*[1-9][0-9]* ALBUM FOLDER.*' } }, timeout: 35000 }

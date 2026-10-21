@@ -5,6 +5,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+
+## Unreleased — UI redesign (branch `ui-redesign`)
+
+From a screen-by-screen interview with the owner; the full checklist is in `docs/design/UI-REDESIGN.md`.
+
+- **Deck:**
+  - Teenage Engineering details on the glass plinth: keys with real travel, anodised-orange START/STOP and counterweight, engraved labels and ticks, and a finer dot-matrix screen.
+  - Drawn in layers, so only the record redraws each frame.
+  - The platter turns slower on screen, with a real-strobe effect.
+- **Home:**
+  - The footer is four icon tabs. The clock and Change folder are gone from the top.
+  - Status shows as coloured dots.
+  - The caption is title and artist plus a spec tag.
+  - A long press opens a record's menu.
+  - Disc pull-out and landing are animated, with haptics and a thud.
+- **Onboarding:**
+  - Full screen, opening with a needle-drop intro.
+  - One Soulseek sign-in that always remembers you; an ⓘ explains how IDs are created.
+  - Steps move on by themselves, and it ends with a greeting that pops into the room.
+- **Dig:**
+  - A full page, albums only, from two sources.
+  - Tap-to-preview cards, peer marks and a floating filters key.
+  - Sleeve-style previews with clean track names, and better ranking.
+- **Friday Drops:** a sleeve shelf, claim lights, and a preview with track list and 30-second listens.
+- **Friends:** a full page with chats, friends with online dots, a + to start a chat, and records sent as cards.
+- **Settings:** a list of pages, short copy with ⓘ, and a TE-style EQ. Downloads controls are icon keys.
+- **Pressing Plant:** removed. Records pressed earlier stay playable.
+
 ## [0.4.6] - 2026-10-21 (development)
 
 ### Changed

@@ -4,13 +4,17 @@ Updated: 2026-10-21, Asia/Kolkata.
 
 This file transfers project context to Hermes or another coding agent. Continue the existing Android project; this handoff does not request a rewrite, a different application framework, or a Hermes runtime inside the APK. The workflows below use ordinary Git, Gradle, Cargo, Android SDK tools and Argent, so they do not depend on Codex tools or conversation history.
 
-## Latest: original room restored (2026-10-21)
+## Latest: UI redesign on `ui-redesign` (2026-10-21)
+
+The owner's screen-by-screen interview, with every agreed change and its status, is in `docs/design/UI-REDESIGN.md`. Treat that checklist as the spec.
+
+## Before that: original room restored (2026-10-21)
 
 The redesign drafts (inked deck, tab bar, mini player, "vinyl as controller") were tried and **rejected by the user**. They have been removed from the repository. The app is back on the original 0.3.0 listening room, with the newer features mapped into it. This is on branch `restore-original-ui` (pull request into `main` on the fork):
 
 - **Home is `RoomScreen`** (`ui/ListeningRoom.kt`): the glass turntable, the crate coverflow and the original palette. Covered albums are picture discs. The app is immersive, with no app-name header, tab bar or mini player.
 - **The glass deck is the only player.** It has START/STOP, ◀◀ ▶▶, the pixel screen, tonearm drag, tap-to-flip and the platter hold. The 33/45 keys, pitch fader and POWER knob are gone, and records always play at recorded speed. Android notification, lock-screen and headset controls stay.
-- **Pill strip** (scrolls sideways): **Dig · Drops · Friends · Pressing Plant · Settings**. Each pill opens a glass sheet; `↓ N` (downloads) and the account link sit next to the clock. Settings has the sections Sound, Soulseek, Library and About. First-run setup is a glass sheet over the room.
+- **Footer**: four icon tabs, **Dig · Drops · Friends · Settings** (the Pressing Plant is gone). Dig and Friends are full pages; the others are glass sheets; `↓ N` (downloads) and the account link sit next to the clock. Settings has the sections Sound, Soulseek, Library and About. First-run setup is a glass sheet over the room.
 - **Search never plays.** "Put on the platter" cues the song with the needle up; the deck's START/STOP plays it.
 
 Do not reintroduce the removed shell or deck controls. Keep UI changes within this room unless the user asks otherwise.
@@ -77,7 +81,7 @@ Relevant code:
 - `discovery/Discovery.kt`: `SearchSource` has only `ALL`, `LOCAL`, `SOULSEEK`.
 - `discovery/DiscoveryRepository.kt`: combines local metadata and Soulseek results; no Archive search provider.
 - `ui/DiscoveryScreen.kt`: search, filters, sorting and album/folder presentation.
-- `ui/ListeningRoom.kt`: the room's pill strip opens **Dig** (search) and **Drops** (Friday Drops) as separate glass sheets.
+- `ui/ListeningRoom.kt`: the room's tab bar opens **Dig** (search, a full page) and **Drops** (Friday Drops, a sheet).
 - `drops/Drops.kt`: Archive's existing weekly discovery/download implementation.
 
 All Kotlin paths above are relative to `app/src/main/java/app/runout/`.

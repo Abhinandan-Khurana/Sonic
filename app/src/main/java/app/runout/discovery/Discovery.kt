@@ -77,11 +77,16 @@ class LocalMusicIndex(albums: List<Album>) {
         val normalized = normalize(query)
         if (normalized.isBlank()) return emptyList()
         val tokens = normalized.split(' ')
-        return entries.asSequence().filter { kind == SearchKind.ALL || (it.track == null) == (kind == SearchKind.ALBUMS) }
+        val matches = entries.asSequence().filter { kind != SearchKind.SONGS || it.track != null }
             .mapNotNull { entry ->
                 val score = matchScore(normalized,tokens,entry.title,entry.text,true)
                 if (score == 0) null else LocalMatch(entry.album,entry.track,score)
-            }.sortedWith(compareByDescending<LocalMatch> { it.score }.thenBy { it.album.title }.thenBy { it.id }).toList()
+            }
+        // Albums only: a song that matches brings up its album, ranked by its best match.
+        val shown = if (kind == SearchKind.ALBUMS) matches.groupBy { it.album.id }.values.map { hits ->
+            LocalMatch(hits.first().album, null, hits.maxOf { it.score })
+        }.asSequence() else matches
+        return shown.sortedWith(compareByDescending<LocalMatch> { it.score }.thenBy { it.album.title }.thenBy { it.id }).toList()
     }
 }
 
