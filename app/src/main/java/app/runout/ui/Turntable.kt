@@ -1,27 +1,31 @@
 /*
- * THE VINYL PLAYER — everything that draws and drives the turntable lives in this one file.
- * Edit here to change how the deck looks or feels; nothing else in the app draws it.
+ * THE VINYL PLAYER — the turntable in the room.
  *
- * Map, top to bottom:
- *   DeckActions        what a press on the deck asks the player to do (start/stop, skip, flip, drop the needle)
- *   DeckGeometry       where every part sits on the plinth: platter, tonearm pivot, keys, screen (ASPECT = shape)
- *   RPM_33_DEG         how fast the platter turns on screen; strobeDrift() = the strobe dots' crawl
- *   screenLines()      the text on the little dot-matrix screen
- *   Turntable()        the composable: spin animation, touch areas, tonearm drag, platter hold, then the drawing
- *   Chrome/SmokedGlass the base colours of the plinth
- *   drawPlinth         the body and its glass coat        drawPlatter / drawStrobe / drawMat   the platter
- *   drawArmBase        tonearm base and counterweight      drawTonearm                         the arm and headshell
- *   teKey / drawButtons  the Teenage Engineering-style keys (signalMetal/greyMetal = their anodised finish)
- *   drawPixelScreen    the LCD, using PixelLine/PixelFont (the Silkscreen dot font)
+ * It's a 3D model (assets/deck/turntable.glb, the Runout RG-1 in white + teal), drawn by Filament
+ * in ui/deck/DeckRenderer.kt. This file is the Compose side: the deck's physics (platter spin-up and
+ * wind-down, the tonearm's travel), touch (drag the arm, tap the record to flip it, hold it to slow
+ * it, the keys START/STOP, ◀◀ ▶▶ and eject), what the deck shows (its screen, the status lamp, the
+ * LED strip's progress) and a readable line of text under the player.
  *
- * The record on the platter (label, grooves, picture discs) is drawn in RecordArt.kt: drawRecord().
- * Colours shared with the rest of the app (Room.Signal, Room.SignalLight, ...) are in Room.kt.
+ * Map:
+ *   DeckActions          what a press on the deck asks the player to do
+ *   RPM_33_DEG           how fast the platter turns on screen
+ *   screenLines()        the track and status, for the deck's screen and the line under it
+ *   Turntable()          the composable: physics, the 3D view (or its flat stand-in), touch, keys
+ *   recordFace()         paints the record's face (RecordArt.drawRecord) into the 3D disc's texture
+ *
+ * Where the parts are in the model, the tonearm's arc and the camera: ui/deck/DeckModel.kt, from
+ * docs/design/deck-spec.json. Rendering, lights, the screen and LEDs: ui/deck/DeckRenderer.kt. The
+ * record's look: RecordArt.kt. To change the model: scripts/prepare-deck-glb.py <source.glb>, then
+ * update DeckModel from the new spec.
  */
 package app.runout.ui
 
+import android.view.TextureView
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -32,70 +36,79 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import app.runout.model.Album
 import app.runout.playback.DeckState
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
+import app.runout.ui.deck.DeckCamera
+import app.runout.ui.deck.DeckKey
+import app.runout.ui.deck.DeckModel
+import app.runout.ui.deck.DeckRenderer
+import app.runout.ui.deck.V3
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
-import kotlin.math.acos
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
-import kotlin.math.min
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -114,99 +127,17 @@ interface DeckActions {
 }
 
 /**
- * Where everything sits on the plinth, in the canvas's own pixels. The layout follows the classic
- * direct-drive deck: platter left, S-shaped tonearm on its base at the top right, start/stop at the
- * bottom left, the transport keys and pixel screen at the bottom right. The tonearm is solved with
- * the law of cosines so the stylus follows a true arc across the grooves.
- */
-class DeckGeometry(val size: Size) {
-    val h = size.height
-    private val w = size.width
-
-    val center = Offset(h * 0.50f, h * 0.455f)
-    val ringR = h * 0.435f
-    val platterR = h * 0.400f
-    val recordR = h * 0.390f
-
-    val pivot = Offset(w - h * 0.205f, h * 0.165f)
-    val armBase = Offset(w - h * 0.245f, h * 0.235f)
-    val armBaseR = h * 0.125f
-    val antiSkate = Offset(w - h * 0.115f, h * 0.27f)
-    val adapterWell = Offset(h * 0.105f, h * 0.10f)
-
-    val screen = Rect(w - h * 0.47f, h * 0.855f, w - h * 0.04f, h * 0.965f)
-    val startStop = Rect(h * 0.03f, h * 0.86f, h * 0.165f, h * 0.965f)
-    val prev = Rect(h * 0.585f, h * 0.915f, h * 0.675f, h * 0.962f)
-    val next = Rect(h * 0.69f, h * 0.915f, h * 0.78f, h * 0.962f)
-
-    val armLength = (pivot - center).getDistance()
-    private val phi = atan2(center.y - pivot.y, center.x - pivot.x)
-
-    private fun alphaForRadius(r: Float): Float =
-        acos((1f - r * r / (2f * armLength * armLength)).coerceIn(-1f, 1f))
-
-    val alphaOut = alphaForRadius(recordR * 0.95f)
-    val alphaIn = alphaForRadius(recordR * 0.43f)
-    val alphaRest = alphaForRadius(ringR * 1.05f) + 0.13f
-
-    fun direction(alpha: Float): Offset {
-        val th = phi - alpha
-        return Offset(cos(th), sin(th))
-    }
-
-    fun stylus(alpha: Float): Offset = pivot + direction(alpha) * armLength
-
-    fun alphaForPointer(p: Offset): Float {
-        var a = phi - atan2(p.y - pivot.y, p.x - pivot.x)
-        while (a > PI) a -= (2 * PI).toFloat()
-        while (a < -PI) a += (2 * PI).toFloat()
-        return a
-    }
-
-    fun alphaForFraction(f: Float) = alphaOut + (alphaIn - alphaOut) * f.coerceIn(0f, 1f)
-    fun fractionForAlpha(a: Float) = ((alphaOut - a) / (alphaOut - alphaIn)).coerceIn(0f, 1f)
-    fun isOnRecord(p: Offset) = (p - center).getDistance() <= recordR
-
-    fun nearArm(p: Offset, alpha: Float, slop: Float): Boolean {
-        val a = pivot
-        val b = stylus(alpha)
-        val ab = b - a
-        val t = (((p - a).x * ab.x + (p - a).y * ab.y) / (ab.x * ab.x + ab.y * ab.y)).coerceIn(0f, 1f)
-        val closest = a + ab * t
-        return (p - closest).getDistance() < slop || (p - b).getDistance() < slop * 1.6f
-    }
-
-    companion object {
-        /** Width to height of the plinth. */
-        const val ASPECT = 1.28f
-    }
-}
-
-/**
  * How fast the platter turns on screen, in degrees a second: one turn every 3.6 s. A true 33⅓
  * (200°/s) reads as racing on a phone-sized platter, so the picture turns at half that; the music
  * always plays at the speed it was cut.
  */
 const val RPM_33_DEG = 100f
 
-/** 180 dots to a row, lit by a 50 Hz flash: the pattern freezes exactly at platter speed. */
-private const val STROBE_DOTS = 180
-private const val STROBE_SPACING = 360f / STROBE_DOTS
-private const val FLASH_PERIOD_S = 0.02f
+/** Width to height of the 3D view (the text line under it is extra). */
+private const val VIEW_ASPECT = 1.55f
+private val SCREEN_LINE = 22.dp
 
-/**
- * How fast the strobe dots appear to move at platter speed [omega], in degrees a second. Between
- * flashes a dot travels omega × T; you only see where it lands relative to the dot ahead, so at
- * exactly 33⅓ the pattern stands still, and a little off speed it crawls forwards or backwards.
- */
-internal fun strobeDrift(omega: Float): Float {
-    val perFlash = omega * FLASH_PERIOD_S
-    var wrapped = perFlash % STROBE_SPACING
-    if (wrapped > STROBE_SPACING / 2f) wrapped -= STROBE_SPACING
-    return wrapped / FLASH_PERIOD_S
-}
-
-/** The two lines on the deck's little pixel screen. */
+/** What's on the deck, as the two parts of the line under the player. */
 fun screenLines(deck: DeckState): Pair<String, String> {
     val album = deck.album ?: return "RUNOUT · DROP A RECORD ON THE PLATTER" to "NO RECORD"
     val track = deck.currentTrack
@@ -225,32 +156,23 @@ fun screenLines(deck: DeckState): Pair<String, String> {
 @Composable
 fun Turntable(
     deck: DeckState,
-    backdrop: Backdrop,
     dropTargetActive: Boolean,
     onPlatterPlaced: (center: Offset, radius: Float) -> Unit,
     actions: DeckActions,
     modifier: Modifier = Modifier,
     contentAlignment: Alignment = Alignment.CenterStart,
 ) {
-    val density = LocalDensity.current
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
     val cover by rememberCover(deck.album)
-    val look = remember(deck.album) { discLookFor(deck.album) }
-    val labelFallback = remember(deck.album) { fallbackColor(deck.album) }
-    val boundaries = remember(deck.side) { deck.side?.trackBoundaries() ?: emptyList() }
-    val labelStyle = Room.Label.copy(color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp)
-    val sideText = remember(deck.side) { deck.side?.let { textMeasurer.measure("SIDE ${it.letter}", labelStyle) } }
-    val qualityText = remember(deck.album) { deck.album?.let { textMeasurer.measure(it.quality.shortLabel.uppercase(), labelStyle) } }
+    // The 3D deck needs Filament and a working GPU; if either fails the flat deck stands in.
+    var use3d by remember { mutableStateOf(DeckRenderer.available) }
+    var renderer by remember { mutableStateOf<DeckRenderer?>(null) }
 
     // Platter: spins up when the needle goes down, winds down when stopped or lifted. A heavy
     // platter takes its time: about a second and a half to reach speed, longer to coast to a stop.
     var rotation by remember { mutableFloatStateOf(0f) }
     var omega by remember { mutableFloatStateOf(0f) }
-    // The strobe dots as you'd see them under mains light: frozen at exactly 33⅓, drifting while
-    // the platter is off speed. Drawing them at the platter's true angle instead makes them shimmer
-    // at screen refresh rates and the whole deck looks like it's racing.
-    var strobe by remember { mutableFloatStateOf(0f) }
     val target = if (deck.album != null && deck.needleDown && !deck.held) RPM_33_DEG else 0f
     val held = deck.held
     LaunchedEffect(target) {
@@ -266,7 +188,8 @@ fun Turntable(
             }
             omega += (target - omega) * (1f - exp(-dt / tau))
             rotation = (rotation + omega * dt) % 360f
-            strobe = (strobe + strobeDrift(omega) * dt) % 360f
+            // Straight to the renderer: no recomposition per frame.
+            renderer?.setPlatter(rotation)
             if (target == 0f && omega < 0.4f) {
                 omega = 0f
                 break
@@ -274,548 +197,276 @@ fun Turntable(
         }
     }
 
-    // The pixel screen scrolls long titles while the record plays.
-    val (line1, line2) = screenLines(deck)
-    val pixels1 = remember(line1) { PixelFont.render(context, line1) }
-    val pixels2 = remember(line2) { PixelFont.render(context, line2) }
-    var scrollStep by remember { mutableLongStateOf(0L) }
-    val scrolling = deck.isPlaying && deck.needleDown && !deck.held
-    LaunchedEffect(scrolling, line1) {
-        scrollStep = 0
-        if (!scrolling) return@LaunchedEffect
-        val start = withFrameNanos { it }
-        while (true) {
-            val now = withFrameNanos { it }
-            scrollStep = (now - start) / 90_000_000L // one dot every 90 ms
-        }
+    // Tonearm: tracks the needle through the side, or follows the finger while dragged. The needle
+    // drops into the groove a moment after the arm arrives, and lifts as soon as it's picked up.
+    var dragAngle by remember { mutableStateOf<Float?>(null) }
+    val playAngle = if (deck.album != null && deck.needleDown) DeckModel.angleForFraction(deck.fraction) else DeckModel.angleRest
+    val animAngle by animateFloatAsState(playAngle, spring(dampingRatio = 1f, stiffness = Spring.StiffnessVeryLow), label = "tonearm")
+    val armAngle = dragAngle ?: animAngle
+    val drop by animateFloatAsState(if (deck.needleDown && dragAngle == null) 1f else 0f, tween(380), label = "needle")
+    LaunchedEffect(renderer) {
+        val r = renderer ?: return@LaunchedEffect
+        r.setPlatter(rotation)
+        snapshotFlow { (dragAngle ?: animAngle) to drop }.collect { (a, d) -> r.setArm(a, d) }
     }
 
-    // Tonearm: tracks the needle through the side, or follows the finger while dragged.
-    var geom by remember { mutableStateOf<DeckGeometry?>(null) }
-    var dragAlpha by remember { mutableStateOf<Float?>(null) }
-    val g = geom
-    val playAlpha = when {
-        g == null -> 0f
-        deck.needleDown -> g.alphaForFraction(deck.fraction)
-        else -> g.alphaRest
+    // The record's face, painted once per record and side, then turned by the platter in 3D.
+    val boundaries = remember(deck.side) { deck.side?.trackBoundaries() ?: emptyList() }
+    val face = remember(deck.album?.id, deck.side, cover) {
+        deck.album?.let { if (use3d) recordFace(it, cover, boundaries, deck.side?.letter?.toString(), textMeasurer) else null }
     }
-    val animAlpha by animateFloatAsState(
-        targetValue = playAlpha,
-        animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessVeryLow),
-        label = "tonearm",
-    )
-    val armAlpha = dragAlpha ?: animAlpha
-    // The keys travel down while held, like real switches.
-    val ssSource = remember { MutableInteractionSource() }
-    val prevSource = remember { MutableInteractionSource() }
-    val nextSource = remember { MutableInteractionSource() }
-    val ssDown by ssSource.collectIsPressedAsState()
-    val prevDown by prevSource.collectIsPressedAsState()
-    val nextDown by nextSource.collectIsPressedAsState()
+    LaunchedEffect(renderer, face, deck.album == null) {
+        renderer?.setRecord(if (deck.album == null) null else face?.asAndroidBitmap())
+    }
+
+    // Pause rendering while the app is in the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, renderer) {
+        val r = renderer
+        val observer = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_START) r?.resume()
+            if (e == Lifecycle.Event.ON_STOP) r?.pause()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+
     val currentDeck by rememberUpdatedState(deck)
-    val currentArm by rememberUpdatedState(armAlpha)
+    val currentArm by rememberUpdatedState(armAngle)
+    // The keys go down under the finger, on the model itself.
+    val keySources = remember { DeckModel.keys.associateWith { MutableInteractionSource() } }
+    keySources.forEach { (key, source) ->
+        val down by source.collectIsPressedAsState()
+        val travel by animateFloatAsState(if (down) 1f else 0f, tween(70), label = key.node)
+        LaunchedEffect(renderer, travel) { renderer?.setKey(key, travel) }
+    }
+
+    // The status lamp, the LED strip and the deck's own screen.
+    val playing = deck.album != null && deck.needleDown && !deck.held
+    val (line1, line2) = screenLines(deck)
+    LaunchedEffect(renderer, playing) { renderer?.setStatusLamp(playing) }
+    val stripStep = if (deck.album == null) 0 else (deck.fraction * 64).toInt()
+    LaunchedEffect(renderer, stripStep, playing) { renderer?.setStrip(stripStep / 64f, playing) }
+    LaunchedEffect(renderer, line1, line2) {
+        val code = deck.album?.let { deck.trackCode }
+        val top = if (code == null) line2 else "$code  $line2".replace("$code  CUE $code", "CUE $code")
+        val bottom = deck.album?.let { deck.currentTrack?.title ?: it.title } ?: "DROP A RECORD ON"
+        renderer?.setScreen(top, bottom)
+    }
+    // A frame drawn by Filament shows once the room redraws around it.
+    var frames by remember { mutableIntStateOf(0) }
+    LaunchedEffect(renderer) { renderer?.onFrame = { frames++ } }
+    val pixelFont = remember { runCatching { FontFamily(Font("fonts/silkscreen.ttf", context.assets)) }.getOrDefault(FontFamily.Monospace) }
 
     BoxWithConstraints(modifier, contentAlignment = contentAlignment) {
-        val plinthH = min(maxHeight.value, maxWidth.value / DeckGeometry.ASPECT).dp
-        val plinthW = plinthH * DeckGeometry.ASPECT
-        val gm = remember(plinthW, plinthH, density) {
-            with(density) { DeckGeometry(Size(plinthW.toPx(), plinthH.toPx())) }
-        }
-        Box(
-            Modifier
-                .size(plinthW, plinthH)
-                .testTag("turntable")
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RoundedCornerShape(plinthH * 0.07f) },
-                    effects = {
-                        vibrancy()
-                        blur(4.dp.toPx())
-                        lens(18.dp.toPx(), 40.dp.toPx(), chromaticAberration = true)
-                    },
-                    onDrawSurface = {
-                        // Frosted, faintly silver glass.
-                        drawRect(
-                            Brush.linearGradient(
-                                listOf(Color.White.copy(alpha = 0.26f), Color(0xFFE9ECF2).copy(alpha = 0.10f), Color.White.copy(alpha = 0.22f)),
-                                start = Offset.Zero, end = Offset(size.width, size.height),
-                            ),
-                        )
-                    },
-                ),
-        ) {
-            Canvas(
-                Modifier
-                    .fillMaxSize()
-                    .onGloballyPositioned { coords ->
-                        // Only a new size makes new geometry; writing state on every callback would
-                        // keep the turntable recomposing forever (and burn battery).
-                        val size = coords.size.toSize()
-                        val geometry = geom?.takeIf { it.size == size } ?: DeckGeometry(size).also { geom = it }
-                        onPlatterPlaced(coords.positionInRoot() + geometry.center, geometry.recordR)
-                    }
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            val gmx = geom ?: return@awaitEachGesture
-                            val d = currentDeck
-                            val slop = 26.dp.toPx()
-                            if (d.album != null && gmx.nearArm(down.position, currentArm, slop)) {
-                                // Pick up the tonearm.
-                                down.consume()
-                                val wasDown = d.needleDown
-                                if (wasDown) actions.liftNeedle()
-                                var moved = 0f
-                                var last = down.position
-                                dragAlpha = currentArm
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                    if (!change.pressed) break
-                                    moved += (change.position - last).getDistance()
-                                    last = change.position
-                                    dragAlpha = gmx.alphaForPointer(change.position).coerceIn(gmx.alphaIn, gmx.alphaRest)
-                                    change.consume()
-                                }
-                                val a = dragAlpha ?: gmx.alphaRest
-                                dragAlpha = null
-                                if (moved < viewConfiguration.touchSlop) {
-                                    if (!wasDown) actions.needleDrop(0f)
-                                } else if (a < gmx.alphaRest - 0.06f) {
-                                    actions.needleDrop(gmx.fractionForAlpha(a))
-                                }
-                            } else if (d.album != null && gmx.isOnRecord(down.position)) {
-                                // A quick tap flips the record; a press on a spinning record slows it down.
-                                val quickRelease = withTimeoutOrNull(170L) { waitForUpOrCancellation() }
-                                if (quickRelease != null) {
-                                    if (!d.needleDown) actions.flip()
-                                } else if (d.needleDown) {
-                                    actions.holdPlatter()
-                                    waitForUpOrCancellation()
-                                    actions.releasePlatter()
-                                } else {
-                                    waitForUpOrCancellation()
-                                }
-                            }
-                        }
-                    },
-            ) {
-                // The base layer: plinth, platter body, keys. It only redraws when a key moves or
-                // the deck's lights change, never per frame.
-                val gx = DeckGeometry(size)
-                drawPlinth(gx, textMeasurer)
-                drawPlatter(gx, hasRecord = deck.album != null)
-                drawButtons(gx, textMeasurer, deck, ssDown, prevDown, nextDown)
-                drawArmBase(gx, textMeasurer)
-            }
-            // The strobe ring: redrawn only while the platter is off speed and the dots drift.
-            Canvas(Modifier.fillMaxSize()) { drawStrobe(DeckGeometry(size), strobe) }
-            // The record (or the bare mat): the only thing that turns every frame.
-            Canvas(Modifier.fillMaxSize()) {
-                val gx = DeckGeometry(size)
-                if (deck.album != null) {
-                    drawRecord(
-                        center = gx.center,
-                        radius = gx.recordR,
-                        rotation = rotation,
-                        look = look,
-                        label = cover,
-                        labelFallback = labelFallback,
-                        trackBoundaries = boundaries,
-                        sideText = sideText,
-                        qualityText = qualityText,
-                    )
-                } else drawMat(gx, rotation)
-                if (dropTargetActive) {
-                    drawCircle(
-                        Room.Signal.copy(alpha = 0.85f),
-                        gx.recordR * 1.03f,
-                        gx.center,
-                        style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))),
-                    )
-                }
-            }
-            Canvas(Modifier.fillMaxSize()) { drawPixelScreen(DeckGeometry(size).screen, pixels1, pixels2, scrollStep) }
-            Canvas(Modifier.fillMaxSize()) { drawTonearm(DeckGeometry(size), armAlpha) }
-
-            // Touch targets for the controls, with names for TalkBack.
-            val (l1, l2) = screenLines(deck)
-            ControlArea(gm.startStop, "Start or stop", "deck:startstop", ssSource, stateText = if (deck.needleDown && !deck.held) "Playing" else "Stopped") { actions.startStop() }
-            ControlArea(gm.prev, "Previous track", "deck:prev", prevSource) { actions.previousTrack() }
-            ControlArea(gm.next, "Next track", "deck:next", nextSource) { actions.nextTrack() }
+        val w = min(maxWidth, (maxHeight - SCREEN_LINE) * VIEW_ASPECT)
+        val h = w / VIEW_ASPECT
+        val density = LocalDensity.current
+        val cam = remember(w, h, density) { with(density) { DeckCamera(w.toPx(), h.toPx()) } }
+        Column(Modifier.width(w).testTag("turntable")) {
             Box(
                 Modifier
-                    .rectOffset(gm.screen)
+                    .size(w, h)
+                    .onGloballyPositioned { coords ->
+                        val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
+                        onPlatterPlaced(coords.positionInRoot() + c, cam.pixelsPerUnit(DeckModel.platterCentre) * DeckModel.RECORD_R)
+                    },
+            ) {
+                if (use3d) {
+                    AndroidView(
+                        factory = { ctx ->
+                            TextureView(ctx).also { tv ->
+                                runCatching { DeckRenderer(ctx, tv).also { it.resume() } }
+                                    .onSuccess { renderer = it }
+                                    .onFailure { e ->
+                                        android.util.Log.w("RunoutDeck", "3D deck unavailable, using the flat deck", e)
+                                        use3d = false
+                                    }
+                            }
+                        },
+                        onRelease = {
+                            renderer?.destroy()
+                            renderer = null
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    // The JVM tests have no GPU: a flat stand-in in the same places.
+                    FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer)
+                }
+                // The drop target over the model. Reading [frames] here redraws the room each time
+                // Filament finishes a frame, so the TextureView's newest picture is what shows.
+                Canvas(Modifier.fillMaxSize()) {
+                    frames
+                    if (dropTargetActive) drawRecordOutline(cam)
+                }
+                // Touch: the arm and the record.
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(cam) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val d = currentDeck
+                                val p = cam.onPlane(down.position, DeckModel.RECORD_Y) ?: return@awaitEachGesture
+                                val slop = 26.dp.toPx() / cam.pixelsPerUnit(DeckModel.platterCentre)
+                                if (d.album != null && DeckModel.nearArm(p, currentArm, slop)) {
+                                    // Pick up the tonearm.
+                                    down.consume()
+                                    val wasDown = d.needleDown
+                                    if (wasDown) actions.liftNeedle()
+                                    var moved = 0f
+                                    var last = down.position
+                                    dragAngle = currentArm
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed) break
+                                        moved += (change.position - last).getDistance()
+                                        last = change.position
+                                        cam.onPlane(change.position, DeckModel.RECORD_Y)?.let { dragAngle = DeckModel.angleTowards(it) }
+                                        change.consume()
+                                    }
+                                    val a = dragAngle ?: DeckModel.angleRest
+                                    dragAngle = null
+                                    val s = DeckModel.stylus(a)
+                                    val overRecord = hypot(s.x - DeckModel.platterCentre.x, s.z - DeckModel.platterCentre.z) <= DeckModel.RECORD_R
+                                    if (moved < viewConfiguration.touchSlop) {
+                                        if (!wasDown) actions.needleDrop(0f)
+                                    } else if (overRecord) {
+                                        actions.needleDrop(DeckModel.fractionForAngle(a))
+                                    }
+                                } else if (d.album != null && DeckModel.isOnRecord(p)) {
+                                    // A quick tap flips the record; a press on a spinning record slows it down.
+                                    val quickRelease = withTimeoutOrNull(170L) { waitForUpOrCancellation() }
+                                    if (quickRelease != null) {
+                                        if (!d.needleDown) actions.flip()
+                                    } else if (d.needleDown) {
+                                        actions.holdPlatter()
+                                        waitForUpOrCancellation()
+                                        actions.releasePlatter()
+                                    } else {
+                                        waitForUpOrCancellation()
+                                    }
+                                }
+                            }
+                        },
+                )
+                // The deck's keys, with names for TalkBack.
+                KeyArea(cam, DeckModel.startStop, "Start or stop", "deck:startstop", keySources.getValue(DeckModel.startStop), stateText = if (playing) "Playing" else "Stopped") { actions.startStop() }
+                KeyArea(cam, DeckModel.prev, "Previous track", "deck:prev", keySources.getValue(DeckModel.prev)) { actions.previousTrack() }
+                KeyArea(cam, DeckModel.next, "Next track", "deck:next", keySources.getValue(DeckModel.next)) { actions.nextTrack() }
+                KeyArea(cam, DeckModel.eject, "Eject the record", "deck:eject", keySources.getValue(DeckModel.eject), enabled = deck.album != null) { actions.eject() }
+            }
+            // What used to be the dot-matrix screen: one line under the player.
+            val (l1, l2) = screenLines(deck)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(SCREEN_LINE)
+                    .padding(horizontal = 6.dp)
                     .testTag("deck:screen")
-                    .semantics { contentDescription = "$l1. $l2" },
-            )
+                    .semantics(mergeDescendants = true) { contentDescription = "$l1. $l2" },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val style = Room.Label.copy(fontFamily = pixelFont, fontSize = 8.sp, letterSpacing = 0.6.sp, color = Room.Ink.copy(alpha = 0.72f))
+                BasicText(l1.uppercase(), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                BasicText(l2, style = style.copy(color = if (deck.needleDown && !deck.held) Room.Signal else style.color), maxLines = 1, modifier = Modifier.padding(start = 10.dp))
+            }
         }
     }
 }
 
-/** Places a box exactly over a rect of the plinth canvas. */
+/** A key's touch zone (its share of the control panel), projected onto the screen, with a haptic click. */
 @Composable
-private fun Modifier.rectOffset(r: Rect): Modifier {
-    val d = LocalDensity.current
-    return this
-        .offset { IntOffset(r.left.roundToInt(), r.top.roundToInt()) }
-        .size(with(d) { r.width.toDp() }, with(d) { r.height.toDp() })
-}
-
-@Composable
-private fun BoxScope.ControlArea(r: Rect, label: String, tag: String, source: MutableInteractionSource, stateText: String? = null, onClick: () -> Unit) {
+private fun BoxScope.KeyArea(cam: DeckCamera, key: DeckKey, label: String, tag: String, source: MutableInteractionSource, stateText: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
     val tick = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.VirtualKey)
+    val density = LocalDensity.current
+    val y = key.centre.y
+    val corners = listOf(key.zoneMin.first, key.zoneMax.first).flatMap { x -> listOf(key.zoneMin.second, key.zoneMax.second).map { z -> cam.project(V3(x, y, z)) } }
+    val left = corners.minOf { it.x }
+    val top = corners.minOf { it.y }
+    val right = corners.maxOf { it.x }
+    val bottom = corners.maxOf { it.y }
     Box(
         Modifier
-            .rectOffset(r)
+            .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
+            .size(with(density) { (right - left).toDp() }, with(density) { (bottom - top).toDp() })
             .testTag(tag)
             .semantics { contentDescription = label; if (stateText != null) stateDescription = stateText }
-            .clickable(interactionSource = source, indication = null, role = Role.Button) { tick(); onClick() },
+            .clickable(enabled = enabled, interactionSource = source, indication = null, role = Role.Button) { tick(); onClick() },
     )
 }
 
-// ---------------------------------------------------------------------------------------------
-// Drawing
-
-private val Chrome = Brush.linearGradient(listOf(Color(0xFFF7F8FA), Color(0xFFB9BCC4), Color(0xFFEDEFF3), Color(0xFFA9ADB6)).map { it.copy(alpha = 0.88f) })
-private val SmokedGlass = Color(0xFF16171C)
-
-/** Draws small printed text on the plinth; returns its width. */
-private fun DrawScope.label(tm: TextMeasurer, text: String, at: Offset, size: Float, color: Color = Room.Ink.copy(alpha = 0.55f), weight: FontWeight = FontWeight.Medium, centered: Boolean = false, alignEnd: Boolean = false): Float {
-    val r = tm.measure(text, TextStyle(fontFamily = Room.Inter, fontSize = (size / density).sp, fontWeight = weight, color = color, letterSpacing = (size * 0.08f / density).sp))
-    val x = when {
-        centered -> at.x - r.size.width / 2f
-        alignEnd -> at.x - r.size.width
-        else -> at.x
+/** The record's rim on the platter, dashed, where a pulled disc will land. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(cam: DeckCamera) {
+    val path = Path()
+    for (i in 0..96) {
+        val a = i / 96f * 2f * PI.toFloat()
+        val p = cam.project(V3(DeckModel.platterCentre.x + cos(a) * DeckModel.RECORD_R * 1.02f, DeckModel.RECORD_Y, DeckModel.platterCentre.z + sin(a) * DeckModel.RECORD_R * 1.02f))
+        if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
     }
-    drawText(r, topLeft = Offset(x, at.y))
-    return r.size.width.toFloat()
-}
-
-private fun DrawScope.drawPlinth(g: DeckGeometry, tm: TextMeasurer) {
-    val h = g.h
-    // A hairline inset, like the edge of a cast top plate.
-    drawRoundRect(Color.White.copy(alpha = 0.55f), topLeft = Offset(h * 0.012f, h * 0.012f), size = Size(size.width - h * 0.024f, size.height - h * 0.024f), cornerRadius = CornerRadius(h * 0.06f), style = Stroke(1.2f))
-    // Four tiny screws in the corners of the top plate.
-    listOf(Offset(h * 0.045f, h * 0.045f), Offset(size.width - h * 0.045f, h * 0.045f), Offset(h * 0.045f, size.height - h * 0.045f), Offset(size.width - h * 0.045f, size.height - h * 0.045f))
-        .forEach { c ->
-            drawCircle(Color.Black.copy(alpha = 0.10f), h * 0.009f, c)
-            drawLine(Color.Black.copy(alpha = 0.22f), c - Offset(h * 0.006f, 0f), c + Offset(h * 0.006f, 0f), strokeWidth = 1f)
-        }
-
-    // 45 adapter well, top left, with its printed speed beside it.
-    drawCircle(SmokedGlass.copy(alpha = 0.10f), h * 0.052f, g.adapterWell)
-    drawCircle(Color.White.copy(alpha = 0.7f), h * 0.052f, g.adapterWell, style = Stroke(1.2f))
-    drawLine(Color.Black.copy(alpha = 0.12f), g.adapterWell - Offset(h * 0.03f, 0f), g.adapterWell + Offset(h * 0.03f, 0f), strokeWidth = h * 0.012f, cap = StrokeCap.Round)
-
-    // Model plate above the screen: the name, the model, and a fine engraved rule with ticks.
-    val plateY = g.screen.top - h * 0.06f
-    val nameW = label(tm, "RUNOUT", Offset(g.screen.left, plateY), h * 0.03f, Room.Ink.copy(alpha = 0.85f), FontWeight.SemiBold)
-    label(tm, "RG-1", Offset(g.screen.left + nameW + h * 0.018f, plateY + h * 0.004f), h * 0.022f, Room.Signal, FontWeight.SemiBold)
-    label(tm, "GLASS DRIVE · 33⅓ RPM", Offset(g.screen.right, plateY + h * 0.009f), h * 0.014f, Room.Ink.copy(alpha = 0.5f), centered = false, alignEnd = true)
-    val ruleY = g.screen.top - h * 0.016f
-    drawLine(Room.Ink.copy(alpha = 0.22f), Offset(g.screen.left, ruleY), Offset(g.screen.right, ruleY), strokeWidth = 1f)
-    val ticks = 24
-    for (i in 0..ticks) {
-        val x = g.screen.left + (g.screen.right - g.screen.left) * i / ticks
-        val long = i % 6 == 0
-        drawLine(Room.Ink.copy(alpha = if (long) 0.35f else 0.2f), Offset(x, ruleY), Offset(x, ruleY - h * (if (long) 0.014f else 0.007f)), strokeWidth = 1f)
-    }
-}
-
-private fun DrawScope.drawPlatter(g: DeckGeometry, hasRecord: Boolean) {
-    val h = g.h
-    // Shadow under the platter.
-    drawCircle(
-        brush = Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.18f), Color.Transparent), center = g.center + Offset(0f, h * 0.02f), radius = g.ringR * 1.1f),
-        radius = g.ringR * 1.1f, center = g.center + Offset(0f, h * 0.02f),
-    )
-    // Platter rim: translucent machined aluminium.
-    drawCircle(
-        brush = Brush.sweepGradient(
-            listOf(Color(0xFFD9DBE0), Color(0xFFF8F9FB), Color(0xFFC6C9D0), Color(0xFFF4F5F8), Color(0xFFCFD2D8), Color(0xFFF7F8FA), Color(0xFFD9DBE0)).map { it.copy(alpha = 0.72f) },
-            center = g.center,
-        ),
-        radius = g.ringR, center = g.center,
-    )
-    drawCircle(Color.Black.copy(alpha = 0.16f), g.ringR, g.center, style = Stroke(1.2f))
-    drawCircle(Color.Black.copy(alpha = 0.10f), g.platterR, g.center, style = Stroke(1f))
-    if (hasRecord) {
-        drawCircle(
-            brush = Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent), center = g.center + Offset(0f, h * 0.008f), radius = g.recordR * 1.04f),
-            radius = g.recordR * 1.04f, center = g.center + Offset(0f, h * 0.008f),
-        )
-    }
-}
-
-/** Four rows of strobe dots on the rim, drawn where the eye sees them (see [strobeDrift]). */
-private fun DrawScope.drawStrobe(g: DeckGeometry, angle: Float) {
-    val h = g.h
-    rotate(angle, g.center) {
-        val band = g.ringR - g.platterR
-        for (row in 0 until 4) {
-            val r = g.platterR + band * (0.2f + row * 0.2f)
-            val pts = List(STROBE_DOTS) { i ->
-                val a = i * (2 * PI / STROBE_DOTS).toFloat() + row * 0.008f
-                g.center + Offset(cos(a), sin(a)) * r
-            }
-            drawPoints(pts, PointMode.Points, Color(0xFF5E6168).copy(alpha = 0.8f), strokeWidth = h * 0.0062f, cap = StrokeCap.Round)
-        }
-    }
-}
-
-/** The bare platter: a smoked, see-through rubber mat with its concentric ribs. */
-private fun DrawScope.drawMat(g: DeckGeometry, rotation: Float) {
-    val h = g.h
-    drawCircle(SmokedGlass.copy(alpha = 0.50f), g.platterR * 0.985f, g.center)
-    for (i in 1..9) {
-        drawCircle(Color.White.copy(alpha = 0.06f), g.platterR * (0.16f + i * 0.09f), g.center, style = Stroke(h * 0.004f))
-    }
-    rotate(rotation, g.center) {
-        drawLine(Color.White.copy(alpha = 0.12f), g.center, g.center + Offset(g.platterR * 0.9f, 0f), strokeWidth = 1.5f)
-    }
-    drawCircle(Color.White.copy(alpha = 0.9f), g.platterR * 0.022f, g.center)
-}
-
-private fun DrawScope.drawArmBase(g: DeckGeometry, tm: TextMeasurer) {
-    val h = g.h
-    // Smoked-glass base disc under the arm, with a chrome trim ring.
-    drawCircle(Color.Black.copy(alpha = 0.10f), g.armBaseR * 1.02f, g.armBase + Offset(0f, h * 0.012f))
-    drawCircle(SmokedGlass.copy(alpha = 0.42f), g.armBaseR, g.armBase)
-    drawCircle(Color.White.copy(alpha = 0.55f), g.armBaseR, g.armBase, style = Stroke(h * 0.005f))
-    // Height-adjust collar around the pivot.
-    drawCircle(Chrome, h * 0.062f, g.pivot)
-    drawCircle(Color.Black.copy(alpha = 0.18f), h * 0.062f, g.pivot, style = Stroke(1f))
-    for (i in 0 until 24) {
-        val a = i * (2 * PI / 24).toFloat()
-        drawLine(Color.Black.copy(alpha = 0.18f), g.pivot + Offset(cos(a), sin(a)) * (h * 0.050f), g.pivot + Offset(cos(a), sin(a)) * (h * 0.060f), strokeWidth = 1f)
-    }
-    // Anti-skate dial with its engraved 0–3 scale.
-    val scaleR = h * 0.036f
-    for (i in 0..12) {
-        val a = (PI * (0.85 + i * 0.1)).toFloat()
-        val long = i % 4 == 0
-        drawLine(
-            Room.Ink.copy(alpha = if (long) 0.45f else 0.25f),
-            g.antiSkate + Offset(cos(a), sin(a)) * scaleR,
-            g.antiSkate + Offset(cos(a), sin(a)) * (scaleR + h * (if (long) 0.012f else 0.006f)),
-            strokeWidth = 1f,
-        )
-    }
-    drawCircle(Chrome, h * 0.024f, g.antiSkate)
-    drawCircle(SmokedGlass.copy(alpha = 0.8f), h * 0.016f, g.antiSkate)
-    drawLine(Room.Signal, g.antiSkate, g.antiSkate + Offset(h * 0.010f, -h * 0.010f), strokeWidth = h * 0.004f)
-    label(tm, "ANTI-SKATE", Offset(g.antiSkate.x, g.antiSkate.y + h * 0.05f), h * 0.012f, Room.Ink.copy(alpha = 0.45f), centered = true)
-    // Arm rest post.
-    val rest = g.stylus(g.alphaRest) - g.direction(g.alphaRest) * (h * 0.13f)
-    drawCircle(Color.Black.copy(alpha = 0.12f), h * 0.02f, rest + Offset(0f, h * 0.006f))
-    drawCircle(Chrome, h * 0.017f, rest)
-    drawCircle(SmokedGlass.copy(alpha = 0.7f), h * 0.008f, rest)
-}
-
-private fun DrawScope.drawTonearm(g: DeckGeometry, alpha: Float) {
-    val h = g.h
-    val dir = g.direction(alpha)
-    val perp = Offset(-dir.y, dir.x)
-    val stylus = g.stylus(alpha)
-    val angleDeg = Math.toDegrees(atan2(dir.y, dir.x).toDouble()).toFloat()
-
-    // Counterweight behind the pivot: a ribbed drum in signal orange.
-    val cwStart = g.pivot - dir * (h * 0.055f)
-    val cwEnd = g.pivot - dir * (h * 0.15f)
-    drawLine(Color(0xFF9EA2AA), g.pivot, cwEnd, strokeWidth = h * 0.012f)
-    rotate(angleDeg, (cwStart + cwEnd) / 2f) {
-        val c = (cwStart + cwEnd) / 2f
-        val len = (cwStart - cwEnd).getDistance()
-        drawRoundRect(Color.Black.copy(alpha = 0.14f), topLeft = c - Offset(len / 2f, h * 0.036f), size = Size(len, h * 0.08f), cornerRadius = CornerRadius(h * 0.012f))
-        drawRoundRect(
-            brush = Brush.verticalGradient(listOf(Room.SignalLight, Room.Signal, Color(0xFFEA9A75), Room.SignalDark), startY = c.y - h * 0.04f, endY = c.y + h * 0.04f),
-            topLeft = c - Offset(len / 2f, h * 0.04f), size = Size(len, h * 0.08f), cornerRadius = CornerRadius(h * 0.012f),
-        )
-        for (i in 1..5) {
-            val x = c.x - len / 2f + len * i / 6f
-            drawLine(Color.Black.copy(alpha = 0.16f), Offset(x, c.y - h * 0.04f), Offset(x, c.y + h * 0.04f), strokeWidth = 1f)
-        }
-    }
-
-    // The S-shaped arm tube: two gentle opposite bends, then the headshell.
-    val headStart = stylus - dir * (h * 0.10f)
-    val len = (headStart - g.pivot).getDistance()
-    val path = Path().apply {
-        moveTo(g.pivot.x, g.pivot.y)
-        val c1 = g.pivot + dir * (len * 0.30f) + perp * (h * 0.045f)
-        val c2 = g.pivot + dir * (len * 0.72f) - perp * (h * 0.050f)
-        cubicTo(c1.x, c1.y, c2.x, c2.y, headStart.x, headStart.y)
-    }
-    drawPath(path, Color.Black.copy(alpha = 0.12f), style = Stroke(h * 0.018f, cap = StrokeCap.Round))
-    drawPath(path, Brush.linearGradient(listOf(Color(0xFFF7F8FA), Color(0xFFB2B6BE), Color(0xFFEFF1F4)), start = g.pivot, end = headStart), style = Stroke(h * 0.013f, cap = StrokeCap.Round))
-    drawPath(path, Color.White.copy(alpha = 0.7f), style = Stroke(h * 0.003f, cap = StrokeCap.Round))
-
-    // Headshell, angled like a real offset head, with its orange finger lift.
-    rotate(angleDeg + 22f, headStart) {
-        drawRoundRect(SmokedGlass.copy(alpha = 0.92f), topLeft = headStart - Offset(h * 0.004f, h * 0.022f), size = Size(h * 0.12f, h * 0.044f), cornerRadius = CornerRadius(h * 0.008f))
-        drawRoundRect(Color.White.copy(alpha = 0.18f), topLeft = headStart + Offset(h * 0.01f, -h * 0.015f), size = Size(h * 0.085f, h * 0.006f), cornerRadius = CornerRadius(h * 0.003f))
-        drawLine(Room.Signal, headStart + Offset(h * 0.08f, h * 0.02f), headStart + Offset(h * 0.12f, h * 0.06f), strokeWidth = h * 0.009f, cap = StrokeCap.Round)
-    }
-
-    // Gimbal on top of the pivot.
-    drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFFB8BBC2)), center = g.pivot, radius = h * 0.038f), h * 0.036f, g.pivot)
-    drawCircle(Color.Black.copy(alpha = 0.25f), h * 0.036f, g.pivot, style = Stroke(1.2f))
-    drawCircle(SmokedGlass, h * 0.012f, g.pivot)
+    drawPath(path, Room.Signal.copy(alpha = 0.85f), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))))
 }
 
 /**
- * A hardware key, Teenage Engineering style: a cap sitting on a darker skirt, with real travel.
- * Pressed, the cap sinks onto the skirt and its shadow tightens.
+ * The deck drawn flat, for the JVM tests (Robolectric has no GPU for Filament): the plinth's top,
+ * the platter, the record and the arm, each projected with the same camera as the 3D view, so
+ * touch lands in the same places.
  */
-private fun DrawScope.teKey(r: Rect, cap: (Rect) -> Brush, skirt: Color, pressed: Boolean): Rect {
-    val h = r.height
-    val travel = h * 0.09f
-    val radius = CornerRadius(h * 0.16f)
-    drawRoundRect(Color.Black.copy(alpha = if (pressed) 0.10f else 0.16f), topLeft = r.topLeft + Offset(0f, travel * (if (pressed) 1.2f else 1.8f)), size = r.size, cornerRadius = radius)
-    drawRoundRect(skirt, topLeft = r.topLeft + Offset(0f, travel), size = r.size, cornerRadius = radius)
-    val face = Rect(r.topLeft + Offset(0f, if (pressed) travel * 0.8f else 0f), r.size)
-    drawRoundRect(cap(face), topLeft = face.topLeft, size = face.size, cornerRadius = radius)
-    // A clear glass coat over the cap: its colour shows through untouched, with a glossy top,
-    // a soft diagonal reflection and a bright rim where the light catches the edge.
-    drawRoundRect(
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.06f), Color.Transparent), startY = face.top, endY = face.top + face.height * 0.62f),
-        topLeft = face.topLeft, size = face.size, cornerRadius = radius,
-    )
-    drawRoundRect(
-        Brush.linearGradient(
-            0f to Color.Transparent, 0.42f to Color.Transparent, 0.5f to Color.White.copy(alpha = 0.22f), 0.6f to Color.Transparent, 1f to Color.Transparent,
-            start = face.topLeft, end = face.bottomRight,
-        ),
-        topLeft = face.topLeft, size = face.size, cornerRadius = radius,
-    )
-    drawRoundRect(Color.Black.copy(alpha = 0.10f), topLeft = face.topLeft + Offset(0f, face.height * 0.55f), size = Size(face.width, face.height * 0.45f), cornerRadius = radius)
-    drawRoundRect(Color.White.copy(alpha = 0.75f), topLeft = face.topLeft, size = face.size, cornerRadius = radius, style = Stroke(1.2f))
-    return face
-}
-
-private val KeyGreySkirt = Color(0xFFB4B7BF)
-private val SignalSkirt = Color(0xFF9A5236)
-
-/** Brushed, anodised orange: a soft vertical sheen with a faint band of light across it. */
-private fun signalMetal(face: Rect) = Brush.linearGradient(
-    0f to Room.SignalLight, 0.35f to Room.Signal, 0.55f to Color(0xFFE88B62), 0.8f to Room.Signal, 1f to Room.SignalDark,
-    start = face.topLeft, end = Offset(face.left + face.width * 0.35f, face.bottom),
-)
-
-private fun greyMetal(face: Rect) = Brush.linearGradient(
-    0f to Color(0xFFF6F7F9), 0.5f to Color(0xFFE6E7EB), 0.75f to Color(0xFFF0F1F4), 1f to Color(0xFFD3D5DB),
-    start = face.topLeft, end = Offset(face.left + face.width * 0.35f, face.bottom),
-)
-
-private fun DrawScope.drawButtons(g: DeckGeometry, tm: TextMeasurer, deck: DeckState, ssDown: Boolean, prevDown: Boolean, nextDown: Boolean) {
-    val h = g.h
-    val playing = deck.needleDown && !deck.held
-    // Start / stop: the big orange key, with its engraved label and a status light above it.
-    val ss = g.startStop
-    val led = Offset(ss.left + h * 0.012f, ss.top - h * 0.028f)
-    if (playing) drawCircle(Brush.radialGradient(listOf(Room.Signal.copy(alpha = 0.4f), Color.Transparent), center = led, radius = h * 0.03f), h * 0.03f, led)
-    drawCircle(if (playing) Room.Signal else Color.Black.copy(alpha = 0.16f), h * 0.0075f, led)
-    label(tm, "START · STOP", Offset(led.x + h * 0.018f, led.y - h * 0.01f), h * 0.0145f, Room.Ink.copy(alpha = 0.55f))
-    val face = teKey(ss, ::signalMetal, SignalSkirt, ssDown)
-    // Printed on the cap: play and stop symbols.
-    val c = face.center
-    val s = face.height * 0.18f
-    drawPath(Path().apply { moveTo(c.x - s * 1.5f, c.y - s); lineTo(c.x - s * 0.1f, c.y); lineTo(c.x - s * 1.5f, c.y + s); close() }, Color.White)
-    drawRect(Color.White, topLeft = Offset(c.x + s * 0.4f, c.y - s * 0.85f), size = Size(s * 1.7f, s * 1.7f))
-
-    // Previous / next: grey keys under one engraved label.
-    label(tm, "TRACK", Offset((g.prev.left + g.next.right) / 2f, g.prev.top - h * 0.032f), h * 0.0145f, Room.Ink.copy(alpha = 0.55f), centered = true)
-    val pf = teKey(g.prev, ::greyMetal, KeyGreySkirt, prevDown)
-    val nf = teKey(g.next, ::greyMetal, KeyGreySkirt, nextDown)
-    fun tri(c: Offset, s: Float, left: Boolean) {
-        val p = Path().apply {
-            if (left) { moveTo(c.x + s / 2, c.y - s / 2); lineTo(c.x - s / 2, c.y); lineTo(c.x + s / 2, c.y + s / 2) }
-            else { moveTo(c.x - s / 2, c.y - s / 2); lineTo(c.x + s / 2, c.y); lineTo(c.x - s / 2, c.y + s / 2) }
-            close()
+@Composable
+private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer) {
+    val look = remember(deck.album) { discLookFor(deck.album) }
+    val labelFallback = remember(deck.album) { fallbackColor(deck.album) }
+    Canvas(Modifier.fillMaxSize()) {
+        fun outline(y: Float, minX: Float, maxX: Float, minZ: Float, maxZ: Float) = Path().apply {
+            val pts = listOf(V3(minX, y, minZ), V3(maxX, y, minZ), V3(maxX, y, maxZ), V3(minX, y, maxZ)).map { cam.project(it) }
+            moveTo(pts[0].x, pts[0].y); pts.drop(1).forEach { lineTo(it.x, it.y) }; close()
         }
-        drawPath(p, Room.Ink.copy(alpha = 0.78f))
-    }
-    val t = g.prev.height * 0.36f
-    tri(pf.center - Offset(t * 0.5f, 0f), t, true); tri(pf.center + Offset(t * 0.5f, 0f), t, true)
-    tri(nf.center - Offset(t * 0.5f, 0f), t, false); tri(nf.center + Offset(t * 0.5f, 0f), t, false)
-}
-
-private val LcdLit = Color(0xFF8DFFC4)
-private val LcdOff = Color(0xFF8DFFC4).copy(alpha = 0.07f)
-
-/** The little dot-matrix screen: two lines of pixel text; the top line scrolls when it's long. */
-private fun DrawScope.drawPixelScreen(r: Rect, top: PixelLine, bottom: PixelLine, step: Long) {
-    val h = r.height
-    drawRoundRect(Color.Black.copy(alpha = 0.10f), topLeft = r.topLeft + Offset(0f, h * 0.06f), size = r.size, cornerRadius = CornerRadius(h * 0.14f))
-    drawRoundRect(Chrome, topLeft = r.topLeft, size = r.size, cornerRadius = CornerRadius(h * 0.14f))
-    val inner = Rect(r.left + h * 0.08f, r.top + h * 0.08f, r.right - h * 0.08f, r.bottom - h * 0.08f)
-    drawRoundRect(Color(0xFF0B1410).copy(alpha = 0.86f), topLeft = inner.topLeft, size = inner.size, cornerRadius = CornerRadius(h * 0.08f))
-
-    // A finer matrix than the glyphs need: smaller dots, with a dark margin round the two lines.
-    val rows = PixelLine.ROWS * 2 + 6
-    val pitch = (inner.height - h * 0.12f) / rows
-    val cols = ((inner.width - h * 0.12f) / pitch).toInt()
-    val x0 = inner.left + (inner.width - cols * pitch) / 2f
-    val y0 = inner.top + (inner.height - rows * pitch) / 2f
-    val dot = Size(pitch * 0.78f, pitch * 0.78f)
-    fun line(p: PixelLine, rowOffset: Int, scroll: Boolean) {
-        val gap = 12
-        val period = p.width + gap
-        val shift = if (scroll && p.width > cols) (step % period).toInt() else 0
-        for (c in 0 until cols) {
-            val src = c + shift
-            val col = if (p.width > cols && scroll) src % period else src
-            for (row in 0 until PixelLine.ROWS) {
-                val lit = col < p.width && p.lit(col, row)
-                drawRect(if (lit) LcdLit else LcdOff, topLeft = Offset(x0 + c * pitch, y0 + (row + rowOffset) * pitch), size = dot)
-            }
+        val top = 0.468f
+        drawPath(outline(top, -2.075f, -1.07f, -1.34f, 1.34f), Color(0xFFE9ECEC))
+        drawPath(outline(top, -1.06f, 2.075f, -1.34f, 1.34f), Color(0xFFEEF0F0))
+        val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
+        val ppu = cam.pixelsPerUnit(DeckModel.platterCentre)
+        drawCircle(Color(0xFF16B8AD).copy(alpha = 0.45f), ppu * DeckModel.PLATTER_R, c)
+        if (deck.album != null) {
+            drawRecord(c, ppu * DeckModel.RECORD_R, rotation, look, cover, labelFallback, boundaries, null, null)
         }
-    }
-    line(top, 2, scroll = true)
-    line(bottom, PixelLine.ROWS + 4, scroll = false)
-    // Glass sheen over the screen.
-    drawRoundRect(
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), startY = inner.top, endY = inner.center.y),
-        topLeft = inner.topLeft, size = Size(inner.width, inner.height / 2f), cornerRadius = CornerRadius(h * 0.08f),
-    )
-}
-
-/** A line of text rasterised into screen dots. */
-class PixelLine(val width: Int, private val bits: BooleanArray) {
-    fun lit(col: Int, row: Int): Boolean = bits[row * width + col]
-
-    companion object {
-        /** Glyphs are 5 dots tall, plus a row for descenders. */
-        const val ROWS = 6
+        val pivot = cam.project(V3(DeckModel.pivot.x, 0.84f, DeckModel.pivot.z))
+        val stylus = DeckModel.stylus(armAngle).let { cam.project(V3(it.x, 0.70f, it.z)) }
+        drawCircle(Color(0xFFDDE3E5), ppu * 0.36f, cam.project(V3(DeckModel.pivot.x, 0.58f, DeckModel.pivot.z)))
+        drawLine(Color(0xFFB9C2C6), pivot, stylus, ppu * 0.05f)
+        DeckModel.keys.forEach { k ->
+            val a = k.centre
+            drawPath(outline(a.y, a.x - k.width / 2, a.x + k.width / 2, a.z - k.depth / 2, a.z + k.depth / 2), if (k == DeckModel.startStop) Room.Signal else Color(0xFF7FB8B0))
+        }
     }
 }
 
-/** Renders text with the Silkscreen pixel font (OFL) at its native size, one screen dot per pixel. */
-object PixelFont {
-    private var typeface: android.graphics.Typeface? = null
-    private val cache = android.util.LruCache<String, PixelLine>(32)
-
-    fun render(context: android.content.Context, text: String): PixelLine {
-        val key = text
-        cache.get(key)?.let { return it }
-        val tf = typeface ?: runCatching { android.graphics.Typeface.createFromAsset(context.assets, "fonts/silkscreen.ttf") }.getOrNull()
-            .also { typeface = it } ?: android.graphics.Typeface.MONOSPACE
-        val paint = android.graphics.Paint().apply {
-            isAntiAlias = false
-            textSize = 8f
-            this.typeface = tf
-            color = android.graphics.Color.BLACK
-        }
-        val shown = text.uppercase()
-        val w = (paint.measureText(shown).toInt() + 2).coerceIn(1, 4000)
-        val bmp = android.graphics.Bitmap.createBitmap(w, 12, android.graphics.Bitmap.Config.ARGB_8888)
-        android.graphics.Canvas(bmp).drawText(shown, 0f, 9f, paint)
-        // Silkscreen caps sit on rows 4..8 at 8 px; row 9 holds anything that hangs below.
-        val bits = BooleanArray(w * PixelLine.ROWS)
-        for (row in 0 until PixelLine.ROWS) for (x in 0 until w) {
-            bits[row * w + x] = (bmp.getPixel(x, row + 4) ushr 24) > 0x80
-        }
-        return PixelLine(w, bits).also { cache.put(key, it) }
+/**
+ * The record's face for the 3D disc: the same drawing as everywhere else in the room (vinyl,
+ * grooves, the cover as the label, side and format), painted square so the disc's UVs map it on.
+ */
+private fun recordFace(album: Album, cover: ImageBitmap?, boundaries: List<Float>, side: String?, measurer: TextMeasurer): ImageBitmap {
+    val px = 1024
+    val image = ImageBitmap(px, px)
+    val canvas = androidx.compose.ui.graphics.Canvas(image)
+    val unit = Density(1f)
+    val style = Room.Label.copy(color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Medium, letterSpacing = 3.sp)
+    val sideText: TextLayoutResult? = side?.let { measurer.measure("SIDE $it", style, density = unit) }
+    val qualityText: TextLayoutResult = measurer.measure(album.quality.shortLabel.uppercase(), style, density = unit)
+    CanvasDrawScope().draw(unit, LayoutDirection.Ltr, canvas, Size(px.toFloat(), px.toFloat())) {
+        drawRecord(
+            center = Offset(px / 2f, px / 2f),
+            radius = px / 2f,
+            rotation = 0f,
+            look = discLookFor(album),
+            label = cover,
+            labelFallback = fallbackColor(album),
+            trackBoundaries = boundaries,
+            sideText = sideText,
+            qualityText = qualityText,
+        )
     }
+    return image
 }

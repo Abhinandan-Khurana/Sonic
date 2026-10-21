@@ -98,6 +98,10 @@ dependencies {
     // Liquid glass (Apache 2.0)
     implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
 
+    // The 3D turntable: Filament and its glTF loader (Apache 2.0)
+    implementation("com.google.android.filament:filament-android:1.75.1")
+    implementation("com.google.android.filament:gltfio-android:1.75.1")
+
     testImplementation(composeBom)
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16.1")

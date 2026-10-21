@@ -343,7 +343,6 @@ fun RoomScreen(
             val turntable = @Composable { m: Modifier, alignment: Alignment ->
                 Turntable(
                     deck = state.deck,
-                    backdrop = backdrop,
                     dropTargetActive = nearPlatter,
                     onPlatterPlaced = { c, r -> platterCenter = c; platterRadius = r },
                     actions = actions,

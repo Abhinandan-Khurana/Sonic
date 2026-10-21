@@ -12,7 +12,9 @@ import app.runout.playback.DeckState
 import app.runout.playback.VinylSfx
 import app.runout.sound.PlayerFactory
 import app.runout.sound.SoundEngine
-import app.runout.ui.DeckGeometry
+import app.runout.ui.deck.DeckCamera
+import app.runout.ui.deck.DeckModel
+import app.runout.ui.deck.V3
 import app.runout.ui.screenLines
 import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.CoroutineScope
@@ -163,12 +165,7 @@ class TurntableDeckTest {
     }
 
     @Test
-    fun `the strobe stands still at 33 and a third and drifts when the platter is off speed`() {
-        assertEquals(0f, app.runout.ui.strobeDrift(app.runout.ui.RPM_33_DEG), 0.001f)
-        assertEquals(0f, app.runout.ui.strobeDrift(0f), 0.001f)
-        // Slightly slow: the pattern creeps backwards; slightly fast: forwards.
-        assertTrue(app.runout.ui.strobeDrift(app.runout.ui.RPM_33_DEG - 4f) < 0f)
-        assertTrue(app.runout.ui.strobeDrift(app.runout.ui.RPM_33_DEG + 4f) > 0f)
+    fun `records count in words`() {
         assertEquals("1 record", app.runout.ui.recordCount(1))
         assertEquals("5 records", app.runout.ui.recordCount(5))
     }
@@ -187,26 +184,49 @@ class TurntableDeckTest {
     }
 
     @Test
-    fun `everything on the plinth sits where it should`() {
-        for (h in listOf(300f, 900f)) {
-            val g = DeckGeometry(Size(h * DeckGeometry.ASPECT, h))
-            val plinth = androidx.compose.ui.geometry.Rect(0f, 0f, h * DeckGeometry.ASPECT, h)
-            val controls = listOf(g.startStop, g.prev, g.next, g.screen)
-            // Inside the plinth...
-            controls.forEach { assertTrue("$it inside", plinth.contains(it.topLeft) && plinth.contains(it.bottomRight)) }
-            // ...not overlapping each other...
-            for (i in controls.indices) for (j in i + 1 until controls.size) {
-                assertFalse("${controls[i]} vs ${controls[j]}", controls[i].overlaps(controls[j]))
+    fun `the 3D deck's arm reaches across the record and rests off it`() {
+        val c = DeckModel.platterCentre
+        fun radius(a: Float) = DeckModel.stylus(a).let { kotlin.math.hypot(it.x - c.x, it.z - c.z) }
+        assertEquals(DeckModel.RECORD_R * 0.95f, radius(DeckModel.angleOut), 0.002f)
+        assertEquals(DeckModel.RECORD_R * 0.43f, radius(DeckModel.angleIn), 0.002f)
+        assertTrue("rest is off the platter", radius(DeckModel.angleRest) > DeckModel.PLATTER_R)
+        assertFalse(DeckModel.stylusOverRecord(DeckModel.angleRest))
+        // As modelled, the arm needs no turn at rest; the needle lands on the record's face.
+        assertEquals(0f, DeckModel.armYaw(DeckModel.angleRest), 1e-5f)
+        assertEquals(0.588f, 0.643f - DeckModel.NEEDLE_DROP, 0.001f)
+        assertEquals(0f, DeckModel.fractionForAngle(DeckModel.angleOut), 1e-4f)
+        assertEquals(1f, DeckModel.fractionForAngle(DeckModel.angleIn), 1e-4f)
+        // Dragging can't take the arm past the run-out or behind its rest.
+        assertEquals(DeckModel.angleIn, DeckModel.angleTowards(c), 1e-4f)
+    }
+
+    @Test
+    fun `the deck's keys have their own zones, clear of the platter, and the camera maps touch back`() {
+        val keys = DeckModel.keys
+        for (i in keys.indices) for (j in i + 1 until keys.size) {
+            val a = keys[i]
+            val b = keys[j]
+            val overlap = a.zoneMin.first < b.zoneMax.first && b.zoneMin.first < a.zoneMax.first &&
+                a.zoneMin.second < b.zoneMax.second && b.zoneMin.second < a.zoneMax.second
+            assertFalse("${a.node} and ${b.node} zones overlap", overlap)
+        }
+        keys.forEach { k ->
+            assertTrue("${k.node} cap inside its zone", k.centre.x in k.zoneMin.first..k.zoneMax.first && k.centre.z in k.zoneMin.second..k.zoneMax.second)
+            assertTrue("${k.node} zone clear of the platter", k.zoneMax.first < DeckModel.platterCentre.x - DeckModel.PLATTER_R)
+        }
+        for ((w, h) in listOf(380f to 245f, 1080f to 697f)) {
+            val cam = DeckCamera(w, h)
+            // Everything the camera frames is on screen.
+            listOf(DeckModel.viewMin, DeckModel.viewMax).forEach { p ->
+                val s = cam.project(p)
+                assertTrue("$p on screen at ${w}x$h", s.x in -0.5f..w + 0.5f && s.y in -0.5f..h + 0.5f)
             }
-            // ...and clear of the spinning platter.
-            controls.forEach { r ->
-                val nearest = androidx.compose.ui.geometry.Offset(g.center.x.coerceIn(r.left, r.right), g.center.y.coerceIn(r.top, r.bottom))
-                assertTrue("$r clear of platter", (nearest - g.center).getDistance() > g.ringR)
-            }
-            // The arm reaches from the edge of the record to the run-out, and rests off the platter.
-            assertEquals(g.recordR * 0.95f, (g.stylus(g.alphaOut) - g.center).getDistance(), h * 0.002f)
-            assertEquals(g.recordR * 0.43f, (g.stylus(g.alphaIn) - g.center).getDistance(), h * 0.002f)
-            assertTrue((g.stylus(g.alphaRest) - g.center).getDistance() > g.ringR)
+            // A finger on the record's face finds the same point in the model.
+            val p = V3(0.7f, DeckModel.RECORD_Y, 0.3f)
+            val back = cam.onPlane(cam.project(p), DeckModel.RECORD_Y)!!
+            assertEquals(p.x, back.x, 1e-3f)
+            assertEquals(p.z, back.z, 1e-3f)
+            assertTrue(DeckModel.isOnRecord(back))
         }
     }
 }
