@@ -1,5 +1,9 @@
 package app.runout
 
+import androidx.compose.foundation.layout.fillMaxSize
+
+import androidx.compose.foundation.layout.Box
+
 import android.app.Application
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
@@ -25,7 +29,8 @@ class Slice0ComposerTest {
     @get:Rule val compose = createComposeRule()
     private fun open(actions: RecordingActions = RecordingActions()) {
         compose.setContent {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            // The panel scrolls its own chat; the page gives it a bounded height.
+            Box(Modifier.fillMaxSize()) {
                 SoulseekMessagesPanel(RoomState(emptyList(), false, null, DeckState(), false, "12:00").copy(
                     soulseekSession = SoulseekSession(SoulseekConnection.CONNECTED, "fixture-owner"),
                     soulseekConversation = "fixture-peer",
@@ -38,7 +43,7 @@ class Slice0ComposerTest {
         val actions = RecordingActions()
         open(actions)
         compose.onNodeWithTag("field:Private message").performTextInput("Keep draft")
-        compose.onNodeWithText("Send message").performScrollTo().performClick()
+        compose.onNodeWithText("Send message").performClick()
         assertEquals(1, actions.log.count { it.startsWith("soulseekMessage:") })
         compose.onNodeWithTag("field:Private message").assertTextContains("Keep draft")
     }
@@ -49,7 +54,7 @@ class Slice0ComposerTest {
             override fun sendSoulseekMessage(username: String, text: String, onPersisted: () -> Unit) { persisted = onPersisted }
         })
         compose.onNodeWithTag("field:Private message").performTextInput("Keep draft")
-        compose.onNodeWithText("Send message").performScrollTo().performClick()
+        compose.onNodeWithText("Send message").performClick()
         compose.onNodeWithTag("field:Private message").assertTextContains("Keep draft")
         compose.runOnIdle { persisted!!() }
         compose.onNodeWithTag("field:Private message").assertTextEquals("", "Private message")
@@ -61,7 +66,7 @@ class Slice0ComposerTest {
             override fun sendSoulseekMessage(username: String, text: String, onPersisted: () -> Unit) { persisted = onPersisted }
         })
         compose.onNodeWithTag("field:Private message").performTextInput("Keep draft")
-        compose.onNodeWithText("Send message").performScrollTo().performClick()
+        compose.onNodeWithText("Send message").performClick()
         compose.onNodeWithTag("field:Private message").performTextInput(" edited")
         compose.runOnIdle { persisted!!() }
         compose.onNodeWithTag("field:Private message").assertTextContains("Keep draft edited")
@@ -72,7 +77,7 @@ class Slice0ComposerTest {
         open(actions)
         val text = "界".repeat(1366)
         compose.onNodeWithTag("field:Private message").performTextInput(text)
-        compose.onNodeWithText("Send message").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Send message").assertIsNotEnabled()
         compose.onNodeWithTag("field:Private message").assertTextContains(text)
         assertEquals(0, actions.log.count { it.startsWith("soulseekMessage:") })
     }
@@ -82,6 +87,6 @@ class Slice0ComposerTest {
         val text = "a".repeat(4096)
         compose.onNodeWithTag("field:Private message").performTextInput(text)
         compose.onNodeWithTag("field:Private message").assertTextContains(text)
-        compose.onNodeWithText("Send message").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("Send message").assertIsEnabled()
     }
 }

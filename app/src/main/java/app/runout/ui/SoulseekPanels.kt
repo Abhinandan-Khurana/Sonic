@@ -1,5 +1,36 @@
 package app.runout.ui
 
+import app.runout.soulseek.SoulseekMessage
+import app.runout.soulseek.SoulseekMessageState
+
+import androidx.compose.foundation.layout.size
+
+import androidx.compose.foundation.layout.heightIn
+
+import androidx.compose.foundation.layout.fillMaxSize
+
+import androidx.compose.foundation.interaction.MutableInteractionSource
+
+import androidx.compose.ui.semantics.semantics
+
+import androidx.compose.ui.semantics.contentDescription
+
+import androidx.compose.ui.semantics.Role
+
+import androidx.compose.ui.draw.shadow
+
+import androidx.compose.foundation.shape.CircleShape
+
+import androidx.compose.foundation.clickable
+
+import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.foundation.rememberScrollState
+
+import androidx.compose.foundation.horizontalScroll
+
+import androidx.compose.ui.geometry.Offset
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -112,14 +143,28 @@ private fun bytesLabel(bytes: Long): String = if (bytes >= 1_073_741_824L) Strin
 @Composable
 fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
     Column(Modifier.fillMaxWidth().testTag("panel:transfers")) {
-        BasicText("Completed FLAC downloads are added to your crate and kept in your selected music folder.", style = Room.LabelQuiet)
-        NetworkNote(state, actions)
-        if (state.soulseekTransfers.isEmpty()) BasicText("No downloads yet. Search Soulseek or claim a Friday Drop.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 12.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-            Pill("Pause all", actions::pauseAllDownloads, enabled = state.soulseekSession.signedIn)
-            Pill("Resume all", actions::resumeAllDownloads, enabled = state.soulseekSession.signedIn)
-            Pill(if (state.turtleMode) "Turtle on" else "Turtle mode", { actions.setTurtleMode(!state.turtleMode) }, active = state.turtleMode)
+        // The controls as three small hardware keys: pause all, resume all, turtle (go gently).
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+            TeKey(null, actions::pauseAllDownloads, Modifier.testTag("downloads-pause-all"), enabled = state.soulseekSession.signedIn, description = "Pause all") { c ->
+                val w = size.width
+                drawRect(c, topLeft = Offset(w * 0.22f, w * 0.15f), size = androidx.compose.ui.geometry.Size(w * 0.18f, w * 0.7f))
+                drawRect(c, topLeft = Offset(w * 0.6f, w * 0.15f), size = androidx.compose.ui.geometry.Size(w * 0.18f, w * 0.7f))
+            }
+            TeKey(null, actions::resumeAllDownloads, Modifier.testTag("downloads-resume-all"), enabled = state.soulseekSession.signedIn, description = "Resume all") { c ->
+                val w = size.width
+                drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.25f, w * 0.12f); lineTo(w * 0.85f, w * 0.5f); lineTo(w * 0.25f, w * 0.88f); close() }, c)
+            }
+            TeKey(null, { actions.setTurtleMode(!state.turtleMode) }, Modifier.testTag("downloads-turtle"), selected = state.turtleMode, description = if (state.turtleMode) "Turtle mode on" else "Turtle mode") { c ->
+                // A small turtle: domed shell, head, two feet.
+                val w = size.width
+                drawArc(c, 180f, 180f, true, topLeft = Offset(w * 0.12f, w * 0.28f), size = androidx.compose.ui.geometry.Size(w * 0.62f, w * 0.56f))
+                drawCircle(c, w * 0.11f, Offset(w * 0.84f, w * 0.52f))
+                drawRect(c, topLeft = Offset(w * 0.18f, w * 0.56f), size = androidx.compose.ui.geometry.Size(w * 0.12f, w * 0.16f))
+                drawRect(c, topLeft = Offset(w * 0.54f, w * 0.56f), size = androidx.compose.ui.geometry.Size(w * 0.12f, w * 0.16f))
+            }
         }
+        NetworkNote(state, actions)
+        if (state.soulseekTransfers.isEmpty()) BasicText("Nothing downloading.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 18.dp).testTag("downloads-empty"))
         state.soulseekTransfers.forEach { transfer ->
             SectionTitle(transfer.fileName)
             BasicText("${transfer.username} · ${transfer.state.name.lowercase().replaceFirstChar { it.uppercase() }}", style = Room.LabelQuiet)
@@ -154,54 +199,251 @@ fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
     }
 }
 
+/**
+ * Friends, on its own page: your saved friends with their online dots, then your chats, newest
+ * first; a floating + starts a chat by Soulseek username. Inside a chat you can send a record as a
+ * card, which the other person can find on Soulseek with one tap.
+ */
 @Composable
-fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () -> Unit) {
+fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onDig: () -> Unit = {}) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(state.soulseekConversation) { state.soulseekConversation?.let { selected = it } }
     val peer = selected
-    Column(Modifier.fillMaxWidth().testTag("panel:messages")) {
-        if (!state.soulseekSession.signedIn) SignInNotice(onAccount)
-        NetworkNote(state, actions)
+    Box(Modifier.fillMaxSize().testTag("panel:messages")) {
         if (peer == null) {
-            var username by rememberSaveable { mutableStateOf("") }
-            Field(username, { username = it.take(30) }, "Soulseek contact username")
-            Pill("Open conversation", { actions.addSoulseekContact(username); actions.openSoulseekConversation(username); selected = username }, enabled = state.soulseekSession.signedIn && SoulseekPolicy.validUsername(username))
-            val peers = (state.soulseekContacts.map { it.username } + state.soulseekConversations.map { it.username }).distinct()
-            if (peers.isEmpty()) BasicText("Add a Soulseek username or message a peer from search results.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 10.dp))
-            peers.forEach { name ->
-                val unread = state.soulseekConversations.firstOrNull { it.username == name }?.unread ?: 0
-                val online = state.soulseekContacts.firstOrNull { it.username == name }?.online == true
-                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        BasicText(name, style = Room.Title.copy(fontSize = 14.sp))
-                        BasicText((if (online) "Online" else "Offline") + if (unread > 0) " · $unread unread" else "", style = Room.LabelQuiet)
+            var newChat by remember { mutableStateOf(false) }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 96.dp)) {
+                if (!state.soulseekSession.signedIn) SignInNotice(onAccount)
+                NetworkNote(state, actions)
+                val friends = state.soulseekContacts
+                if (friends.isNotEmpty()) {
+                    SectionTitle("Friends")
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        friends.sortedByDescending { it.online }.forEach { f ->
+                            Column(
+                                Modifier
+                                    .testTag("friend:${f.username}")
+                                    .clickable(role = Role.Button) { selected = f.username; actions.openSoulseekConversation(f.username) },
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Avatar(f.username, online = f.online, size = 46.dp)
+                                BasicText(f.username, style = Room.Label.copy(fontSize = 10.sp), maxLines = 1)
+                            }
+                        }
                     }
-                    Pill("Message", { selected = name; actions.openSoulseekConversation(name) })
                 }
+                SectionTitle("Chats")
+                val chats = state.soulseekConversations.sortedByDescending { c -> c.messages.maxOfOrNull { it.timestamp } ?: 0L }
+                if (chats.isEmpty()) BasicText("No chats yet. Tap + to message someone.", style = Room.LabelQuiet, modifier = Modifier.padding(vertical = 10.dp))
+                chats.forEach { c ->
+                    val last = c.messages.maxByOrNull { it.timestamp }
+                    val online = state.soulseekContacts.firstOrNull { it.username == c.username }?.online == true
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("chat:${c.username}")
+                            .clickable(role = Role.Button) { selected = c.username; actions.openSoulseekConversation(c.username) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Avatar(c.username, online = online, size = 42.dp)
+                        Column(Modifier.weight(1f)) {
+                            BasicText(c.username, style = Room.Title.copy(fontSize = 14.sp))
+                            BasicText(last?.let { preview(it) } ?: "", style = Room.LabelQuiet, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            last?.let { BasicText(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.timestamp)), style = Room.LabelQuiet.copy(fontSize = 10.sp)) }
+                            if (c.unread > 0) Box(Modifier.size(9.dp).background(Room.Signal, CircleShape).semantics { contentDescription = "${c.unread} unread" })
+                        }
+                    }
+                }
+            }
+            // Start a chat: a floating +, bottom right.
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .size(56.dp)
+                    .shadow(10.dp, CircleShape)
+                    .background(Room.Accent, CircleShape)
+                    .clickable(enabled = state.soulseekSession.signedIn, role = Role.Button) { newChat = true }
+                    .semantics { contentDescription = "New chat" }
+                    .testTag("new-chat"),
+                contentAlignment = Alignment.Center,
+            ) { BasicText("+", style = Room.Title.copy(fontSize = 26.sp, color = Color.White)) }
+            if (newChat) NewChat(onDismiss = { newChat = false }) { name, friend ->
+                if (friend) actions.addSoulseekContact(name)
+                actions.openSoulseekConversation(name)
+                selected = name
+                newChat = false
             }
         } else {
-            Pill("All conversations", { selected = null; actions.closeSoulseekConversation() })
-            SectionTitle(peer)
-            val conversation = state.soulseekConversations.firstOrNull { it.username == peer }
-            LaunchedEffect(peer, conversation?.unread) { actions.markSoulseekRead(peer) }
+            Chat(peer, state, actions, onBack = { selected = null; actions.closeSoulseekConversation() }, onDig = onDig)
+        }
+    }
+}
+
+/** A round initial, with a green dot when the person is online. */
+@Composable
+private fun Avatar(name: String, online: Boolean, size: androidx.compose.ui.unit.Dp) {
+    val hue = ((name.hashCode() and 0x7fffffff) % 360).toFloat()
+    Box(Modifier.size(size)) {
+        Box(Modifier.size(size).background(Color.hsl(hue, 0.45f, 0.82f), CircleShape), contentAlignment = Alignment.Center) {
+            BasicText(name.take(1).uppercase(), style = Room.Title.copy(fontSize = (size.value * 0.4f).sp, color = Color.hsl(hue, 0.5f, 0.3f)))
+        }
+        if (online) Box(Modifier.align(Alignment.BottomEnd).size(size * 0.28f).background(Color.White, CircleShape).padding(2.dp).background(Room.Online, CircleShape))
+    }
+}
+
+private fun preview(m: SoulseekMessage): String {
+    val card = RecordCard.parse(m.text)
+    val text = if (card != null) "♪ ${card.album} — ${card.artist}" else m.text
+    return (if (m.outgoing) "You: " else "") + text.lineSequence().first()
+}
+
+@Composable
+private fun NewChat(onDismiss: () -> Unit, onStart: (String, Boolean) -> Unit) {
+    var username by rememberSaveable { mutableStateOf("") }
+    var friend by rememberSaveable { mutableStateOf(true) }
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.10f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss))
+        Column(
+            Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(20.dp).testTag("new-chat-card"),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            BasicText("New chat", style = Room.Title.copy(fontSize = 17.sp))
+            Field(username, { username = it.take(30) }, "Soulseek username")
+            ToggleRow("Add as a friend", "See when they're online.", friend, { friend = it })
+            Pill("Start chat", { onStart(username.trim(), friend) }, Modifier.testTag("start-chat"), active = true, enabled = SoulseekPolicy.validUsername(username.trim()))
+        }
+    }
+}
+
+@Composable
+private fun Chat(peer: String, state: RoomState, actions: RoomActions, onBack: () -> Unit, onDig: () -> Unit) {
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    val conversation = state.soulseekConversations.firstOrNull { it.username == peer }
+    LaunchedEffect(peer, conversation?.unread) { actions.markSoulseekRead(peer) }
+    val contact = state.soulseekContacts.firstOrNull { it.username == peer }
+    var sharing by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        TextAction("‹ Chats", onBack, tag = "chats-back", color = Room.Ink)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 6.dp)) {
+            Avatar(peer, online = contact?.online == true, size = 36.dp)
+            Column(Modifier.weight(1f)) {
+                BasicText(peer, style = Room.Title.copy(fontSize = 16.sp))
+                BasicText(if (contact?.online == true) "Online" else if (contact != null) "Offline" else "Not a friend yet", style = Room.LabelQuiet)
+            }
+            if (contact == null) Pill("Add friend", { actions.addSoulseekContact(peer) }, Modifier.testTag("add-friend"))
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
             conversation?.messages.orEmpty().forEach { message ->
-                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(if (message.outgoing) Room.Accent.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.65f), RoundedCornerShape(6.dp)).padding(10.dp)) {
-                    Column {
-                        BasicText(message.text, style = Room.Title.copy(fontSize = 13.sp))
-                        BasicText("${if (message.outgoing) "You" else peer} · ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.timestamp))} · ${message.state.name.lowercase()}", style = Room.LabelQuiet.copy(fontSize = 10.sp))
-                    }
+                val card = RecordCard.parse(message.text)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .padding(start = if (message.outgoing) 40.dp else 0.dp, end = if (message.outgoing) 0.dp else 40.dp)
+                        .background(if (message.outgoing) Room.Accent.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+                        .padding(10.dp),
+                ) {
+                    if (card != null) RecordCardView(card, state, mine = message.outgoing) {
+                        actions.setSearchOptions(state.discovery.options.copy(source = app.runout.discovery.SearchSource.SOULSEEK))
+                        actions.setSearchQuery("${card.artist} ${card.album}")
+                        actions.searchSoulseek("${card.artist} ${card.album}")
+                        onDig()
+                    } else BasicText(message.text, style = Room.Title.copy(fontSize = 13.sp))
+                    BasicText(
+                        "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.timestamp))}" + if (message.outgoing && message.state != SoulseekMessageState.SENT) " · ${message.state.name.lowercase()}" else "",
+                        style = Room.LabelQuiet.copy(fontSize = 10.sp),
+                    )
                 }
             }
-            var text by rememberSaveable(peer) { mutableStateOf("") }
-            val bytes = text.trim().toByteArray(Charsets.UTF_8).size
-            Field(text, { text = it }, "Private message", singleLine = false)
-            if (bytes > 4096) BasicText("Messages must contain 1–4,096 bytes of text.", style = Room.LabelQuiet)
+        }
+        var text by rememberSaveable(peer) { mutableStateOf("") }
+        val bytes = text.trim().toByteArray(Charsets.UTF_8).size
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TeKey(null, { sharing = true }, Modifier.testTag("share-record"), enabled = state.soulseekSession.signedIn && state.albums.isNotEmpty(), description = "Send a record") { c ->
+                // A small record.
+                val w = size.width
+                drawCircle(c, w * 0.42f, center)
+                drawCircle(Color.White, w * 0.14f, center)
+            }
+            Box(Modifier.weight(1f)) { Field(text, { text = it }, "Private message", singleLine = false) }
             Pill("Send message", {
                 val submitted = text
                 actions.sendSoulseekMessage(peer, submitted) { if (text == submitted) text = "" }
             }, active = true, enabled = state.soulseekSession.signedIn && text.isNotBlank() && bytes <= 4096)
-            BasicText("Soulseek can deliver stored messages when a contact reconnects. Messages are not end-to-end encrypted.", style = Room.LabelQuiet, modifier = Modifier.padding(top = 10.dp))
         }
-        Spacer(Modifier.height(12.dp))
+        if (bytes > 4096) BasicText("Messages must contain 1–4,096 bytes of text.", style = Room.LabelQuiet)
+    }
+    if (sharing) RecordPicker(state.albums, onDismiss = { sharing = false }) { album ->
+        actions.sendSoulseekMessage(peer, RecordCard.of(album).encode()) {}
+        sharing = false
+    }
+}
+
+/** A record shared in a chat: its sleeve, title and artist; a tap looks for it on Soulseek. */
+@Composable
+private fun RecordCardView(card: RecordCard, state: RoomState, mine: Boolean, onFind: () -> Unit) {
+    val local = state.albums.firstOrNull { it.title.equals(card.album, true) && it.artist.equals(card.artist, true) }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("record-card")) {
+        if (local != null) SleeveArt(local, Modifier.size(56.dp)) else GeneratedSleeve(card.album, card.artist, Modifier.size(56.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BasicText(card.album, style = Room.Title.copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(card.artist, style = Room.LabelQuiet, maxLines = 1)
+            card.quality?.let { SpecTag(it) }
+            if (!mine) Pill(if (local != null) "In your crate" else "Find on Soulseek", onFind, Modifier.testTag("find-record"), enabled = local == null)
+        }
+    }
+}
+
+@Composable
+private fun RecordPicker(albums: List<app.runout.model.Album>, onDismiss: () -> Unit, onPick: (app.runout.model.Album) -> Unit) {
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.10f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss))
+        Column(Modifier.fillMaxWidth().heightIn(max = 460.dp).background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(20.dp).testTag("record-picker")) {
+            BasicText("Send a record", style = Room.Title.copy(fontSize = 17.sp), modifier = Modifier.padding(bottom = 8.dp))
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                albums.forEach { a ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(a) }.testTag("pick-record:${a.id}").padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SleeveArt(a, Modifier.size(44.dp))
+                        Column { BasicText(a.title, style = Room.Title.copy(fontSize = 14.sp)); BasicText(a.artist, style = Room.LabelQuiet) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A record sent in a Soulseek private message. It travels as ordinary text that any Soulseek
+ * client shows sensibly ("♪ Album — Artist · FLAC 24/96"), plus a last line Runout recognises:
+ * `runout:record?artist=…&album=…&q=…`, URL-encoded.
+ */
+internal data class RecordCard(val artist: String, val album: String, val quality: String?) {
+    fun encode(): String {
+        fun e(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
+        val q = quality?.let { "&q=${e(it)}" } ?: ""
+        return "♪ $album — $artist" + (quality?.let { " · $it" } ?: "") + "\nrunout:record?artist=${e(artist)}&album=${e(album)}$q"
+    }
+
+    companion object {
+        private val line = Regex("runout:record\\?artist=([^&\\s]*)&album=([^&\\s]*)(?:&q=([^&\\s]*))?")
+        fun of(album: app.runout.model.Album) = RecordCard(album.artist, album.title, album.quality.label)
+        fun parse(text: String): RecordCard? {
+            val m = line.find(text) ?: return null
+            fun d(v: String) = runCatching { java.net.URLDecoder.decode(v, "UTF-8") }.getOrDefault(v)
+            val artist = d(m.groupValues[1]); val album = d(m.groupValues[2])
+            if (artist.isBlank() || album.isBlank()) return null
+            return RecordCard(artist, album, m.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() }?.let(::d))
+        }
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -232,6 +233,9 @@ class ListeningRoomUiTest {
         compose.setContent { RoomScreen(state(sound = actions.sound), actions) }
         compose.onNodeWithTag("nav:SETTINGS").performClick()
         compose.onNodeWithTag("panel-title").assertTextContains("Settings")
+        // A plain list first; Sound is one row of it.
+        compose.onNodeWithTag("settings:SOUND").assertIsDisplayed()
+        compose.onNodeWithTag("settings:SOUND").performClick()
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()
         compose.onNodeWithText("24-bit · 96 kHz → 32-bit float").assertIsDisplayed()
 
@@ -262,16 +266,18 @@ class ListeningRoomUiTest {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
         compose.onNodeWithText("Week of 16 October").assertIsDisplayed()
-        compose.onNodeWithText("2 of 3 claims left this week").assertIsDisplayed()
+        // Claims left are three TE lights; the drops stand on a shelf as sleeves.
+        compose.onNodeWithContentDescription("2 of 3 claims left").assertIsDisplayed()
         compose.onNodeWithText("In your crate").assertIsDisplayed() // already claimed
-        compose.onNodeWithText("CC BY-NC-SA 4.0").assertIsDisplayed()
         compose.onNodeWithTag("drop:NS050").assertIsDisplayed()
-        // Two records are still claimable; the first is NS050's.
-        val claims = compose.onAllNodes(hasText("Claim"))
-        claims.assertCountEquals(2)
-        claims[0].performClick()
-        assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
+        compose.onAllNodes(hasText("Claim")).assertCountEquals(0)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/05_drops_panel.png")
+        // A tap opens the drop: its licence, its tracks, and Claim inside.
+        compose.onNodeWithTag("drop:NS050").performClick()
+        compose.onNodeWithTag("drop-preview").assertIsDisplayed()
+        compose.onNodeWithText("CC BY-NC-SA 4.0").assertIsDisplayed()
+        compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
+        assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
     }
 
     @Test
@@ -289,10 +295,11 @@ class ListeningRoomUiTest {
         compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), actions, initialPanel = Panel.FRIENDS) }
         compose.onNodeWithTag("panel:messages").assertIsDisplayed()
         compose.onNodeWithText("maya").assertIsDisplayed()
-        compose.onNodeWithText("Message").performScrollTo().performClick()
+        compose.onNodeWithTag("new-chat").assertIsDisplayed()
+        compose.onNodeWithTag("friend:maya").performClick()
         assertTrue(actions.log.contains("soulseekConversation:maya"))
-        compose.onNodeWithTag("field:Private message").performScrollTo().performTextInput("Hi Maya")
-        compose.onNodeWithText("Send message").performScrollTo().performClick()
+        compose.onNodeWithTag("field:Private message").performTextInput("Hi Maya")
+        compose.onNodeWithText("Send message").performClick()
         assertTrue(actions.log.contains("soulseekMessage:maya:Hi Maya"))
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/06_messages_panel.png")
     }
@@ -327,7 +334,8 @@ class ListeningRoomUiTest {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.DROPS) }
         compose.onNodeWithText("Sign in with Soulseek").assertIsDisplayed()
-        compose.onAllNodes(hasText("Claim"))[0].performScrollTo().performClick()
+        compose.onNodeWithTag("drop:NS050").performScrollTo().performClick()
+        compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
         assertTrue(actions.log.none { it.startsWith("claim:") })
     }
 

@@ -167,17 +167,17 @@ Folder preview: **"Sleeve-style header, Clean track names, Drop the disclaimer, 
 ## 4. Friday Drops
 Answers: **"Record-shop shelf, Claim counter as TE, Tap = preview first"**. Drops stays a sheet.
 
-- [ ] **DR-1** The 10 drops appear as big sleeves (a shelf or grid) instead of a text list.
-- [ ] **DR-2** The claim counter becomes three small TE lights or tokens that switch off as you claim.
-- [ ] **DR-3** Tapping a drop opens a preview (track list and a short listen), with Claim inside the preview.
+- [x] **DR-1** The 10 drops appear as big sleeves (a shelf or grid) instead of a text list.
+- [x] **DR-2** The claim counter becomes three small TE lights or tokens that switch off as you claim.
+- [x] **DR-3** *(the preview lists FLAC tracks from the archive metadata and streams 30 s per track with a MediaPlayer that never touches the deck; albums with no FLAC say so and can't be claimed)* Tapping a drop opens a preview (track list and a short listen), with Claim inside the preview.
 
 ## 5. Friends (Soulseek messages)
 Answers: **"Full screen like Dig, Chat list first, Share records in chat, Friends list"**.
 
-- [ ] **FR-1** Friends is its own full screen.
-- [ ] **FR-2** Chat list first (initial, last message, unread dot). A floating "+" starts a chat by username.
-- [ ] **FR-3** A friends list of saved usernames, with online/offline dots.
-- [ ] **FR-4** Share records in chat: a record card the other person can tap to preview or download. This needs a wire-format design over Soulseek private messages.
+- [x] **FR-1** Friends is its own full screen.
+- [x] **FR-2** Chat list first (initial, last message, unread dot). A floating "+" starts a chat by username.
+- [x] **FR-3** A friends list of saved usernames, with online/offline dots.
+- [x] **FR-4** *(wire format: the message is ordinary text, "♪ Album — Artist · FLAC …", plus a last line `runout:record?artist=…&album=…&q=…`, URL-encoded. Other Soulseek clients show readable text; Runout renders a card whose button searches Soulseek for that album and opens Dig)* Share records in chat: a record card the other person can tap to preview or download. This needs a wire-format design over Soulseek private messages.
 
 ## 6. Pressing Plant
 > "remove this whole module."
@@ -188,26 +188,26 @@ Answers: **"Full screen like Dig, Chat list first, Share records in chat, Friend
 ## 7. Settings
 Answers: **"TE hardware EQ, Shorter copy, Simple list layout"**. Settings stays a sheet.
 
-- [ ] **ST-1** A plain list (Sound ›, Soulseek ›, Library ›, About ›) where each row opens its own page. This replaces the chip tabs.
-- [ ] **ST-2** Shorter copy: one-line descriptions, with details behind an ⓘ.
-- [ ] **ST-3** TE hardware EQ: orange fader caps, a tick scale, and presets as small keys.
-- [ ] **ST-4** Library gains "Change folder" (see `HM-7`).
+- [x] **ST-1** A plain list (Sound ›, Soulseek ›, Library ›, About ›) where each row opens its own page. This replaces the chip tabs.
+- [x] **ST-2** Shorter copy: one-line descriptions, with details behind an ⓘ.
+- [x] **ST-3** TE hardware EQ: orange fader caps, a tick scale, and presets as small keys.
+- [x] **ST-4** Library gains "Change folder" (see `HM-7`).
 
 ## 8. Downloads
 Answers: **"Controls as icons, Shorter copy"**. Downloads stays a sheet.
 
-- [ ] **DL-1** Pause all / Resume all / Turtle mode become small icon keys.
-- [ ] **DL-2** Shorter copy: remove the two explanation lines and show a small empty state instead.
+- [x] **DL-1** Pause all / Resume all / Turtle mode become small icon keys.
+- [x] **DL-2** Shorter copy: remove the two explanation lines and show a small empty state instead.
 
 ## 9. Global
 Answers: **"Haptics everywhere, Landscape later"**. The owner did not pick "TE look everywhere".
 
-- [~] **GL-1** *(done: deck keys, tabs, pills, toggles, menu rows, disc pickup/landing; still to do: the new onboarding and Dig screens)* Haptics on keys, toggles, tab switches, and disc pickup/landing.
+- [x] **GL-1** *(deck keys, tabs, pills, toggles, TE keys, menu rows, onboarding buttons, result cards, disc pickup/landing)* Haptics on keys, toggles, tab switches, and disc pickup/landing.
 - [ ] **GL-2** Portrait first. Landscape must keep working but is not redesigned now.
 - [ ] **GL-3** TE styling stays limited to what is listed: the deck, the EQ, spec tags, claim tokens and the refresh icon. Do not restyle the rest of the app into TE hardware.
 
 ## 10. Bugs found during the interview
-- [x] **BG-7** *(found while testing)* A tap on a tab during a sheet's fade-out was swallowed by the fading scrim. The scrim now only catches taps while the sheet is open.
+- [x] **BG-7** *(found while testing)* A tap on a tab during a sheet's fade-out was swallowed. The scrim only catches taps while the sheet is open, a closing sheet stops catching taps, and the exit is quicker (180 ms). A tap within about 150 ms of Close can still land on the departing sheet.
 - [x] **BG-1** The record count says "1 records". It should say "1 record".
 - [x] **BG-2** Search results say "1 matching tracks". It should say "1 matching track".
 - [ ] **BG-3** With the Dig sheet open, Back closed the whole sheet. Back should dismiss the keyboard first.

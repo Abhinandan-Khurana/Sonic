@@ -40,6 +40,9 @@ data class DropItem(
     val coverUrl: String get() = "https://archive.org/services/img/$identifier"
 }
 
+/** One FLAC track of a drop, as listed before claiming. */
+data class DropTrack(val title: String, val url: String, val lengthMs: Long?)
+
 data class DropWeek(val index: Long, val opens: LocalDate, val closes: LocalDate, val items: List<DropItem>)
 
 sealed interface DropState {
@@ -104,6 +107,21 @@ class DropsRepository(
         prefs.edit().putString("week-$index", JSONArray(week.items.map { it.toJson() }).toString()).apply()
         _state.value = DropState.Ready(week)
         _state.value
+    }
+
+    /**
+     * What's on a drop before you spend a claim: its FLAC tracks, each with a streaming address so a
+     * few seconds can be heard. Reads the archive's metadata only; nothing is downloaded.
+     */
+    suspend fun preview(item: DropItem): Result<List<DropTrack>> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(item.identifier.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid Internet Archive identifier" }
+            val meta = http.get("https://archive.org/metadata/${item.identifier}")?.toString(Charsets.UTF_8)
+                ?: error("Couldn't load the album from Internet Archive")
+            planDownload(JSONObject(meta)).tracks.map { f ->
+                DropTrack(f.title ?: f.name.substringAfterLast('/').substringBeforeLast('.'), fileUrl(item.identifier, f.name), f.lengthMs)
+            }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     /** Downloads one of this week's albums onto the shelf. */

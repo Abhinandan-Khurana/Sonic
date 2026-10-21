@@ -168,6 +168,8 @@ class MainActivity : ComponentActivity() {
                     override fun refreshDrops() { graph.scope.launch { graph.drops.refresh() } }
                     override fun claim(item: DropItem) = claimDrop(item)
                     override suspend fun dropCover(item: DropItem): String? = graph.drops.thumbnail(item)?.absolutePath
+                    override suspend fun dropTracks(item: DropItem) = graph.drops.preview(item).getOrNull()
+                    override fun listen(url: String?) = listenTo(url)
 
                     override fun dismissMessage() { message.value = null }
 
@@ -278,6 +280,12 @@ class MainActivity : ComponentActivity() {
         immerse()
     }
 
+    override fun onStop() {
+        // A drop preview is a quick listen, not background music.
+        listenTo(null)
+        super.onStop()
+    }
+
     /** The room fills the screen; the system bars appear only when swiped in. */
     private fun immerse() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -386,6 +394,25 @@ class MainActivity : ComponentActivity() {
             if (item != null) claimDrop(item)
             else message.value = "This album is outside the current Friday Drop. Completed FLAC files are still in your music folder."
         }
+    }
+
+    // A short listen to a Friday Drop before claiming it. It streams from archive.org and stops on
+    // its own after thirty seconds; it never touches the deck.
+    private var preview: android.media.MediaPlayer? = null
+    private var previewStop: kotlinx.coroutines.Job? = null
+
+    private fun listenTo(url: String?) {
+        previewStop?.cancel()
+        preview?.let { runCatching { it.stop() }; it.release() }
+        preview = null
+        if (url == null) return
+        preview = android.media.MediaPlayer().apply {
+            setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            setOnPreparedListener { it.start() }
+            setOnErrorListener { _, _, _ -> message.value = "Couldn't play a preview of that track."; true }
+            runCatching { setDataSource(url); prepareAsync() }.onFailure { message.value = "Couldn't play a preview of that track." }
+        }
+        previewStop = graph.scope.launch { kotlinx.coroutines.delay(30_000); listenTo(null) }
     }
 
     private fun importAutoEq(uri: Uri) {

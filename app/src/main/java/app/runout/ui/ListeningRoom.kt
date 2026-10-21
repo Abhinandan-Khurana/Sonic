@@ -175,6 +175,10 @@ interface RoomActions : DeckActions {
     fun refreshDrops() {}
     fun claim(item: DropItem) {}
     suspend fun dropCover(item: DropItem): String? = null
+    /** A drop's FLAC tracks, before it is claimed; empty when it has none, null when they couldn't be listed. */
+    suspend fun dropTracks(item: DropItem): List<app.runout.drops.DropTrack>? = null
+    /** Plays about thirty seconds of [url] to help choose a drop; null stops it. */
+    fun listen(url: String?) {}
 
     fun dismissMessage() {}
 
@@ -242,7 +246,8 @@ fun RoomScreen(
     initialPulledId: String? = null,
     initialCrateIndex: Int = 0,
     initialPanel: Panel? = null,
-    initialSettings: SettingsSection = SettingsSection.SOUND,
+    /** Which Settings page is open; null is the list. */
+    initialSettings: SettingsSection? = null,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -389,7 +394,7 @@ fun RoomScreen(
 
             CornerLabels(
                 state, pulled != null, portrait, screenW, backdrop, actions,
-                onOpen = { panel = it; pulledId = null },
+                onOpen = { if (it == Panel.SETTINGS) settings = null; panel = it; pulledId = null },
                 onDownloads = { panel = Panel.DOWNLOADS; pulledId = null },
                 onAccount = openAccount,
             )
@@ -530,7 +535,7 @@ fun RoomScreen(
                 Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount)
                 Panel.FRIENDS -> {
                     if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
-                    SoulseekMessagesPanel(state, actions, onAccount = openAccount)
+                    SoulseekMessagesPanel(state, actions, onAccount = openAccount, onDig = { panel = Panel.DIG })
                 }
                 Panel.SETTINGS -> SettingsPanel(
                     state, actions, settings, { settings = it },
@@ -560,7 +565,8 @@ fun RoomScreen(
             AnimatedVisibility(
                 visible = open != null,
                 enter = if (portrait) slideInVertically { it } + fadeIn() else slideInHorizontally { it } + fadeIn(),
-                exit = if (portrait) slideOutVertically { it } + fadeOut() else slideOutHorizontally { it } + fadeOut(),
+                // A quick exit, so the room's tabs are clear almost at once after Close.
+                exit = if (portrait) slideOutVertically(tween(180)) { it } + fadeOut(tween(160)) else slideOutHorizontally(tween(180)) { it } + fadeOut(tween(160)),
                 modifier = Modifier.align(if (portrait) Alignment.BottomCenter else Alignment.CenterEnd),
             ) {
                 var shown by remember { mutableStateOf(open ?: Panel.SETTINGS) }
@@ -572,6 +578,7 @@ fun RoomScreen(
                     width = sheetWidth,
                     height = screenH * 0.74f,
                     onClose = { closePanel() },
+                    catchTaps = open != null,
                 ) { panelContent(shown) }
             }
         }
@@ -586,8 +593,8 @@ fun RoomScreen(
         ) {
             var shown by remember { mutableStateOf(page ?: Panel.DIG) }
             if (page != null) shown = page
-            // Dig scrolls its own lazy list; Friends' content scrolls inside the page.
-            FullPage(shown.title, onClose = { closePanel() }, scroll = shown != Panel.DIG) { panelContent(shown) }
+            // Both pages scroll their own lists.
+            FullPage(shown.title, onClose = { closePanel() }) { panelContent(shown) }
         }
 
         // Onboarding: its own full screen, on first launch or when Soulseek setup is asked for again.
@@ -732,6 +739,8 @@ private fun PanelSheet(
     onClose: (() -> Unit)?,
     /** Off for content that scrolls itself, like a lazy list of search results. */
     scroll: Boolean = true,
+    /** Off while the sheet slides away, so a tap meant for the room isn't swallowed. */
+    catchTaps: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sheet = if (portrait) Modifier.fillMaxWidth().height(height).padding(horizontal = 8.dp).padding(bottom = 8.dp)
@@ -750,7 +759,7 @@ private fun PanelSheet(
                 onDrawSurface = { drawRect(Color.White.copy(alpha = 0.86f)) },
             )
             // Taps inside the sheet stay inside it (without turning the whole sheet into one button for TalkBack).
-            .pointerInput(Unit) { detectTapGestures { } }
+            .then(if (catchTaps) Modifier.pointerInput(Unit) { detectTapGestures { } } else Modifier)
             .padding(start = 22.dp, end = 22.dp, top = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
