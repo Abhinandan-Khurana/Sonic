@@ -75,6 +75,45 @@ fn stop_removes_tracked_downloads_and_keeps_partial_files() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+#[test]
+fn a_finished_transfer_is_reported_once_then_no_longer_polled() {
+    let r = Runtime::new(Arc::new(|_| Err(io::ErrorKind::PermissionDenied.into())));
+    let client = Arc::new(Client::with_settings(ClientSettings {
+        username: "fixture".into(), password: "fixture".into(),
+        server_address: PeerAddress::new("127.0.0.1".into(), 1),
+        enable_listen: false, listen_port: 0, accept_children: false,
+        shared_directories: Vec::new(), version: ClientVersion { major: 177, minor: 1 },
+    }));
+    let dir = std::env::temp_dir().join(format!("runout-finished-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // The client's own entry for the file (whatever this offline client makes of it), and a
+    // status channel the test drives, so the states arrive exactly as written here.
+    let _ = client.download("track.flac".into(), "peer".into(), 1000, dir.to_string_lossy().into_owned()).unwrap();
+    let (status, receiver) = std::sync::mpsc::channel();
+    lock(&r.transfers).insert("done".into(), Transfer {
+        username: "peer".into(), path: "track.flac".into(), total: 1000,
+        directory: dir.clone(), receiver, state: DownloadStatus::Queued,
+        last: String::new(), verified: false, token: u32::MAX,
+    });
+    *lock(&r.client) = Some(client.clone());
+    let first = r.poll();
+    assert_eq!(first.as_array().unwrap().iter().filter(|e| e["type"] == "transfer").count(), 1, "queued is reported");
+    status.send(DownloadStatus::InProgress { bytes_downloaded: 10, total_bytes: 1000, speed_bytes_per_sec: 1.0 }).unwrap();
+    assert_eq!(r.poll()[0]["state"], "downloading");
+    assert_eq!(lock(&r.transfers).len(), 1, "a live transfer stays tracked");
+    status.send(DownloadStatus::Cancelled).unwrap();
+    let events = r.poll();
+    let reported: Vec<_> = events.as_array().unwrap().iter().filter(|e| e["type"] == "transfer").collect();
+    assert_eq!(reported.len(), 1);
+    assert_eq!(reported[0]["state"], "cancelled", "the final state still reaches the host");
+    assert!(lock(&r.transfers).is_empty(), "then it is no longer tracked");
+    assert!(client.get_all_downloads().is_empty(), "nor kept in the client's own list");
+    assert_eq!(r.poll(), json!([]), "later polls carry nothing for it");
+    assert!(r.execute(json!({"op":"pause","id":"done"})).is_ok(), "a late pause is a no-op, as before");
+    assert!(r.execute(json!({"op":"pause","id":"never"})).is_err(), "an id never seen is still unknown");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 fn peer_init(name: &str, kind: &str, token: u32) -> Vec<u8> {
     let mut payload = vec![1]; payload.extend(string(name)); payload.extend(string(kind)); payload.extend(token.to_le_bytes());
     let mut bytes = (payload.len() as u32).to_le_bytes().to_vec(); bytes.extend(payload); bytes

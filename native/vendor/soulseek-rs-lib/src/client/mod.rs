@@ -683,6 +683,10 @@ impl Client {
             context.shares = Arc::new(shares);
             context.host_file_opener = Some(opener);
             context.shared_directories.clear();
+            // Nothing shared: no reason to keep relaying the tree's searches.
+            if count == 0 {
+                distributed::leave_tree(&mut context);
+            }
         }
         self.send_server_message(
             crate::message::server::MessageFactory::build_shared_folders_message(folders, count),

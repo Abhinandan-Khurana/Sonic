@@ -115,6 +115,12 @@ impl Leaf {
         self.branch.clone()
     }
 
+    /// Whether we hang from a parent, or are sounding out candidates for one.
+    #[must_use]
+    pub fn in_tree(&self) -> bool {
+        self.parent.is_some() || !self.candidates.is_empty()
+    }
+
     /// Whether `link` is the live link to our parent.
     #[must_use]
     pub fn is_parent(&self, username: &str, link: u64) -> bool {
@@ -290,6 +296,33 @@ impl Leaf {
         }
         self.candidates.clear();
     }
+}
+
+/// The candidates to dial for a PossibleParents offer. A parent relays the
+/// whole network's search stream, and a client sharing nothing has no answer
+/// for any of it, so it does not join the tree: on a phone that stream keeps
+/// the radio awake for nothing. Our own searches go through the server and
+/// never need a parent.
+pub fn parent_dials(
+    ctx: &mut super::ClientContext,
+    candidates: Vec<(String, String, u16)>,
+) -> Vec<Dial> {
+    if ctx.shares.file_count() == 0 {
+        return Vec::new();
+    }
+    ctx.leaf.consider(candidates)
+}
+
+/// The shares went empty: let go of the parent and any candidates, and tell
+/// the server we are on our own again, so it offers parents should we share
+/// later.
+pub fn leave_tree(ctx: &mut super::ClientContext) {
+    if !ctx.leaf.in_tree() {
+        return;
+    }
+    ctx.leaf.reset();
+    let branch = ctx.leaf.branch();
+    announce_move(ctx, &branch, false);
 }
 
 /// Tell the server where we sit now.
@@ -503,6 +536,41 @@ mod tests {
             .into_iter()
             .map(|d| (d.username.clone(), d))
             .collect()
+    }
+
+    fn sharing(ctx: &mut crate::client::ClientContext) {
+        ctx.shares = Arc::new(
+            crate::shares::Shares::from_host(vec![crate::shares::HostSharedFile {
+                key: "k".into(),
+                path: "Music\\Album\\01.flac".into(),
+                size: 100,
+                attributes: Vec::new(),
+            }])
+            .unwrap(),
+        );
+    }
+
+    #[test]
+    fn nothing_shared_means_no_parent_is_dialled() {
+        let mut ctx = crate::client::ClientContext::for_user("me");
+        assert!(parent_dials(&mut ctx, vec![candidate("alice")]).is_empty());
+        assert!(!ctx.leaf.in_tree());
+        sharing(&mut ctx);
+        assert_eq!(parent_dials(&mut ctx, vec![candidate("alice")]).len(), 1);
+    }
+
+    #[test]
+    fn shares_going_empty_let_go_of_the_parent() {
+        let mut ctx = crate::client::ClientContext::for_user("me");
+        sharing(&mut ctx);
+        let dials = parent_dials(&mut ctx, vec![candidate("alice")]);
+        let alice = dials[0].link;
+        ctx.leaf.branch_level("alice", alice, 0);
+        assert!(ctx.leaf.search_from("alice", alice).is_some());
+        leave_tree(&mut ctx);
+        assert!(!ctx.leaf.in_tree());
+        assert_eq!(ctx.leaf.branch(), Branch::parentless("me"));
+        assert!(dials[0].cancel.load(Ordering::Relaxed), "the link is told to stop");
     }
 
     #[test]
