@@ -2,12 +2,20 @@ package app.runout.soulseek
 
 import android.content.Context
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicInteger
+
+/** How often events are fetched while something is under way, and while nothing is. */
+internal const val POLL_ACTIVE_MS = 100L
+internal const val POLL_IDLE_MS = 1_000L
+/** Fast polls kept after the last event or command: about two seconds' worth. */
+private const val ACTIVE_POLLS = 20
 
 /** Owns exactly one native connection. Account identity survives temporary loss of that connection. */
 internal class SoulseekConnectionManager(
@@ -18,6 +26,8 @@ internal class SoulseekConnectionManager(
     private val receive: suspend (JSONObject, String) -> Unit,
     private val problem: (String) -> Unit,
     private val worker: CoroutineDispatcher = Dispatchers.IO,
+    /** Whether a transfer, search or browse is waiting on events, so they are fetched quickly. */
+    private val busy: () -> Boolean = { false },
 ) {
     private val vault = SoulseekCredentialVault(context)
     private val prefs = context.getSharedPreferences("soulseek-connection", Context.MODE_PRIVATE)
@@ -35,6 +45,13 @@ internal class SoulseekConnectionManager(
     private var retryJob: Job? = null
     private var idleJob: Job? = null
     @Volatile var generation = 0L
+        private set
+    /** Fast polls left before the loop slows down; reset by every event and command. */
+    private val activePolls = AtomicInteger(ACTIVE_POLLS)
+    /** Wakes a slow poll at once when a command goes out, so its answer isn't a second late. */
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+    /** The wait the poll loop chose last; tests read it. */
+    @Volatile internal var pollIntervalMs = POLL_ACTIVE_MS
         private set
     private val _session = MutableStateFlow(SoulseekSession())
     val session = _session.asStateFlow()
@@ -87,6 +104,7 @@ internal class SoulseekConnectionManager(
 
     suspend fun command(op: String, body: JSONObject.() -> Unit = {}) {
         val request = JSONObject().put("op", op).apply(body).toString()
+        activePolls.set(ACTIVE_POLLS); wake.trySend(Unit)
         val response = wire.withLock { client?.command(request) ?: error("Soulseek is offline. Reconnect to continue.") }
         val result = JSONObject(response)
         check(result.optBoolean("ok")) { result.optString("error", "Soulseek could not complete this action.") }
@@ -143,7 +161,13 @@ internal class SoulseekConnectionManager(
                 if (System.nanoTime() > deadline && generation == epoch) {
                     sessionEvent(JSONObject().put("type","session").put("state","error").put("reasonCode","NETWORK_LOST").put("reason","Soulseek connection timed out"), pair.first, epoch)
                 }
-                delay(100)
+                // Ten polls a second only while something is under way; an idle session, which
+                // can stay online in the background for hours, asks once a second.
+                if (batch.length() > 0) activePolls.set(ACTIVE_POLLS)
+                val fast = activePolls.getAndUpdate { (it - 1).coerceAtLeast(0) } > 0 || busy()
+                pollIntervalMs = if (fast) POLL_ACTIVE_MS else POLL_IDLE_MS
+                if (fast) delay(POLL_ACTIVE_MS)
+                else withTimeoutOrNull(POLL_IDLE_MS) { wake.receive() }
             }
         }
     }
@@ -234,10 +258,18 @@ internal class SoulseekConnectionManager(
             }
         }
     }
-    suspend fun networkChanged(available: Boolean) {
-        trace("network=$available state=${session.value.state}")
+    /**
+     * [fresh] is false when the same network only reported new capabilities, which mobile data
+     * does often: that is no reason to cut a back-off short, only a new network (or the first
+     * one after none) is.
+     */
+    suspend fun networkChanged(available: Boolean, fresh: Boolean = true) {
+        trace("network=$available fresh=$fresh state=${session.value.state}")
+        val was = network
         network = available
-        if (available) lifecycle.withLock { if (desired && !session.value.connected && client == null) scheduleRetry(true) }
+        if (available) lifecycle.withLock {
+            if (desired && !session.value.connected && client == null && (fresh || !was || retryJob?.isActive != true)) scheduleRetry(true)
+        }
         else if (desired && credentials != null) {
             val owner = credentials!!.first
             lifecycle.withLock {

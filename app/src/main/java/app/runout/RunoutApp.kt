@@ -51,13 +51,24 @@ class RunoutApp : Application() {
         fun wifi(caps: NetworkCapabilities?) = caps != null &&
             (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
         connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { graph.soulseek.onNetworkChanged(true, wifi(connectivity.getNetworkCapabilities(network))) }
+            /** The default network Soulseek last heard about. */
+            @Volatile private var current: Network? = null
+            override fun onAvailable(network: Network) {
+                current = network
+                graph.soulseek.onNetworkChanged(true, wifi(connectivity.getNetworkCapabilities(network)))
+            }
             override fun onLost(network: Network) {
                 val active = connectivity.activeNetwork
+                current = active
                 graph.soulseek.onNetworkChanged(active != null, wifi(active?.let(connectivity::getNetworkCapabilities)))
             }
+            // Mobile data reports capability changes (signal, bandwidth) all the time. On the same
+            // network they only update Wi-Fi or not; a reconnect at once is for a new network.
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) graph.soulseek.onNetworkChanged(true, wifi(caps))
+                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
+                val fresh = network != current
+                current = network
+                graph.soulseek.onNetworkChanged(true, wifi(caps), newNetwork = fresh)
             }
         })
     }

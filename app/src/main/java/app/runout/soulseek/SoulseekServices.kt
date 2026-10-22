@@ -16,8 +16,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 
 /** Services share the process repository and never create a second Soulseek login. */
 internal object SoulseekRuntime {
@@ -44,13 +46,16 @@ abstract class SoulseekForegroundService : Service() {
             repo.session.collect { session -> manager.notify(notificationId,notification(if(session.connected) "Soulseek online · messages and FLAC sharing" else "Soulseek reconnecting · your account is kept")) }
         }
         if (!online) scope.launch {
-            combine(repo.transfers, repo.uploads) { downloads, uploads -> downloads to uploads }.collect { (transfers, uploads) ->
+            // At most one notification update a second, always ending on the newest numbers:
+            // progress arrives far more often, and each post wakes the system UI.
+            combine(repo.transfers, repo.uploads) { downloads, uploads -> downloads to uploads }.conflate().collect { (transfers, uploads) ->
                 val active = transfers.filter { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) }
                 val serving = uploads.filter { it.state == "uploading" || it.state == "queued" }
                 if (active.isNotEmpty() || serving.isNotEmpty()) {
                     val bytes = active.sumOf { it.bytes } + serving.sumOf { it.bytes }
                     val total = (active.sumOf { it.size } + serving.sumOf { it.size }).coerceAtLeast(1)
                     manager.notify(notificationId, notification("${active.size} downloads · ${serving.size} uploads", ((bytes.toDouble() / total) * 100).toInt()))
+                    delay(NOTIFY_INTERVAL_MS)
                 }
             }
         }
@@ -89,6 +94,7 @@ abstract class SoulseekForegroundService : Service() {
     companion object {
         private const val CHANNEL = "soulseek"
         private const val DISCONNECT = "app.runout.soulseek.DISCONNECT"
+        private const val NOTIFY_INTERVAL_MS = 1_000L
     }
 }
 class SoulseekTransferService : SoulseekForegroundService() {
