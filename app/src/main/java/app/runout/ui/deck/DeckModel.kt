@@ -270,11 +270,12 @@ object DeckModel {
  * down towards the front edge, framed so the deck and its shadow fit. The same numbers drive
  * Filament's camera and the touch mapping, so a finger lands where the eye sees the part.
  */
-class DeckCamera(val width: Float, val height: Float) {
+class DeckCamera(val width: Float, val height: Float, val tiltDegrees: Float = TILT_DEG) {
     private val aspect = width / height
     private val tanH = tan(Math.toRadians(FOV_H_DEG / 2.0)).toFloat()
     private val tanV = tanH / aspect
-    private val back = V3(0f, cos(TILT), sin(TILT))
+    private val tilt = Math.toRadians(tiltDegrees.toDouble()).toFloat()
+    private val back = V3(0f, cos(tilt), sin(tilt))
     var target = V3(0f, 0.32f, 0.05f)
         private set
     var eye = target + back * 10f
@@ -334,6 +335,9 @@ class DeckCamera(val width: Float, val height: Float) {
 
     val viewForward: V3 get() = forward
 
+    /** Up the screen, in the model: what Filament's camera is told is up. */
+    val viewUp: V3 get() = up
+
     /** Half the width and half the height of the view's frustum at a distance [d] from the eye. */
     fun halfExtentsAt(d: Float): Pair<Float, Float> = d * tanH to d * tanV
 
@@ -343,7 +347,9 @@ class DeckCamera(val width: Float, val height: Float) {
     private fun place(distance: Float) {
         eye = target + back * distance
         forward = (target - eye).normalized()
-        right = forward.cross(V3(0f, 1f, 0f)).normalized()
+        // Straight down, "up" can't be the sky: the back of the deck is up the screen instead.
+        val r = forward.cross(V3(0f, 1f, 0f))
+        right = (if (r.length() > 1e-4f) r else forward.cross(V3(0f, 0f, -1f))).normalized()
         up = right.cross(forward)
     }
 
@@ -363,7 +369,10 @@ class DeckCamera(val width: Float, val height: Float) {
 
     companion object {
         const val FOV_H_DEG = 30.0
-        private val TILT = Math.toRadians(25.0).toFloat()
+        /** The deck seen from in front and above, 25° off vertical: the room's usual view. */
+        const val TILT_DEG = 25f
+        /** Seen from straight above, flat on the screen. */
+        const val FLAT_DEG = 0f
         private const val MARGIN = 1.0f
     }
 }

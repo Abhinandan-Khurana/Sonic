@@ -69,6 +69,9 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private var platterDegrees = 0f
     private var flip = 0f
     private var liftOff = 0f
+    private var tilt = DeckCamera.TILT_DEG
+    private var viewW = 0
+    private var viewH = 0
     private var armAngle = DeckModel.angleRest
     private var armDrop = 0f
     private val keyPress = DeckModel.keys.associateWith { 0f }.toMutableMap()
@@ -150,11 +153,21 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
 
             override fun onResized(width: Int, height: Int) {
                 view.viewport = Viewport(0, 0, width, height)
-                frame(DeckCamera(width.toFloat(), height.toFloat()))
+                viewW = width
+                viewH = height
+                frame(DeckCamera(width.toFloat(), height.toFloat(), tilt))
                 warmUp()
             }
         }
         uiHelper.attachTo(textureView)
+    }
+
+    /** The view's tilt off vertical, in degrees (see [DeckCamera]); 0 looks straight down. */
+    fun setTilt(degrees: Float) {
+        if (degrees == tilt) return
+        tilt = degrees
+        if (viewW > 0 && viewH > 0) frame(DeckCamera(viewW.toFloat(), viewH.toFloat(), tilt))
+        dirty = true
     }
 
     /** Matches Filament's camera to the one the touch mapping uses. */
@@ -163,7 +176,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         camera.lookAt(
             c.eye.x.toDouble(), c.eye.y.toDouble(), c.eye.z.toDouble(),
             c.target.x.toDouble(), c.target.y.toDouble(), c.target.z.toDouble(),
-            0.0, 1.0, 0.0,
+            c.viewUp.x.toDouble(), c.viewUp.y.toDouble(), c.viewUp.z.toDouble(),
         )
     }
 

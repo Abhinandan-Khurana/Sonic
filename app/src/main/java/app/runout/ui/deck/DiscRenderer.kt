@@ -121,7 +121,7 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
         camera.lookAt(
             cam.eye.x.toDouble(), cam.eye.y.toDouble(), cam.eye.z.toDouble(),
             cam.target.x.toDouble(), cam.target.y.toDouble(), cam.target.z.toDouble(),
-            0.0, 1.0, 0.0,
+            cam.viewUp.x.toDouble(), cam.viewUp.y.toDouble(), cam.viewUp.z.toDouble(),
         )
         dirty = true
     }

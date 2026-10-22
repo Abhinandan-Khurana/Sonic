@@ -23,12 +23,11 @@
  */
 package app.runout.ui
 
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.Animatable
 import android.view.TextureView
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -57,11 +56,13 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -77,15 +78,18 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -106,6 +110,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.runout.model.Album
 import app.runout.playback.DeckState
 import app.runout.ui.deck.DeckCamera
@@ -114,15 +119,16 @@ import app.runout.ui.deck.DeckModel
 import app.runout.ui.deck.DeckRenderer
 import app.runout.ui.deck.RecordMaps
 import app.runout.ui.deck.V3
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Callbacks from the turntable to the deck. */
 interface DeckActions {
@@ -302,6 +308,24 @@ fun Turntable(
         r.setRecordSurface(maps.first, maps.second)
     }
 
+    // The view: the usual three-quarter view, or flat from straight above. Two fingers down lay it
+    // flat, two fingers up stand it back; the deck follows the fingers and settles on one of the two.
+    val viewPrefs = remember { context.getSharedPreferences("room", android.content.Context.MODE_PRIVATE) }
+    var flatView by remember { mutableStateOf(viewPrefs.getBoolean(FLAT_VIEW_KEY, false)) }
+    val tilt = remember { Animatable(if (flatView) DeckCamera.FLAT_DEG else DeckCamera.TILT_DEG) }
+    val viewScope = rememberCoroutineScope()
+    val settled = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentTick)
+    fun settleView(flat: Boolean) {
+        if (flat != flatView) settled()
+        flatView = flat
+        viewPrefs.edit().putBoolean(FLAT_VIEW_KEY, flat).apply()
+        viewScope.launch { tilt.animateTo(if (flat) DeckCamera.FLAT_DEG else DeckCamera.TILT_DEG, tween(360, easing = FastOutSlowInEasing)) }
+    }
+    LaunchedEffect(renderer) {
+        val r = renderer ?: return@LaunchedEffect
+        snapshotFlow { tilt.value }.collect { r.setTilt(it) }
+    }
+
     // Pause rendering while the app is in the background.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, renderer) {
@@ -352,15 +376,68 @@ fun Turntable(
         val w = min(maxWidth, maxHeight * VIEW_ASPECT)
         val h = w / VIEW_ASPECT
         val density = LocalDensity.current
-        val cam = remember(w, h, density) { with(density) { DeckCamera(w.toPx(), h.toPx()) } }
-        Column(Modifier.width(w).testTag("turntable")) {
+        // Re-fitted to the same box at every tilt, so nothing around the deck moves.
+        val cam = remember(w, h, density, tilt.value) { with(density) { DeckCamera(w.toPx(), h.toPx(), tilt.value) } }
+        val boxOrigin = remember { arrayOfNulls<Offset>(1) }
+        fun placed(origin: Offset) {
+            val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
+            onPlatterPlaced(origin + c, cam.pixelsPerUnit(DeckModel.platterCentre) * DeckModel.RECORD_R)
+            link?.let { it.camera = cam; it.origin = origin }
+        }
+        LaunchedEffect(cam) { boxOrigin[0]?.let { placed(it) } }
+        Column(
+            Modifier
+                .width(w)
+                .testTag("turntable")
+                .semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction(if (flatView) "Angled view" else "Flat view") { settleView(!flatView); true },
+                    )
+                },
+        ) {
             Box(
                 Modifier
                     .size(w, h)
                     .onGloballyPositioned { coords ->
-                        val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
-                        onPlatterPlaced(coords.positionInRoot() + c, cam.pixelsPerUnit(DeckModel.platterCentre) * DeckModel.RECORD_R)
-                        link?.let { it.camera = cam; it.origin = coords.positionInRoot() }
+                        boxOrigin[0] = coords.positionInRoot()
+                        placed(coords.positionInRoot())
+                    }
+                    // Two fingers anywhere on the deck tilt the view; the deck's own touch stands down.
+                    .pointerInput(Unit) {
+                        val reach = 140.dp.toPx()
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            var startY = Float.NaN
+                            var from = tilt.value
+                            try {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val pressed = event.changes.filter { it.pressed }
+                                    if (pressed.size >= 2) {
+                                        val y = pressed.map { it.position.y }.average().toFloat()
+                                        if (startY.isNaN()) { startY = y; from = tilt.value }
+                                        event.changes.forEach { it.consume() }
+                                        val t = (from - (y - startY) / reach * DeckCamera.TILT_DEG).coerceIn(DeckCamera.FLAT_DEG, DeckCamera.TILT_DEG)
+                                        viewScope.launch { tilt.snapTo(t) }
+                                    } else if (!startY.isNaN()) {
+                                        // The tilt ends as a finger lifts; the deck doesn't see the rest.
+                                        event.changes.forEach { it.consume() }
+                                        break
+                                    } else if (pressed.isEmpty()) {
+                                        // A one-finger touch: left alone for the keys, arm and record.
+                                        break
+                                    }
+                                }
+                            } finally {
+                                // On lift, or if the gesture is cancelled: never left half-tilted. A
+                                // quarter of the way is enough to go; less and it springs back.
+                                if (!startY.isNaN()) {
+                                    val t = tilt.value
+                                    val flat = if (from >= DeckCamera.TILT_DEG) t < DeckCamera.TILT_DEG * 0.75f else t < DeckCamera.TILT_DEG * 0.25f
+                                    settleView(flat)
+                                }
+                            }
+                        }
                     },
             ) {
                 if (use3d) {
@@ -405,18 +482,27 @@ fun Turntable(
                                     // Pick up the tonearm.
                                     down.consume()
                                     val wasDown = d.needleDown
+                                    val startAngle = currentArm
                                     if (wasDown) actions.liftNeedle()
                                     var moved = 0f
                                     var last = down.position
+                                    var twoFingers = false
                                     dragAngle = currentArm
                                     while (true) {
                                         val event = awaitPointerEvent()
+                                        if (event.changes.count { it.pressed } > 1) { twoFingers = true; break }
                                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                         if (!change.pressed) break
                                         moved += (change.position - last).getDistance()
                                         last = change.position
                                         cam.onPlane(change.position, DeckModel.RECORD_Y)?.let { dragAngle = DeckModel.angleTowards(it) }
                                         change.consume()
+                                    }
+                                    if (twoFingers) {
+                                        // Tilting the view, not moving the arm: put it back where it was.
+                                        dragAngle = null
+                                        if (wasDown) actions.needleDrop(DeckModel.fractionForAngle(startAngle))
+                                        return@awaitEachGesture
                                     }
                                     val a = dragAngle ?: DeckModel.angleRest
                                     dragAngle = null
@@ -441,6 +527,8 @@ fun Turntable(
                                             if (d.needleDown) { holding = true; actions.holdPlatter() }
                                             continue
                                         }
+                                        // A second finger: the view is being tilted, not the record touched.
+                                        if (event.changes.count { it.pressed } > 1) break
                                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                         if (!change.pressed) {
                                             if (!pressed && !dragged && !d.needleDown) actions.flip()
@@ -522,6 +610,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(c
     }
     drawPath(path, colour.copy(alpha = 0.85f), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))))
 }
+
+/** The room's preference for the flat (top-down) view of the deck. */
+private const val FLAT_VIEW_KEY = "deck_flat"
 
 /**
  * The deck drawn flat, for the JVM tests (Robolectric has no GPU for Filament) and while the 3D

@@ -289,6 +289,24 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `the flat view looks straight down, keeps the deck in its box, and touch still lands`() {
+        for (tilt in listOf(DeckCamera.FLAT_DEG, 12f, DeckCamera.TILT_DEG)) {
+            val cam = DeckCamera(1080f, 628f, tilt)
+            listOf(cam.eye.x, cam.eye.y, cam.eye.z, cam.viewUp.x, cam.viewUp.y, cam.viewUp.z).forEach { assertTrue("finite at $tilt°", it.isFinite()) }
+            // The platter's centre maps to a pixel inside the view and back to the same point.
+            val p = V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z)
+            val px = cam.project(p)
+            assertTrue("inside at $tilt°", px.x in 0f..1080f && px.y in 0f..628f)
+            val back = cam.onPlane(px, DeckModel.RECORD_Y)!!
+            assertEquals(p.x, back.x, 1e-3f)
+            assertEquals(p.z, back.z, 1e-3f)
+        }
+        // Straight down, the back of the deck is up the screen.
+        val flat = DeckCamera(1080f, 628f, DeckCamera.FLAT_DEG)
+        assertTrue(flat.project(V3(0f, 0.5f, -1f)).y < flat.project(V3(0f, 0.5f, 1f)).y)
+    }
+
+    @Test
     fun `turning the record over lifts it edge-on at halfway and lands it back on the mat`() {
         for (degrees in listOf(0f, 73f)) {
             val flat = DeckModel.recordTransform(degrees)
