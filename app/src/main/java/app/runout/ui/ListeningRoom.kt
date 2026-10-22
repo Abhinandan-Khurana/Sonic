@@ -203,8 +203,6 @@ data class RoomState(
     val sleepAt: Long? = null,
     /** Settings › Flags › look: the theme and the deck. */
     val look: Look = Look(),
-    /** Settings › Flags › updates: the last check against the GitHub releases. */
-    val update: app.runout.update.UpdateState = app.runout.update.UpdateState.Idle,
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -276,8 +274,6 @@ interface RoomActions : DeckActions {
     fun setTheme(theme: ThemeMode) {}
     fun setDeckSkin(deck: DeckSkin) {}
     fun setIntroOnLaunch(on: Boolean) {}
-    /** Asks GitHub for a newer release (Settings › Flags › updates). */
-    fun checkForUpdates() {}
     /** Stops the music in so many minutes; null turns the timer off. */
     fun setSleepTimer(minutes: Int?) {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}

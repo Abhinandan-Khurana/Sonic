@@ -537,24 +537,6 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `Flags checks for updates and shows a newer build with its download`() {
-        portrait()
-        val checks = java.util.concurrent.atomic.AtomicInteger()
-        val actions = object : RecordingActions() { override fun checkForUpdates() { checks.incrementAndGet() } }
-        val newer = app.runout.update.Release(
-            app.runout.update.Version(0, 8, 0, pre = 1), "Sonic 0.8.0", development = true, notes = "A dark room. Three decks.",
-            page = "https://github.com/Abhiroop1122/runout/releases/tag/v0.8.0-dev.1", apk = "https://github.com/x.apk", apkBytes = 74_000_000,
-        )
-        compose.setContent { RoomScreen(state().copy(update = app.runout.update.UpdateState.Available(newer)), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.FLAGS) }
-        compose.onNodeWithTag("update-available").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("sonic 0.8.0-dev.1 · development build").assertExists()
-        compose.onNodeWithTag("update-download").assertExists()
-        compose.onNodeWithTag("update-check").performScrollTo().performClick()
-        assertEquals(1, checks.get())
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_flags_update.png")
-    }
-
-    @Test
     fun `soulseek settings grey out how you share until sharing is on`() {
         portrait()
         val calls = mutableListOf<String>()
