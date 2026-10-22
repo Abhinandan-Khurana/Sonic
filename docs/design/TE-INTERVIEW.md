@@ -223,3 +223,91 @@ The goal is "perfect animation". The record is one 3D object from the moment it 
 ## 4–5. Home · pulling a record / dropping on the platter
 - [ ] The dashed drop ring is in ink (black), not orange. Everything else stays as shown: the disc rising behind the sleeve, the sleeve labels and the "let go to drop" line.
 
+
+## Post-build interview · 0.7.0 (fresh install, 2026-10-22)
+
+Run on the v0.7.0-dev.1 build after `pm clear`, screen by screen from the intro.
+
+### 1. Intro
+- [x] Story and timing kept (3 s, then sign-in). The 2D tonearm swing is fine as is.
+
+### 2–4. Onboarding step pictures (02 offline, 03 downloads, 04 share)
+- [ ] Add one picture per step above the big step number: GPT image, music-related, in the calm editorial-illustration style of Anthropic's launch images, palette white / black / one orange #F05A24. Prompts given to the owner; waiting for the PNGs (1024²).
+
+### Sign in
+- [ ] Collage: replace the drawn covers with six GPT covers (prompts given: night drive purple, teal, cream, blue, charcoal, pink). Keep 274 dp, 3 × 2.
+- [ ] Keep the collage on short screens and in landscape too; let the page scroll rather than hide it. Keyboard-up behaviour (wordmark to 22) stays.
+
+### Steps 02–05
+- [x] 02 Bring your own records: keep as is (picture to come).
+- [x] 03 Where should downloads go: keep as is (picture to come).
+- [ ] 04 Share a folder: make the warning stronger with an amber boxed note between the body and the key: a 1 dp #FAB413 outline, an amber square lamp, 10/400 black text "this folder becomes PUBLIC. nothing else on your phone is."
+- [x] 05 Rhythm: keep as is (no picture).
+
+### Welcome
+- [ ] Hold the greeting longer before the room comes in.
+
+### Home · empty (no folder)
+- [ ] "choose folder" key full width, like the onboarding keys.
+
+### Home (records)
+- [ ] Move the crate, the album name, the spec tag and the rest of that block a little further down.
+- [ ] Make the sleeves and the disc bigger.
+- [ ] Sticker: more real, less vibrant, like an official mark: black background, white text (see the sticker question below).
+- [x] First-run "?" helps: keep the rule (gone once the first record lands).
+- [ ] Dragging the playing record off the platter (towards the crate): show a toast at the bottom, "use the eject key to put the record back".
+- [ ] With a record pulled, tapping another sleeve: the pulled disc first slides back down into its sleeve, then the crate slides to the other record. (Broken now: the crate slides with the disc still out.)
+- [ ] Flip: the rolling disc cuts into the plinth (owner's screenshot). It must clear the deck: lift higher, and don't let the deck view crop it.
+- [ ] Both stickers become black official marks with white text: the HI-RES round becomes a black rectangular "Hi-Res AUDIO 24/96" badge (white keyline, ~1° tilt, top right); the label tab looks printed (thin white keyline, straight, smaller caps).
+
+### Dig
+- [ ] Empty: pull the big dotted "?" and its line further down the page.
+- [ ] Results: only the result list scrolls; keep "soulseek · N album folders", "peers ?" and the status line pinned above it.
+- [ ] Pad the end of the list so the black sort key never covers the last row (it hid "1.7 gb").
+- [ ] Searching: an animation until results arrive, in the dotted style: a dot-matrix vinyl (round dots like the "?" and the DIG title), drawn in code, its rings lighting up dot by dot as it spins. (A GPT image prompt is available if the owner prefers.)
+
+### Accessibility (found during the interview)
+- [ ] While a page is open, hide the room underneath from TalkBack (its nodes still show in the tree).
+
+### Drops
+- [ ] Covers: while a cover loads, or when a drop has none, show a dotted placeholder instead of the flat pastel square: a dot-matrix record (the same round dots as the DIG title) on grey, with the drop's number. The real cover fades in when it arrives.
+
+### Friends
+- [x] Chats list and new-chat panel: keep as is.
+
+### Friends · chat
+- [ ] Composer: enclose the message field in a proper outlined box, with margin on the left and at the bottom (it touches the edges now).
+- [ ] Redraw the send-a-record icon so it reads as a vinyl: grooves, label and spindle hole.
+- [ ] The keyboard's enter key sends the message.
+- [ ] Bubbles: mine solid black (white text); theirs solid orange #F05A24 (black text).
+
+### Friends home
+- [x] Keep as is.
+- [ ] Opening Friends (nav or anywhere) always lands on the Friends home page, never on the last open chat.
+
+### Settings list
+- [x] Keep as is.
+- [ ] Move the "01 signal" panel (verdict, then the track / runout / output stations and the tip) from Sound to the Settings home page, above the four rows, in the same layout.
+
+### Settings · Sound
+- [ ] "import autoeq…" becomes a proper key (TE outlined key), not a text link.
+- [ ] Crackle moves to the top of the output section (first row of "output"), out of "05 the deck". Renumber the sections.
+
+### Settings · Soulseek
+- [x] Keep the sections as they are.
+- [ ] Remove the "review soulseek setup" key.
+
+### Settings · Library
+- [x] Layout: keep as is.
+- [ ] Audit "change folder" end to end (new permission persisted, old one released, rescan, crate refreshed, the deck's record if it came from the old folder) and report to the owner.
+- [ ] When the music folder changes and the user is signed in to Soulseek (not offline): ask whether the shared (upload) folder should change too, and request that folder's own permission separately. Offline: don't ask.
+
+### Settings · About
+- [x] Facts and version block: keep.
+- [ ] Add a credits row: "fuze2k and 0xs0m", with 0xs0m linking to https://somm.tf.
+
+### Nav · getting home
+- [ ] When any full page is open (Dig, Drops, Friends, Settings, Downloads), a "room" cell slides in from the left of the nav bar, ahead of dig: the board's TE Nav Cell / Active (disc icon, "room"). Tapping it closes the page and goes home, so the thumb needn't reach "close ×" in the top corner. On the room itself the cell slides away.
+
+### Downloads, Audio quality, record menu / details / remove, landscape
+- [x] Keep as is.
