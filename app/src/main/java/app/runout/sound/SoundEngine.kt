@@ -7,6 +7,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioMixerAttributes
+import android.media.AudioTrack
 import android.media.MediaRouter
 import android.os.Build
 import android.os.Handler
@@ -252,6 +253,10 @@ class SoundEngine(private val context: Context?) {
         // Before the AudioTrack opens, so a bit-perfect stream starts that way. Cached: a gapless
         // join in the same format makes no calls to Android's audio service.
         applyPure()
+        // A USB output may reopen at the stream's rate once the track starts: read its rate after.
+        if (context != null && _status.value.device.kind == OutputKind.USB) {
+            Handler(Looper.getMainLooper()).postDelayed({ refreshDevice() }, 1_000)
+        }
     }
 
     /** The output that started a stream has stopped; the readout goes back to "nothing playing". */
@@ -373,9 +378,14 @@ object OutputDevices {
         val kind = device?.let { kindOf(it.type) } ?: if (routeName != null) OutputKind.BLUETOOTH else OutputKind.SPEAKER
         val name = (device?.productName?.toString() ?: routeName)?.trim()
             ?.takeIf { it.isNotEmpty() && kind != OutputKind.SPEAKER && !it.equals(Build.MODEL, ignoreCase = true) }
-        // The reported rate belongs to the phone's own (primary) output; a USB, Bluetooth or HDMI
-        // path runs at its own rate, which Android doesn't tell apps.
-        val rate = if (kind == OutputKind.SPEAKER || kind == OutputKind.WIRED) am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0 else 0
+        // The reported rate belongs to the phone's own (primary) output. A USB DAC may share that
+        // mixer or get its own: the rate of the output music goes to tells which. Bluetooth and
+        // HDMI paths run at their own rate, which Android doesn't tell apps.
+        val rate = when (kind) {
+            OutputKind.SPEAKER, OutputKind.WIRED -> am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0
+            OutputKind.USB -> runCatching { AudioTrack.getNativeOutputSampleRate(AudioManager.STREAM_MUSIC) }.getOrDefault(0).coerceAtLeast(0)
+            else -> 0
+        }
         OutputDevice(kind, name, rate, device?.type ?: if (routeName != null) AudioDeviceInfo.TYPE_BLUETOOTH_A2DP else 0, device?.id ?: 0, spatial(am),
             device?.sampleRates?.filter { it > 0 }?.sorted().orEmpty())
     }.getOrDefault(OutputDevice())

@@ -132,6 +132,7 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
             if (dacResamples) "Mixer · resampled" else if (mixer > 0) "Mixer · ${rate(mixer)}" else "Mixer",
             buildString {
                 if (dacResamples) append("This DAC takes ${d.rates.joinToString(" or ") { rate(it) }}, so ${rate(o.sampleRate)} is resampled on the way. ")
+                else if (resampled) append("Android mixes this output at ${rate(mixer)}, so ${rate(o.sampleRate)} is resampled on the way. ")
                 append(if (s.pure) o.bitPerfect.label + "." else "Through Android's mixer. Turn on Pure for bit-perfect (Android 14 and later).")
             },
             ok = !resampled && !dacResamples,
@@ -169,7 +170,7 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
         hiResFile && d.kind != OutputKind.USB -> {
             // A 24/48 file already plays at its own rate on a 48 kHz phone: what a DAC adds is the depth.
             val what = if (fileBits > 16 && !resampled && o.sampleRate <= 48_000) "$fileBits-bit" else rate(o.sampleRate)
-            "For the full $what, play through a USB DAC with Pure on (Android 14 and later)."
+            "For the full $what, play through a USB DAC with Pure on, on a phone that offers bit-perfect (Android 14 and later)."
         }
         else -> null
     }

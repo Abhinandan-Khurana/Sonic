@@ -329,6 +329,14 @@ class AudioHonestyTest {
         assertFalse(hiRes.output.ok)
         val native = signalPath(OutputStatus(24, 96_000, floatPath = true, device = dac, bitPerfect = BitPerfect.UNSUPPORTED), SoundSettings(pure = true))!!
         assertEquals("Lossless, through Android's mixer", native.verdict)
+        // A phone that mixes USB at 48 kHz (the Pixel 6) resamples a rate the DAC itself takes.
+        val shared = dac.copy(mixerRate = 48_000)
+        val mixed = signalPath(OutputStatus(24, 96_000, floatPath = true, device = shared, bitPerfect = BitPerfect.UNSUPPORTED), SoundSettings(pure = true))!!
+        assertEquals("Lossless, resampled to 48 kHz", mixed.verdict)
+        assertTrue(mixed.output.detail.startsWith("Android mixes this output at 48 kHz, so 96 kHz is resampled"))
+        assertFalse(mixed.output.ok)
+        val atRate = signalPath(OutputStatus(16, 48_000, device = shared, bitPerfect = BitPerfect.UNSUPPORTED), SoundSettings(pure = true))!!
+        assertEquals("Lossless, through Android's mixer", atRate.verdict)
     }
 
     @Test fun `Android's Spatial Audio is named, and Pure keeps Runout out of it`() {
