@@ -17,6 +17,13 @@ import app.runout.sound.OutputDevice
 import app.runout.sound.OutputKind
 import app.runout.sound.OutputStatus
 import app.runout.sound.SoundSettings
+import androidx.compose.foundation.background
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.test.onNodeWithContentDescription
+import app.runout.ui.BrandText
+import app.runout.ui.Room
+import app.runout.ui.Wordmark
+import app.runout.ui.brandMark
 import app.runout.ui.Panel
 import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
@@ -122,6 +129,17 @@ class SignalAndSheetsTest {
         compose.onNodeWithTag("settings-downloads").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("settings-setup").assertDoesNotExist()
         compose.onNodeWithText("review soulseek setup").assertDoesNotExist()
+    }
+
+    @Test fun `the brand's full stop is a round signal-orange dot`() {
+        compose.setContent {
+            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color.White)) {
+                Wordmark(96.sp)
+                BrandText(brandMark() + androidx.compose.ui.text.AnnotatedString(" 0.7"), Room.Display.copy(fontSize = 66.sp))
+            }
+        }
+        compose.onNodeWithContentDescription("Sonic").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/brand_dot.png")
     }
 
     @Test fun `About credits fuze2k and 0xs0m, whose name opens somm·tf`() {

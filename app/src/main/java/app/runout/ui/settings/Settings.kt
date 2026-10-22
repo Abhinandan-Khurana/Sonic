@@ -133,7 +133,7 @@ fun SettingsPanel(
             }
             // The wordmark set huge and faint underneath, like a manual's back page.
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                BasicText(brandMark(Room.HairlineSoft), style = Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), maxLines = 1, modifier = Modifier.clearAndSetSemantics {})
+                BrandText(brandMark(Room.HairlineSoft), Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), Modifier.clearAndSetSemantics {})
                 BasicText("$VERSION · white / teal · flac only", style = Room.LabelQuiet)
             }
         }
@@ -367,7 +367,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
         }
     }
     Column(Modifier.fillMaxWidth().hairlineTop(Room.Ink).padding(top = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-        BasicText(brandMark() + androidx.compose.ui.text.AnnotatedString(" $VERSION"), style = Room.Display.copy(fontSize = 33.sp), maxLines = 1)
+        BrandText(brandMark() + androidx.compose.ui.text.AnnotatedString(" $VERSION"), Room.Display.copy(fontSize = 33.sp))
         BasicText(if (BuildConfig.DEBUG) "development build · rg-1 v3" else "rg-1 v3", style = Room.LabelQuiet)
     }
 }

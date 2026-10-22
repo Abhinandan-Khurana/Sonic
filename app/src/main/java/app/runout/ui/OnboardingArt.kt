@@ -1,6 +1,12 @@
 package app.runout.ui
 
 import androidx.compose.ui.text.withStyle
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -49,7 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /*
- * The drawn pieces of onboarding: the RUNOUT wordmark, the sign-in's record collage and the
+ * The drawn pieces of onboarding: the SONIC. wordmark, the sign-in's record collage and the
  * caution icon on the share key, and the loader for the pictures the owner adds to
  * assets/onboarding (the step pictures and the collage covers).
  */
@@ -85,7 +91,7 @@ internal fun Wordmark(
     ) {
         val shown = letters.coerceIn(0, WORDMARK.length)
         val typed = if (shown == WORDMARK.length) full else measurer.measure(brandMark(letters = shown), style)
-        if (shown > 0) drawText(typed)
+        if (shown > 0) { drawText(typed); drawBrandDot(typed) }
         if (cursor) {
             val x = (if (shown > 0) typed.size.width.toFloat() + cursorGap else 0f)
             // Sits on the capital height: 4/33 down from the line top, 30/33 tall.
@@ -98,12 +104,33 @@ private const val WORDMARK = "SONIC."
 
 /**
  * The name as the brand sets it: SONIC in [ink] (the style's colour when unspecified) and its full
- * stop in signal orange. [letters] cuts it short for typing it out.
+ * stop held clear, for [drawBrandDot] to set a round signal-orange dot in its place (the face's own
+ * full stop is square). [letters] cuts it short for typing it out.
  */
 internal fun brandMark(ink: Color = Color.Unspecified, letters: Int = WORDMARK.length): AnnotatedString = buildAnnotatedString {
     val shown = WORDMARK.take(letters.coerceIn(0, WORDMARK.length))
     withStyle(SpanStyle(color = ink)) { append(shown.removeSuffix(".")) }
-    if (shown.endsWith(".")) withStyle(SpanStyle(color = Room.Signal)) { append(".") }
+    if (shown.endsWith(".")) withStyle(SpanStyle(color = Color.Transparent)) { append(".") }
+}
+
+/** The brand's full stop in [layout]: a signal-orange disc in the clear "." glyph's place, sat on the baseline. */
+internal fun DrawScope.drawBrandDot(layout: TextLayoutResult) {
+    val at = layout.layoutInput.text.text.indexOf(WORDMARK).takeIf { it >= 0 } ?: return
+    val i = at + WORDMARK.length - 1
+    val box = layout.getBoundingBox(i)
+    val d = layout.layoutInput.style.fontSize.toPx() * BRAND_DOT
+    val baseline = layout.getLineBaseline(layout.getLineForOffset(i))
+    drawCircle(Room.Signal, d / 2f, Offset(box.center.x, baseline - d / 2f))
+}
+
+/** The dot's width against the type size: about the letters' stroke, as the square stop was. */
+private const val BRAND_DOT = 0.2f
+
+/** The brand set as text, its round dot drawn over: for SONIC. on a page rather than as onboarding's graphic. */
+@Composable
+internal fun BrandText(text: AnnotatedString, style: TextStyle, modifier: Modifier = Modifier) {
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    BasicText(text, modifier.drawWithContent { drawContent(); layout?.let { drawBrandDot(it) } }, style, onTextLayout = { layout = it }, maxLines = 1)
 }
 
 /** One sleeve in the collage: a flat ground colour (or the night-sky gradient), a sun and a horizon. */
