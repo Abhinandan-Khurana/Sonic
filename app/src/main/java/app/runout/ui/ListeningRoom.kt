@@ -62,6 +62,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
@@ -79,6 +80,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -1002,6 +1005,40 @@ fun RoomScreen(
             }
         }
 
+        // Something joined the downloads queue (from Dig, a missing track, a retry): a pop that says
+        // so, wherever you are, with the way to the list. What's already queued when the room opens
+        // (the saved list arriving) doesn't count.
+        val lastGroups = remember { HashMap<String, DownloadGroup>() }
+        var watching by remember { mutableStateOf(false) }
+        var added by remember { mutableIntStateOf(0) }
+        var addedAt by remember { mutableLongStateOf(0L) }
+        val addedTick = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+        LaunchedEffect(Unit) { frameDelay(2_000); watching = true }
+        LaunchedEffect(state.soulseekTransfers) {
+            val now = state.soulseekTransfers.associate { it.id to downloadGroup(it.state) }
+            val fresh = now.count { (id, g) -> g == DownloadGroup.QUEUE && lastGroups[id] != DownloadGroup.QUEUE }
+            if (watching && fresh > 0) {
+                val stamp = System.currentTimeMillis()
+                added = if (stamp - addedAt < 3_000) added + fresh else fresh
+                addedAt = stamp
+                addedTick()
+            }
+            lastGroups.clear(); lastGroups.putAll(now)
+        }
+        if (added > 0 && !setupOpen) {
+            LaunchedEffect(addedAt) { frameDelay(3_500); added = 0 }
+            // On a page it sits on the nav bar, under the page's own keys (Dig's sort key);
+            // in the room, where the room's toasts go.
+            val popAt = if (panel?.fullPage == true) Modifier
+                .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
+                .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = NAV_HEIGHT, start = 22.dp, end = 22.dp)
+                .widthIn(max = 520.dp)
+            else toastAt
+            DownloadsAddedPop(added, addedAt, popAt.zIndex(21f).testTag("downloads-added")) { added = 0; panel = Panel.DOWNLOADS; pulledId = null }
+        }
+
         // The room's first-time helps.
         Box(Modifier.fillMaxSize().zIndex(if (roomHelp != null) 31f else -1f)) { TeHelpSheet(roomHelp) { roomHelp = null } }
 
@@ -1074,6 +1111,48 @@ private fun TeToast(text: String, lamp: Color, modifier: Modifier, action: (@Com
         Box(Modifier.size(8.dp).background(lamp))
         BasicText(text, style = Room.Label.copy(color = Color.White, lineHeight = 15.sp), modifier = Modifier.weight(1f))
         action?.invoke()
+    }
+}
+
+/** Waits [ms] on the frame clock (which tests can step), not the wall clock. */
+private suspend fun frameDelay(ms: Long) {
+    val start = withFrameMillis { it }
+    while (withFrameMillis { it } - start < ms) Unit
+}
+
+/**
+ * "2 tracks added to downloads": the toast's black bar with the orange download glyph, popping up
+ * (a short overshoot) each time more join; "view →" opens the list.
+ */
+@Composable
+private fun DownloadsAddedPop(count: Int, stamp: Long, modifier: Modifier, onView: () -> Unit) {
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(stamp) {
+        pop.snapTo(0f)
+        pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 520f))
+    }
+    Row(
+        modifier
+            .graphicsLayer {
+                val k = 0.82f + 0.18f * pop.value
+                scaleX = k; scaleY = k
+                alpha = pop.value.coerceIn(0f, 1f)
+                translationY = (1f - pop.value) * 18.dp.toPx()
+            }
+            .background(Room.Ink)
+            // 48 dp, the link's own touch height: low enough to sit under a page's corner key.
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        Canvas(Modifier.size(16.dp)) { drawDownloadGlyph(Room.Signal) }
+        BasicText(
+            "${if (count == 1) "1 track" else "$count tracks"} added to downloads",
+            style = Room.Label.copy(color = Color.White, lineHeight = 15.sp),
+            modifier = Modifier.weight(1f),
+        )
+        TeLink("view", onView, tag = "downloads-added-view", color = Color.White)
     }
 }
 

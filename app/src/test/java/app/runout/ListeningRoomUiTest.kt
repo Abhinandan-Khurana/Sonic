@@ -197,6 +197,24 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `new downloads pop up a note with the way to the list, ones already saved don't`() {
+        val saved = SoulseekTransfer("old", "maya", "a/old.flac", 10, state = SoulseekTransferState.PAUSED)
+        var room by mutableStateOf(state().copy(soulseekTransfers = listOf(saved)))
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(room, RecordingActions(), initialCrateIndex = 1) }
+        repeat(25) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithTag("downloads-added").assertDoesNotExist()
+        room = room.copy(soulseekTransfers = room.soulseekTransfers + listOf(
+            SoulseekTransfer("a", "maya", "a/01.flac", 10), SoulseekTransfer("b", "maya", "a/02.flac", 10),
+        ))
+        compose.waitForIdle()
+        repeat(6) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithText("2 tracks added to downloads").assertIsDisplayed()
+        repeat(40) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithTag("downloads-added").assertDoesNotExist()
+    }
+
+    @Test
     fun `a paused record with the needle down reads as stopped, not spinning`() {
         still("01b_stopped", state(deck = playing().copy(isPlaying = false)))
         compose.onNodeWithText("stopped — side a", substring = true).assertIsDisplayed()

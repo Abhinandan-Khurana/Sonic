@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
@@ -71,7 +72,11 @@ import kotlin.math.sin
 private const val TYPE_AT = 2400
 private const val LETTER_MS = 100
 private const val INTRO_MS = 3000
-private const val HOLD_MS = 600
+private const val HOLD_MS = 1000
+/** The storyboard plays this much slower than its timings above: unhurried, about 7 s in all. */
+private const val PACE = 1.8f
+/** The record's printed label, as a share of its diameter (the deck renders' label, and the art's). */
+private const val LABEL = 0.35f
 
 /** The renders' pixel grid: every position below is in these units. */
 private const val SRC_W = 2064f
@@ -102,10 +107,12 @@ private class IntroArt(
     val arm: ImageBitmap,
     val sleeve: ImageBitmap,
     val disc: ImageBitmap,
+    /** When the disc is the owner's art (intro-disc), its label, laid over the deck renders' own. */
+    val label: ImageBitmap? = null,
 )
 
 /**
- * The first thing a new listener sees, about three seconds on white: a sleeve arrives, its disc
+ * The first thing a new listener sees, about seven unhurried seconds on white: a sleeve arrives, its disc
  * slides out and lands on the RG-1's platter, the tonearm swings in and drops, the grooves catch
  * the light, and RUNOUT types itself out in dot-matrix. Tap anywhere to skip. With system
  * animations off it hands over straight away and draws nothing.
@@ -121,20 +128,25 @@ fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         if (animationsOff) { finish(); return@LaunchedEffect }
         // Runs on the frame clock, the hold included, so a tap or a test can step through it.
-        clock.animateTo((INTRO_MS + HOLD_MS).toFloat(), tween(INTRO_MS + HOLD_MS, easing = LinearEasing))
+        clock.animateTo((INTRO_MS + HOLD_MS).toFloat(), tween(((INTRO_MS + HOLD_MS) * PACE).toInt(), easing = LinearEasing))
         finish()
     }
     if (animationsOff) {
         Box(modifier.fillMaxSize().background(Room.Background))
         return
     }
+    // The sleeve and its record: the owner's art from assets/onboarding (intro-sleeve, intro-disc)
+    // when it's there, else the drawn ones.
+    val ownSleeve = rememberOnboardingPicture("intro-sleeve", 360.dp)
+    val ownDisc = rememberOnboardingPicture("intro-disc", 360.dp)
     val art = IntroArt(
         ImageBitmap.imageResource(R.drawable.onboarding_deck_empty),
         ImageBitmap.imageResource(R.drawable.onboarding_deck_loaded),
         ImageBitmap.imageResource(R.drawable.onboarding_deck_playing),
         ImageBitmap.imageResource(R.drawable.onboarding_deck_arm),
-        ImageBitmap.imageResource(R.drawable.onboarding_sleeve),
-        ImageBitmap.imageResource(R.drawable.onboarding_disc),
+        ownSleeve ?: ImageBitmap.imageResource(R.drawable.onboarding_sleeve),
+        ownDisc ?: ImageBitmap.imageResource(R.drawable.onboarding_disc),
+        label = ownDisc,
     )
     val letters by remember { derivedStateOf { if (clock.value < TYPE_AT) 0 else ((clock.value - TYPE_AT) / LETTER_MS).toInt() + 1 } }
     // The cursor is solid while typing, then blinks through the hold.
@@ -227,6 +239,8 @@ private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, deckTop: Float) {
         }
     }
     deck(art.playing, drop)
+    // The owner's record keeps its own label once it's down, turned as it landed.
+    if (landed > 0f) art.label?.let { drawLabel(it, at(RECORD_CENTRE), RECORD_W * k, RECORD_H * k, LANDED_TURN, alpha = landed) }
     if (ms >= 1800f) drawGrooveLight(at(RECORD_CENTRE), RECORD_W * k / 2f, RECORD_H * k / 2f, ms)
 
     // The disc: rises out of the sleeve, flies to the spindle, lands and hands over to the deck.
@@ -275,6 +289,35 @@ private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, deckTop: Float) {
             dstSize = IntSize((SLEEVE * k).roundToInt(), (SLEEVE * k).roundToInt()),
             alpha = 1f - leave,
         )
+    }
+}
+
+/** How far the disc has turned by the time it lands (rise × 40° + fly × 160°). */
+private const val LANDED_TURN = 200f
+
+/**
+ * The centre [LABEL] of [disc] as a printed label on a record [w] × [h] px (the platter's
+ * perspective) at [c], turned [degrees]; drawn a hair larger so the render's own label can't show.
+ */
+private fun DrawScope.drawLabel(disc: ImageBitmap, c: Offset, w: Float, h: Float, degrees: Float, alpha: Float) {
+    val side = minOf(disc.width, disc.height)
+    val src = (side * LABEL).roundToInt()
+    val d = w * LABEL * 1.04f
+    val clip = androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, d / 2f)) }
+    withTransform({
+        scale(1f, h / w, c)
+        rotate(degrees, c)
+    }) {
+        clipPath(clip) {
+            drawImage(
+                disc,
+                srcOffset = IntOffset((disc.width - src) / 2, (disc.height - src) / 2),
+                srcSize = IntSize(src, src),
+                dstOffset = IntOffset((c.x - d / 2f).roundToInt(), (c.y - d / 2f).roundToInt()),
+                dstSize = IntSize(d.roundToInt(), d.roundToInt()),
+                alpha = alpha.coerceIn(0f, 1f),
+            )
+        }
     }
 }
 
