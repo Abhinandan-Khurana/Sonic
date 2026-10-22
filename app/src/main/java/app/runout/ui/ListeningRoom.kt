@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.semantics.contentDescription
@@ -280,7 +281,8 @@ fun RoomScreen(
 ) {
     val density = LocalDensity.current
     val appContext = androidx.compose.ui.platform.LocalContext.current
-    remember { TeType.init(appContext) }
+    // The face is loaded before the first frame (MainActivity does it too; tests start here).
+    remember(appContext) { TeType.init(appContext); TeType.family }
     val scope = rememberCoroutineScope()
     val backdrop = rememberLayerBackdrop()
     val roomBackdrop = rememberLayerBackdrop()
@@ -378,7 +380,7 @@ fun RoomScreen(
         val screenH = maxHeight
         // In landscape the disc slides left out of its sleeve, towards the turntable; in portrait it rises.
         val pullOut: (SleeveSlot) -> Offset = { s ->
-            if (portrait) Offset(0f, -s.rect.height * 0.58f) else Offset(-s.rect.width * 0.56f, 0f)
+            if (portrait) Offset(0f, -s.rect.height * 0.65f) else Offset(-s.rect.width * 0.56f, 0f)
         }
 
         // Pulling a record: it slides up out of the sleeve, overshoots a touch and settles, turning a
@@ -471,7 +473,7 @@ fun RoomScreen(
                 )
             }
             val front = state.albums.firstOrNull { it.id == frontId } ?: state.albums.firstOrNull()
-            val line = nowLine(state, pulled != null, nearPlatter)
+            val line = nowLine(state, pulled != null && ejecting == null, nearPlatter)
             val help = @Composable { h: TeHelp, m: Modifier -> if (roomHelps) HelpKey(h.title, m) { roomHelp = h } }
 
             if (portrait) {
@@ -565,11 +567,16 @@ fun RoomScreen(
             val restPos = s.rect.center - rootOrigin + pullOut(s)
 
             if (use3d) {
+                // The 3D record counts as shown once its first frames are up and its face is on, so
+                // a bare black disc never flashes.
+                var framesUp by remember(pulled.id) { mutableStateOf(false) }
+                var faceOn by remember(pulled.id) { mutableStateOf(false) }
+                LaunchedEffect(framesUp, faceOn) { if (framesUp && faceOn) { disc3dShown = true; heldReady = true } }
                 AndroidView(
                     factory = { ctx ->
                         TextureView(ctx).also { tv ->
                             runCatching { DiscRenderer(ctx, tv).also { it.resume() } }
-                                .onSuccess { r -> r.onReady = { disc3dShown = true; heldReady = true }; discRenderer = r }
+                                .onSuccess { r -> r.onReady = { framesUp = true }; discRenderer = r }
                         }
                     },
                     onRelease = { discRenderer?.destroy(); discRenderer = null },
@@ -583,6 +590,9 @@ fun RoomScreen(
                     val face = recordFace(pulled, cover, faceGaps, if (home) ejectSide else "A", measurer)
                     val maps = withContext(Dispatchers.Default) { RecordMaps.normal(faceGaps) to RecordMaps.roughness(faceGaps) }
                     r.setRecord(face.asAndroidBitmap(), maps.first, maps.second)
+                    // A few frames for the new textures to reach the screen.
+                    delay(64)
+                    faceOn = true
                 }
                 LaunchedEffect(discRenderer) {
                     val r = discRenderer ?: return@LaunchedEffect
@@ -703,10 +713,14 @@ fun RoomScreen(
             // Its label says what to do; once the record is over the deck the empty sleeve fades back.
             SleeveArt(
                 pulled,
-                label = if (proximity > 0.05f) "sleeve · empty" else "pull up · drag",
+                label = if (proximity > 0.05f || ejecting == pulled.id) "sleeve · empty" else "pull up · drag",
                 modifier = Modifier
                     .zIndex(if (dragging || proximity > 0.05f) 4f else 6f)
-                    .graphicsLayer { alpha = 1f - 0.55f * (proximity * 3f).coerceIn(0f, 1f) }
+                    // A white wash rather than layer alpha: a translucent layer under the 3D overlay drops out.
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Color.White.copy(alpha = 0.55f * (proximity * 3f).coerceIn(0f, 1f)))
+                    }
                     .offset { IntOffset((s.rect.left - rootOrigin.x).roundToInt(), (s.rect.top - rootOrigin.y).roundToInt()) }
                     .size(s.size)
                     .combinedClickable(
@@ -769,7 +783,8 @@ fun RoomScreen(
         // The Audio quality panel: up from the foot over the grey scrim, 83 % of the height.
         val open = panel?.takeIf { !it.fullPage }
         val sheetWidth = (screenW * 0.46f).coerceIn(340.dp, 520.dp)
-        Box(Modifier.fillMaxSize().zIndex(10f)) {
+        // Over the nav bar too, as on the board: the scrim and the panel cover the whole screen.
+        Box(Modifier.fillMaxSize().zIndex(if (open != null) 11.8f else 10f)) {
             AnimatedVisibility(open != null, enter = fadeIn(), exit = fadeOut()) {
                 // Only catches taps while a panel is open: during its fade-out the room must take the next tap.
                 Box(
@@ -820,16 +835,18 @@ fun RoomScreen(
 
         // One nav bar for the room and every page, the open page's cell in black.
         // In landscape it sits at the foot of the room's column, beside the deck.
-        if (!setupOpen) TeNavBar(
-            active = page,
-            badges = navBadges(state),
-            onOpen = { if (it == Panel.SETTINGS) settings = null; panel = if (panel == it) null else it; pulledId = null },
-            modifier = Modifier
-                .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
-                .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
-                .zIndex(11.5f)
-                .windowInsetsPadding(WindowInsets.navigationBars),
-        )
+        // The same side insets as the room's column, so the bar lines up with it.
+        if (!setupOpen) Box(Modifier.fillMaxSize().zIndex(11.5f).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+            TeNavBar(
+                active = page,
+                badges = navBadges(state),
+                onOpen = { if (it == Panel.SETTINGS) settings = null; panel = if (panel == it) null else it; pulledId = null },
+                modifier = Modifier
+                    .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
+                    .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
+                    .windowInsetsPadding(WindowInsets.navigationBars),
+            )
+        }
         // Sheets opened by a page's content cover the whole screen, nav bar included.
         if (page != null) Box(Modifier.fillMaxSize().zIndex(11.7f)) { PageSheetLayer(pageSheets) }
 

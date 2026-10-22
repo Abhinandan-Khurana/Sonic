@@ -5,7 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## Unreleased — RG-1 v3
+## 0.7.0 development — the TE room (2026-10-22)
+
+- **The whole app is rebuilt to the TE boards** (`docs/design/runout-te.pen`): black ink on white, zero radius, no shadows or glass, 1 dp hairlines.
+  - The dot-matrix type follows the boards' scale: Array at 400 (10/12/16) and its dotted 700 (12 to 132). The stickers on the sleeves use Inter 700/800.
+  - Array is embedded in the APK under its licence. It is not committed to the repository; a source build without it falls back to Silkscreen.
+- **Home:** a top bar shows the side that's up ("side a · a2 · 2 / 4"), the line out, downloads and the record count.
+  - Under the deck sits its band ("rg-1 · side a · 01:12 · 33⅓ rpm").
+  - The crate is redrawn: neighbouring sleeves turned hard away, a floor line, and a faint reflection under the front sleeve. Its stickers are an orange HI-RES round and a black label tab, both slightly tilted.
+  - Below the crate: the album caption, a side-coded track wheel (the playing song sharp, the rest soft), and the "now spinning" line.
+  - First-time "?" helps open help panels. The landscape room mirrors portrait.
+- **Pages:** Dig, Drops, Friends, Settings and Downloads are full pages with the TE screen head ("02 / dig", "close ×") under one nav bar.
+  - Audio quality opens from a long press on the deck's LED. Crackle moves to Settings › Sound.
+  - Dig results are two compact lines without art. Every "?" opens its help panel.
+- **Onboarding:** a 3 s intro tells the needle-drop story and types RUNOUT out (tap to skip; skipped when animations are off). Steps show poster-size numbers, and the welcome greets you by your Soulseek ID over the deck.
+- **The record in your hand is 3D** from the sleeve to the platter. It now:
+  - turns over in 3D when you flip it (about 0.9 s, with FLIP on the LED and a squash on the flat deck);
+  - flies home to its sleeve on Eject (about 1.1 s: EJECT, lift, arc, slide in);
+  - bounces back off a busy platter (a red ring, a double buzz, and "first, remove the current record from the platter." with an eject key).
+
+## RG-1 v3 (in 0.7.0)
 
 - **A wider deck, controls on the right:** the turntable is redrawn as the RG-1 v3. It is wider and shallower, so it now fills the width of the screen.
   - Its keys sit on the right in TE style: big, flush keys edge to edge for prev, next, START/STOP and eject.

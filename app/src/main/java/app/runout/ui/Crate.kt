@@ -204,7 +204,8 @@ fun Crate(
                                 }
                             },
                     ) {
-                        SleeveArt(album, Modifier.fillMaxSize(), label = if (adx < 0.5f) label(album) else null)
+                        // Stickers and the label tab only on the sleeve facing you, as on the board.
+                        SleeveArt(album, Modifier.fillMaxSize(), showSticker = adx < 0.5f, label = if (adx < 0.5f) label(album) else null)
                     }
                 }
             }

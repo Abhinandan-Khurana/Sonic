@@ -1,29 +1,35 @@
-The record player is now a 3D turntable: the Runout RG-1, drawn live on the phone.
+Runout is redrawn as a Teenage Engineering catalogue: black ink on white, dot-matrix type, and the 3D record player as the one rich object in the room.
 
 ## What changed
 
-- **A 3D deck:** a white turntable with teal glass and an anodised-orange START/STOP key, standing in the room on a soft shadow.
-  - The platter and the record turn in 3D. Each record keeps its own look (black, coloured, splatter or picture vinyl, the cover as the label, the gaps between tracks), now on a grooved disc.
-  - The tonearm swings out from its rest, follows the side and drops into the groove. Drag it to start anywhere; tap the record to flip it; hold it to slow it.
-- **A control panel:** START/STOP, ◀◀ ▶▶ and a new **eject** key, which press down under your finger.
-- **Lights and a screen on the deck:** an orange status lamp while a record plays, an LED strip along the front that fills as the side plays, and a small screen showing the track and time.
-- **Library:** a scan you start no longer gets cancelled by the quiet refresh at startup (the shelf could stay empty).
-- If the phone can't draw 3D, a flat deck stands in so the app still works.
-- Startup rendering now requests a redraw even when Filament skips a frame, allowing the texture queue to drain.
+- **A new look, everywhere:** every screen is rebuilt to the TE design boards. Square corners, hairline rules, no glass or shadows, and the boards' exact sizes and type.
+  - The interface face is **Array** by the Indian Type Foundry (via Fontshare), embedded in the app. Its dotted bold sets the titles.
+  - Inter prints the stickers on the sleeves.
+- **Home:** a top bar says which side is up and where the needle is ("side a · a2 · 2 / 4"), with the line out, downloads and your record count.
+  - The deck sits on a band with its own caption.
+  - The crate stands on a floor line, with a faint reflection under the front sleeve and tilted HI-RES and label stickers.
+  - Under the album, a track wheel lists the songs by side: the one playing is sharp, the rest soft. Tap one to drop the needle there.
+  - The first time in, "?" helps explain the crate, the track wheel and the LED window.
+- **Pages:** Dig, Drops, Friends, Settings and Downloads are full pages under one nav bar.
+  - Hold the deck's LED window for Audio quality. Crackle now lives in Settings › Sound.
+  - Dig lists albums as two compact lines. Every "?" opens a short help panel.
+- **Onboarding:** a 3-second intro tells the needle-drop story: a sleeve, the disc, the platter, the arm, then RUNOUT typed out. Tap to skip it; it's skipped when animations are off. Each step shows a big number, and the welcome greets you by your Soulseek ID.
+- **The record moves in 3D:**
+  - **Pulling:** it rises out of its sleeve, and lands on the platter exactly where the deck draws it.
+  - **Flip:** tap the record with the needle up and it lifts, rolls over and lands on the other side.
+  - **Eject:** the record flies home to its sleeve.
+  - **Busy platter:** drop a second record onto a busy platter and it bounces back with "first, remove the current record from the platter." and an eject key.
+- **The deck:** the RG-1 v3, wider, with red LED windows and big flush keys on the right.
 
 ## Install
 
-Download **Runout-0.6.0-development.apk** and check it against the attached SHA-256 file. It installs as **Runout Dev** (`app.runout.dev`) and updates 0.5.x in place (same certificate). Coming from 0.4.x, uninstall it first.
-
-The APK is about 22 MB larger than 0.5.1: it carries Filament's 3D libraries for the four CPU types.
+Download **Runout-0.7.0-development.apk** and check it against the attached SHA-256 file. It installs as **Runout Dev** (`app.runout.dev`) and updates 0.5.x and 0.6.0 in place (same certificate). Coming from 0.4.x, uninstall it first.
 
 ## Not tested, and limits
 
-- Tested on the Android emulator only, not on a phone. How smoothly the deck turns on older phones is unknown.
-- The flying disc doesn't yet morph into the 3D one when you drop it, and flipping is an instant swap, not a 3D turn.
-- Clear vinyl draws solid on the 3D deck.
-- A few printed labels on the deck show a stray mark instead of "·" or "-" (a font problem in the model, fixed in the next model).
-- On the emulator, the deck can take several seconds to appear. A graphics stall encountered during verification cleared after restarting the emulator; phone startup remains unverified.
-- The remote discovery benchmark missed its 250 ms target (403–526 ms on the emulator).
-- The native Soulseek library is reused from the earlier development build; this Mac has no Rust/NDK toolchain. Newer native-source changes are not included. See the verification report.
+- Tested on the Android emulator only, not on a phone. How smoothly the 3D record moves on older phones is unknown.
+- On the emulator, the first 3D frames can take a few seconds after a fresh install; a flat deck stands in until then.
+- The track wheel's "?" and the other first-time helps show until a record first lands on the platter.
+- Array is embedded in this APK under its licence, which doesn't allow sharing the font files in a public repository. A build from source without them uses Silkscreen instead.
+- The native Soulseek library is reused from the earlier development build (no Rust/NDK toolchain on this Mac). See the verification report.
 - This is a debug-signed development pre-release.
