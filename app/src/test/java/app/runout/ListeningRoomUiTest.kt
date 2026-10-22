@@ -428,11 +428,12 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `sideways the places wait for the phone upright, and downloads still open`() {
+    fun `sideways a place closes to the room, and downloads still open`() {
         compose.setContent { RoomScreen(state(), RecordingActions(), initialPanel = Panel.DIG) }
-        compose.onAllNodesWithTag("landscape-note").assertCountEquals(2)
+        // Dig was open: turned sideways, the room is home and only the nav's note is left.
+        compose.onAllNodesWithTag("landscape-note").assertCountEquals(1)
         compose.onNodeWithTag("screen:search").assertDoesNotExist()
-        compose.onNodeWithTag("nav:ROOM").performClick()
+        compose.onNodeWithTag("nav:ROOM").assertDoesNotExist()
         compose.onNodeWithTag("open-downloads").performClick()
         compose.onNodeWithTag("panel:transfers").assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/landscape_downloads.png")

@@ -498,6 +498,8 @@ fun RoomScreen(
             .onGloballyPositioned { rootOrigin = it.positionInRoot() },
     ) {
         val portrait = maxHeight > maxWidth
+        // Turned sideways on a place that needs the phone upright: the place closes and the room is home.
+        LaunchedEffect(portrait) { if (!portrait && panel in UPRIGHT_ONLY) closePanel() }
         val screenW = maxWidth
         val screenH = maxHeight
         // In landscape the disc slides left out of its sleeve, towards the turntable; in portrait it rises.

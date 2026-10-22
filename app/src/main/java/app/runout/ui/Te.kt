@@ -133,7 +133,7 @@ private val NAV = listOf(Panel.DIG, Panel.DROPS, Panel.FRIENDS, Panel.SETTINGS)
 fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifier: Modifier = Modifier, onHome: (() -> Unit)? = null, upright: Boolean = true) {
     val tick = rememberTick()
     Row(modifier.fillMaxWidth().background(Room.Background)) {
-        // On a page, a "room" cell slides in from the left: home is under the thumb, not in the top corner.
+        // On a page, an orange "room" cell slides in from the left: home is under the thumb, not in the top corner.
         AnimatedVisibility(
             visible = onHome != null,
             enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
@@ -144,7 +144,8 @@ fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifi
             Column(
                 Modifier
                     .width(76.dp)
-                    .background(Room.Ink)
+                    // Home in signal orange, so the way back to the room is the brightest key on the bar.
+                    .background(Room.Signal)
                     .testTag("nav:ROOM")
                     .semantics(mergeDescendants = true) { contentDescription = "Room" }
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); last?.invoke() }
@@ -152,8 +153,8 @@ fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifi
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Canvas(Modifier.size(20.dp)) { drawRoomIcon(Room.OnInk) }
-                BasicText("room", style = Room.Label.copy(color = Room.OnInk))
+                Canvas(Modifier.size(20.dp)) { drawRoomIcon(Color.White) }
+                BasicText("room", style = Room.Label.copy(color = Color.White))
             }
         }
         // Sideways the room is for listening: the places wait until the phone is upright again.
