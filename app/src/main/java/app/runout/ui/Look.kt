@@ -19,8 +19,11 @@ enum class DeckSkin(val label: String, val asset: String?) {
     DARK("dark", "deck/turntable_dark.glb"),
 }
 
-/** Settings › Flags › look: the theme and which deck stands in the room. */
-data class Look(val theme: ThemeMode = ThemeMode.PHONE, val deck: DeckSkin = DeckSkin.MATCH) {
+/**
+ * Settings › Flags › look: the theme, which deck stands in the room, and whether the needle-drop
+ * intro plays each time the app opens (onboarding's first screen, without the steps after it).
+ */
+data class Look(val theme: ThemeMode = ThemeMode.PHONE, val deck: DeckSkin = DeckSkin.MATCH, val introOnLaunch: Boolean = false) {
     /** Whether the room is dark, given the phone's own setting. */
     fun dark(phoneDark: Boolean): Boolean = when (theme) {
         ThemeMode.PHONE -> phoneDark
@@ -35,7 +38,7 @@ data class Look(val theme: ThemeMode = ThemeMode.PHONE, val deck: DeckSkin = Dec
     }
 }
 
-/** [Look], kept in the "look" preferences. Both default to following along: phone and theme. */
+/** [Look], kept in the "look" preferences: following the phone and the theme, the intro off, until changed. */
 class LookPreferences(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("look", Context.MODE_PRIVATE)
     private val _look = MutableStateFlow(read())
@@ -43,19 +46,22 @@ class LookPreferences(context: Context) {
 
     fun setTheme(theme: ThemeMode) = save(_look.value.copy(theme = theme))
     fun setDeck(deck: DeckSkin) = save(_look.value.copy(deck = deck))
+    fun setIntroOnLaunch(on: Boolean) = save(_look.value.copy(introOnLaunch = on))
 
     private fun save(look: Look) {
-        prefs.edit().putString(THEME, look.theme.name).putString(DECK, look.deck.name).apply()
+        prefs.edit().putString(THEME, look.theme.name).putString(DECK, look.deck.name).putBoolean(INTRO, look.introOnLaunch).apply()
         _look.value = look
     }
 
     private fun read() = Look(
         prefs.getString(THEME, null)?.let { n -> ThemeMode.entries.firstOrNull { it.name == n } } ?: ThemeMode.PHONE,
         prefs.getString(DECK, null)?.let { n -> DeckSkin.entries.firstOrNull { it.name == n } } ?: DeckSkin.MATCH,
+        prefs.getBoolean(INTRO, false),
     )
 
     private companion object {
         const val THEME = "theme"
         const val DECK = "deck"
+        const val INTRO = "intro_on_launch"
     }
 }

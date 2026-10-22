@@ -95,19 +95,32 @@ private val SLEEVE_FROM = Offset(1069.5f, 281.25f)
 private val SLEEVE_AT = Offset(487.9f, 281.25f)
 private const val DISC = 900.6f
 private val DISC_AT = Offset(1013.2f, 150.3f)
-private val RECORD_CENTRE = Offset(608f, 515f)
-private const val RECORD_W = 744f
-private const val RECORD_H = 660f
-private val ARM_PIVOT = Offset(1042f, 182f)
-private val ARM_TOP_LEFT = Offset(1001f, 85f)
-private const val ARM_W = 207f
-private const val ARM_H = 717f
-/** The arm's turn from its rest onto the lead-in groove, and the stretch the camera adds. */
-private const val ARM_SWING = 36f
-private const val ARM_REACH = 1.088f
+
+/**
+ * Where a set of deck renders puts the record and the arm: the record's centre and size on the
+ * platter, the arm picture's place, its pivot, its turn from rest onto the lead-in groove and the
+ * stretch the camera adds.
+ */
+private class IntroGeometry(
+    val recordCentre: Offset, val recordW: Float, val recordH: Float,
+    val armTopLeft: Offset, val armW: Float, val armH: Float,
+    val armPivot: Offset, val armSwing: Float, val armReach: Float,
+) {
+    companion object {
+        /** The white / teal renders (res/drawable-nodpi/onboarding_deck_*), the arm cropped to itself. */
+        val WhiteTeal = IntroGeometry(Offset(608f, 515f), 744f, 660f, Offset(1001f, 85f), 207f, 717f, Offset(1042f, 182f), 36f, 1.088f)
+        /**
+         * The dark and mono white RG-1's (assets/onboarding/deck-*-dark, -mono), rendered from the
+         * room's own deck by DeckCapture, which logged these points through its camera. Their arm
+         * picture is the whole frame.
+         */
+        val Captured = IntroGeometry(Offset(607.4f, 493.3f), 763f, 684f, Offset.Zero, SRC_W, SRC_H, Offset(1039.5f, 170.2f), 26.8f, 1.031f)
+    }
+}
 
 /** The intro's pictures. */
 private class IntroArt(
+    val geometry: IntroGeometry,
     val empty: ImageBitmap,
     val loaded: ImageBitmap,
     val playing: ImageBitmap,
@@ -119,13 +132,14 @@ private class IntroArt(
 )
 
 /**
- * The first thing a new listener sees, about seven unhurried seconds on white: a sleeve arrives, its disc
+ * The first thing a new listener sees (and, with Flags › Intro on launch, every opening), about
+ * seven unhurried seconds on the room's paper, white or OLED black: a sleeve arrives, its disc
  * slides out and lands on the RG-1's platter, the tonearm swings in and drops, the grooves catch
  * the light, and RUNOUT types itself out in dot-matrix. Tap anywhere to skip. With system
  * animations off it hands over straight away and draws nothing.
  */
 @Composable
-fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
+fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier, deck: DeckSkin = DeckSkin.WHITE_TEAL) {
     val context = LocalContext.current
     val finish by rememberUpdatedState(onFinished)
     val animationsOff = remember {
@@ -146,14 +160,19 @@ fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
     // when it's there, else the drawn ones.
     val ownSleeve = rememberOnboardingPicture("intro-sleeve", 360.dp)
     val ownDisc = rememberOnboardingPicture("intro-disc", 360.dp)
-    // The deck's renders: the dark RG-1's (assets/onboarding/deck-*-dark) in the dark theme once
-    // they're rendered, else the white / teal ones built in.
-    val darkDeck = rememberOnboardingPictures(remember { DARK_DECK }, 600.dp).takeIf { Room.dark && it.all { p -> p != null } }
+    // The renders of the deck the room shows: the dark and mono white RG-1's captured from the room's
+    // own deck (assets/onboarding/deck-*-dark, -mono), read before the first frame so the intro never
+    // opens on another deck; the white / teal ones built in.
+    val px = with(LocalDensity.current) { 600.dp.roundToPx() }
+    val captured = remember(deck) {
+        introDeckPictures(deck)?.map { decodeOnboardingPicture(context.assets, it, px) }?.takeIf { it.all { p -> p != null } }
+    }
     val art = IntroArt(
-        darkDeck?.get(0) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_empty),
-        darkDeck?.get(1) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_loaded),
-        darkDeck?.get(2) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_playing),
-        darkDeck?.get(3) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_arm),
+        if (captured != null) IntroGeometry.Captured else IntroGeometry.WhiteTeal,
+        captured?.get(0) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_empty),
+        captured?.get(1) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_loaded),
+        captured?.get(2) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_playing),
+        captured?.get(3) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_arm),
         ownSleeve ?: ImageBitmap.imageResource(R.drawable.onboarding_sleeve),
         ownDisc ?: ImageBitmap.imageResource(R.drawable.onboarding_disc),
         label = ownDisc,
@@ -237,6 +256,7 @@ private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, frame: Rect) {
         if (alpha > 0f) drawImage(image, dstOffset = deckOffset, dstSize = deckSize, alpha = alpha.coerceIn(0f, 1f))
     }
 
+    val g = art.geometry
     val deckIn = phase(ms, 600f, 950f)
     val landed = phase(ms, 1150f, 1300f)
     val swing = phase(ms, 1300f, 1650f)
@@ -246,25 +266,25 @@ private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, frame: Rect) {
     if (landed < 1f) deck(art.empty, deckIn)
     if (drop < 1f) deck(art.loaded, deckIn * landed)
     if (landed > 0f && drop < 1f) {
-        val pivot = at(ARM_PIVOT)
-        val reach = lerp(1f, ARM_REACH, swing)
+        val pivot = at(g.armPivot)
+        val reach = lerp(1f, g.armReach, swing)
         withTransform({
-            rotate(ARM_SWING * swing, pivot)
+            rotate(g.armSwing * swing, pivot)
             scale(reach, reach, pivot)
         }) {
-            val tl = at(ARM_TOP_LEFT)
+            val tl = at(g.armTopLeft)
             drawImage(
                 art.arm,
                 dstOffset = IntOffset(tl.x.roundToInt(), tl.y.roundToInt()),
-                dstSize = IntSize((ARM_W * k).roundToInt(), (ARM_H * k).roundToInt()),
+                dstSize = IntSize((g.armW * k).roundToInt(), (g.armH * k).roundToInt()),
                 alpha = landed,
             )
         }
     }
     deck(art.playing, drop)
     // The owner's record keeps its own label once it's down, turned as it landed.
-    if (landed > 0f) art.label?.let { drawLabel(it, at(RECORD_CENTRE), RECORD_W * k, RECORD_H * k, LANDED_TURN, alpha = landed) }
-    if (ms >= 1800f) drawGrooveLight(at(RECORD_CENTRE), RECORD_W * k / 2f, RECORD_H * k / 2f, ms)
+    if (landed > 0f) art.label?.let { drawLabel(it, at(g.recordCentre), g.recordW * k, g.recordH * k, LANDED_TURN, alpha = landed) }
+    if (ms >= 1800f) drawGrooveLight(at(g.recordCentre), g.recordW * k / 2f, g.recordH * k / 2f, ms)
 
     // The disc: rises out of the sleeve, flies to the spindle, lands and hands over to the deck.
     val rise = phase(ms, 300f, 600f)
@@ -273,10 +293,10 @@ private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, frame: Rect) {
         val sleeveCentre = SLEEVE_FROM.let { lerp(it, SLEEVE_AT, arrive(ms, 0f, 600f)) } + Offset(SLEEVE / 2f, SLEEVE / 2f)
         val start = lerp(sleeveCentre, DISC_AT, rise)
         // A small arc on the way over, and the platter's perspective as it comes down.
-        val centre = lerp(start, RECORD_CENTRE, fly) - Offset(0f, 160f * sin(PI.toFloat() * fly))
+        val centre = lerp(start, g.recordCentre, fly) - Offset(0f, 160f * sin(PI.toFloat() * fly))
         val thud = 1f - 0.035f * sin(PI.toFloat() * phase(ms, 1150f, 1250f))
-        val w = lerp(DISC, RECORD_W, fly) * k * thud
-        val h = lerp(DISC, RECORD_H, fly) * k * thud
+        val w = lerp(DISC, g.recordW, fly) * k * thud
+        val h = lerp(DISC, g.recordH, fly) * k * thud
         val spin = rise * 40f + fly * 160f
         val c = at(centre)
         // Its shadow drops away from it in flight and settles under it on landing.
@@ -375,5 +395,15 @@ private fun DrawScope.drawGrooveLight(c: Offset, rx: Float, ry: Float, ms: Float
     }
 }
 
-/** The dark RG-1's onboarding renders in assets/onboarding, in [IntroArt]'s order. */
-internal val DARK_DECK = listOf("deck-empty-dark", "deck-loaded-dark", "deck-playing-dark", "deck-arm-dark")
+/**
+ * A deck's captured renders in assets/onboarding, in [IntroArt]'s order (empty, loaded, playing,
+ * arm); null for white / teal, whose renders are built in.
+ */
+internal fun introDeckPictures(deck: DeckSkin): List<String>? {
+    val suffix = when (deck) {
+        DeckSkin.DARK -> "dark"
+        DeckSkin.MONO_WHITE -> "mono"
+        else -> return null
+    }
+    return listOf("empty", "loaded", "playing", "arm").map { "deck-$it-$suffix" }
+}

@@ -23,6 +23,9 @@
  */
 package app.runout.ui
 
+import app.runout.model.AudioQuality
+import app.runout.model.Track
+import app.runout.ui.deck.DeckCapture
 import android.view.TextureView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -373,6 +376,20 @@ fun Turntable(
     // Until the 3D deck's first frames are through, the flat deck stands in for it.
     // The flat deck stands in again while another colourway loads.
     var shown3d by remember(skin) { mutableStateOf(false) }
+    // Debug builds: the intro's deck pictures, rendered from this deck on request (DeckCapture).
+    var deckView by remember { mutableStateOf<TextureView?>(null) }
+    if (app.runout.BuildConfig.DEBUG && DeckCapture.requested) LaunchedEffect(renderer, shown3d) {
+        val r = renderer ?: return@LaunchedEffect
+        val tv = deckView ?: return@LaunchedEffect
+        if (!shown3d) return@LaunchedEffect
+        val sample = Album(
+            "capture", "Night Drive", "Vela Park", 2023, "",
+            listOf(Track("t1", "", "Opening", 1, 1, 180_000), Track("t2", "", "Lowlight", 2, 1, 200_000)),
+            AudioQuality("FLAC", 24, 96_000),
+        )
+        DeckCapture.run(context, r, tv, recordFace(sample, null, emptyList(), "A", textMeasurer).asAndroidBitmap(), link?.camera)
+        r.setGroundShadow(!Room.dark)
+    }
     LaunchedEffect(renderer) {
         renderer?.onFrame = { frames++ }
         renderer?.onReady = { shown3d = true }
@@ -453,7 +470,7 @@ fun Turntable(
                         factory = { ctx ->
                             TextureView(ctx).also { tv ->
                                 runCatching { DeckRenderer(ctx, tv, skin.asset ?: DeckSkin.WHITE_TEAL.asset!!).also { it.resume() } }
-                                    .onSuccess { tv.tag = it; renderer = it }
+                                    .onSuccess { tv.tag = it; renderer = it; deckView = tv }
                                     .onFailure { e ->
                                         android.util.Log.w("RunoutDeck", "3D deck unavailable, using the flat deck", e)
                                         use3d = false
@@ -470,9 +487,12 @@ fun Turntable(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                // The JVM tests have no GPU, and a phone takes a moment to get the 3D deck going: a
-                // flat stand-in in the same places.
-                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, FlatColours.of(skin), flip = { flipT.value }, liftOff = liftOff)
+                // Without a GPU (the JVM tests, a phone Filament can't drive) a flat deck stands in, in
+                // the same places. While the 3D deck starts, the dotted record turns where it will be.
+                if (!use3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, FlatColours.of(skin), flip = { flipT.value }, liftOff = liftOff)
+                else if (!shown3d) Box(Modifier.fillMaxSize().testTag("deck-loading"), contentAlignment = Alignment.Center) {
+                    DotVinylSpinner(Modifier.size(96.dp), description = "Setting up the deck")
+                }
                 // The drop target over the model. Reading [frames] here redraws the room each time
                 // Filament finishes a frame, so the TextureView's newest picture is what shows.
                 Canvas(Modifier.fillMaxSize()) {

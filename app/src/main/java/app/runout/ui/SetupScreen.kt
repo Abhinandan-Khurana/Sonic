@@ -116,14 +116,14 @@ internal fun SetupScreen(
             // Each step is its own subtree, so TalkBack (and test tools) never see the previous step's text.
             key(shown) {
                 when (shown) {
-                    Step.INTRO -> RunoutIntro(onFinished = { move(Step.LOGIN) })
+                    Step.INTRO -> RunoutIntro(onFinished = { move(Step.LOGIN) }, deck = state.look.deckFor(Room.dark))
                     Step.LOGIN -> LoginStep(state, actions, onClose, onConnected = { move(Step.DOWNLOADS) }, onOffline = { actions.disconnectSoulseek(); move(Step.OFFLINE) })
                     Step.OFFLINE -> OfflineStep(state, actions, onDone = { move(Step.WELCOME) }, onBack = { back() })
                     Step.DOWNLOADS -> DownloadsStep(state, actions, onDone = { move(Step.SHARE) }, onBack = { back() })
                     Step.SHARE -> ShareStep(state, actions, onDone = { move(Step.DROPS) }, onBack = { back() })
                     Step.DROPS -> DropsStep(onDone = { move(Step.RHYTHM) }, onBack = { back() })
                     Step.RHYTHM -> RhythmStep(state, actions, onDone = { move(Step.WELCOME) }, onBack = { back() })
-                    Step.WELCOME -> WelcomeStep(state.soulseekSession.username?.takeIf { state.soulseekSession.hasAccount }, onFinish)
+                    Step.WELCOME -> WelcomeStep(state.soulseekSession.username?.takeIf { state.soulseekSession.hasAccount }, state.look.deckFor(Room.dark), onFinish)
                 }
             }
         }
@@ -638,7 +638,7 @@ private fun RhythmCard(title: String, detail: String, selected: Boolean, enabled
  * page draws the render instead.
  */
 @Composable
-private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
+private fun WelcomeStep(name: String?, deckSkin: DeckSkin, onFinish: () -> Unit) {
     val pop = remember { Animatable(0f) }
     val hold = remember { Animatable(0f) }
     val onFinished by rememberUpdatedState(onFinish)
@@ -695,9 +695,9 @@ private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
         ) {
             if (deck == null) {
-                val darkDeck = rememberOnboardingPicture(DARK_DECK[0], 600.dp).takeIf { Room.dark }
+                val captured = introDeckPictures(deckSkin)?.let { rememberOnboardingPicture(it[0], 600.dp) }
                 Image(
-                    darkDeck?.let { androidx.compose.ui.graphics.painter.BitmapPainter(it) } ?: painterResource(R.drawable.onboarding_deck_empty),
+                    captured?.let { androidx.compose.ui.graphics.painter.BitmapPainter(it) } ?: painterResource(R.drawable.onboarding_deck_empty),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().height(212.dp),

@@ -177,6 +177,7 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
     SettingsSection.LIBRARY -> "${recordCount(state.albums.size)} · ${if (state.hasFolder) "1 folder" else "no folder"}"
     SettingsSection.FLAGS -> listOfNotNull(
         "auto-flip".takeIf { state.deckFlags.autoFlip }, "auto-play".takeIf { state.deckFlags.autoPlay }, "sleep".takeIf { state.deckFlags.sleepMode },
+        "intro".takeIf { state.look.introOnLaunch },
     ).joinToString(" · ").ifEmpty { "all off" } + (if (state.look.theme != ThemeMode.PHONE) " · ${state.look.theme.label}" else "")
     SettingsSection.ABOUT -> "sonic $VERSION · rg-1"
 }

@@ -93,6 +93,11 @@ private val HelpAutoPlay = TeHelp("help · flags", "auto-play", listOf(
     "turn it off to put records on first and start them from the deck.",
 ))
 
+private val HelpIntro = TeHelp("help · flags", "intro on launch", listOf(
+    "each time sonic opens, the sleeve slides in and its record drops onto the deck, as on the very first day. no sign-in or setup steps after it.",
+    "tap anywhere to skip it. it plays in light or dark, on the deck you're using.",
+))
+
 private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
     "puts a moon in the room's top bar. tap it to stop the music in 15 to 50 minutes.",
     "when the time is up the music fades out over a few seconds and the needle lifts.",
@@ -112,6 +117,7 @@ internal fun FlagsPage(state: RoomState, actions: RoomActions) {
                 HelpToggle("Auto-flip", "Side A over, side B plays.", f.autoFlip, actions::setAutoFlip) { help = HelpAutoFlip }
                 HelpToggle("Auto-play", "A record on the platter starts playing.", f.autoPlay, actions::setAutoPlay) { help = HelpAutoPlay }
                 HelpToggle("Sleep mode", "A moon in the room for the sleep timer.", f.sleepMode, actions::setSleepMode) { help = HelpSleep }
+                HelpToggle("Intro on launch", "The needle drop, each time sonic opens.", state.look.introOnLaunch, actions::setIntroOnLaunch) { help = HelpIntro }
             }
         }
         PageSection("02 theme") {

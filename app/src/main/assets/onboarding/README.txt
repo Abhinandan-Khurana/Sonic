@@ -29,7 +29,15 @@ Dark theme (Settings › Flags › theme, or the phone's dark mode). Each pictur
 twin, used in the dark theme; missing, the light one shows:
   step-02-dark … step-05-dark   the step pictures redrawn on true black (#000000), same
                                 composition, square 1024 x 1024
-  deck-empty-dark, deck-loaded-dark, deck-playing-dark, deck-arm-dark
-                                the dark RG-1 rendered from Blender exactly as the white / teal
-                                res/drawable-nodpi/onboarding_deck_* (same camera, size and
-                                transparent background), so the intro still lands on the 3D deck
+
+Intro deck renders for the other colourways (Settings › Flags › deck), used whatever the theme:
+  deck-{empty,loaded,playing,arm}-dark   the dark RG-1
+  deck-{empty,loaded,playing,arm}-mono   the mono white RG-1
+These are rendered from the room's own 3D deck by a debug build (ui/deck/DeckCapture.kt), so the
+intro lands on exactly the deck the room shows: pick the deck in Flags, use the three-quarter view,
+run
+    adb shell am start -n app.sonic.dev/app.runout.MainActivity --ez capture_intro_deck true
+pull Android/data/app.sonic.dev/files/deck-capture/*.png and convert each with
+    cwebp -q 86 -alpha_q 90 deck-<state>.png -o deck-<state>-<dark|mono>.webp
+The intro's positions for them (IntroGeometry.Captured in Intro.kt) come from the same run's log.
+White / teal uses the built-in res/drawable-nodpi/onboarding_deck_*.

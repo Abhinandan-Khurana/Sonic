@@ -512,6 +512,31 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `with intro on launch the needle drop plays over the room, and a tap gives the room back`() {
+        portrait()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(state().copy(look = Look(introOnLaunch = true)), RecordingActions()) }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onNodeWithTag("onboarding-intro").assertExists().performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithTag("onboarding-intro").assertDoesNotExist()
+        // No setup steps after it: straight to the room.
+        compose.onNodeWithTag("screen:setup").assertDoesNotExist()
+        compose.onNodeWithTag("turntable").assertExists()
+    }
+
+    @Test
+    fun `without the flag the room opens straight away, and Flags turns the intro on`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() { override fun setIntroOnLaunch(on: Boolean) { calls += "intro:$on" } }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.FLAGS) }
+        compose.onNodeWithTag("onboarding-intro").assertDoesNotExist()
+        compose.onNodeWithTag("toggle:Intro on launch").performScrollTo().performClick()
+        assertEquals(listOf("intro:true"), calls)
+    }
+
+    @Test
     fun `soulseek settings grey out how you share until sharing is on`() {
         portrait()
         val calls = mutableListOf<String>()

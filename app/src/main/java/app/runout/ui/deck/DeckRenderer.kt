@@ -239,6 +239,22 @@ class DeckRenderer(private val context: Context, textureView: TextureView, model
         invalidate()
     }
 
+    /**
+     * For [DeckCapture]: the named [part] shown or hidden, and with [only] every other part hidden.
+     * A null part puts the whole deck back.
+     */
+    internal fun showPart(part: String?, visible: Boolean, only: Boolean = false) {
+        deck.entities.forEach { e ->
+            val show = when {
+                part == null -> true
+                deck.getName(e) == part -> visible
+                else -> !only
+            }
+            if (show) scene.addEntity(e) else scene.removeEntity(e)
+        }
+        invalidate()
+    }
+
     /** The orange lamp by START/STOP: lit while a record plays. */
     fun setStatusLamp(lit: Boolean) {
         val m = statusLamp ?: return

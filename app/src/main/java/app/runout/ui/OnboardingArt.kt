@@ -221,7 +221,7 @@ internal fun rememberOnboardingPicture(name: String, maxSide: Dp): ImageBitmap? 
 private val PICTURE_TYPES = listOf("webp", "png", "jpg")
 
 /** Decodes `onboarding/<name>.*`, halving it while it's still twice [maxSide] across; null if absent. */
-private fun decodeOnboardingPicture(assets: AssetManager, name: String, maxSide: Int): ImageBitmap? {
+internal fun decodeOnboardingPicture(assets: AssetManager, name: String, maxSide: Int): ImageBitmap? {
     for (type in PICTURE_TYPES) {
         val path = "onboarding/$name.$type"
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

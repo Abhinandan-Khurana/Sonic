@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
         val phoneDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         applyTheme(graph.look.look.value.dark(phoneDark))
         if (savedInstanceState == null) handleIncoming(intent)
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("capture_intro_deck", false)) app.runout.ui.deck.DeckCapture.requested = true
 
         val graph = graph
         // A track that fails to play lifts the needle; the room says why.
@@ -95,6 +96,16 @@ class MainActivity : ComponentActivity() {
             val look by graph.look.look.collectAsStateWithLifecycle()
             val dark = look.dark(androidx.compose.foundation.isSystemInDarkTheme())
             LaunchedEffect(dark) { applyTheme(dark) }
+            // The next launch screen in the pinned theme's paper too (with "phone", Android's own).
+            LaunchedEffect(look.theme) {
+                if (android.os.Build.VERSION.SDK_INT >= 33) splashScreen.setSplashScreenTheme(
+                    when (look.theme) {
+                        app.runout.ui.ThemeMode.DARK -> R.style.Theme_Runout_Dark
+                        app.runout.ui.ThemeMode.LIGHT -> R.style.Theme_Runout_Light
+                        app.runout.ui.ThemeMode.PHONE -> android.content.res.Resources.ID_NULL
+                    },
+                )
+            }
             val sleepAt by graph.deck.sleepAt.collectAsStateWithLifecycle()
             val listening by previewState.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
@@ -223,6 +234,7 @@ class MainActivity : ComponentActivity() {
                     override fun setSleepMode(on: Boolean) = graph.deck.setSleepMode(on)
                     override fun setTheme(theme: app.runout.ui.ThemeMode) = graph.look.setTheme(theme)
                     override fun setDeckSkin(deck: app.runout.ui.DeckSkin) = graph.look.setDeck(deck)
+                    override fun setIntroOnLaunch(on: Boolean) = graph.look.setIntroOnLaunch(on)
                     override fun setSleepTimer(minutes: Int?) = graph.deck.setSleepTimer(minutes)
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {

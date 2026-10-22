@@ -273,6 +273,7 @@ interface RoomActions : DeckActions {
     fun setSleepMode(on: Boolean) {}
     fun setTheme(theme: ThemeMode) {}
     fun setDeckSkin(deck: DeckSkin) {}
+    fun setIntroOnLaunch(on: Boolean) {}
     /** Stops the music in so many minutes; null turns the timer off. */
     fun setSleepTimer(minutes: Int?) {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}
@@ -365,6 +366,8 @@ fun RoomScreen(
     }
     // First launch opens onboarding over the room; Soulseek setup can be opened again later.
     var setupOpen by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
+    // Once per launch with Flags › Intro on launch (kept across turns, so rotating doesn't replay it).
+    var launchIntro by rememberSaveable { mutableStateOf(state.onboardingComplete && state.look.introOnLaunch) }
     var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
     val openSetup = { setupStart = 1; setupOpen = true; panel = null }
     val openAccount = {
@@ -1110,6 +1113,23 @@ fun RoomScreen(
                     },
                     intro = firstRun && setupStart == 0,
                     onClose = if (firstRun) null else ({ setupOpen = false }),
+                )
+            }
+        }
+
+        // Flags › Intro on launch: the needle drop over the room each time the app opens, its deck
+        // where the room's is, then the room rises in around it as after onboarding.
+        AnimatedVisibility(launchIntro && !setupOpen, enter = fadeIn(tween(0)), exit = fadeOut(tween(320)), modifier = Modifier.zIndex(12f)) {
+            CompositionLocalProvider(LocalDeckSpot provides deckSpot) {
+                RunoutIntro(
+                    onFinished = {
+                        launchIntro = false
+                        scope.launch {
+                            entry.snapTo(0f)
+                            entry.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 200f))
+                        }
+                    },
+                    deck = state.look.deckFor(Room.dark),
                 )
             }
         }
