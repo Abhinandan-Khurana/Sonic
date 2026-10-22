@@ -503,7 +503,8 @@ class SoulseekRepositoryTest {
         assertNotNull(waiting.retryAt)
         await("asked again by itself") { downloads(id).size == 2 }
         assertEquals("the same staging folder, so the part file resumes", downloads(id)[0].getString("localDirectory"), downloads(id)[1].getString("localDirectory"))
-        assertNull(repo.transfers.value.single().recovery)
+        // The row was cleared before the command went out; the list follows the database a beat later.
+        await("no longer waiting") { repo.transfers.value.single().recovery == null }
         // Three times away in a row: then it looks for the file elsewhere.
         repeat(3) { n ->
             await("retry ${n + 2} running") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.QUEUED }
