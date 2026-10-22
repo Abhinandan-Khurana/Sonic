@@ -557,7 +557,7 @@ private fun ClaimLights(left: Int, onHelp: () -> Unit) {
 private fun shortLicence(label: String) = label.lowercase().replace(Regex(" \\d+(\\.\\d+)*$"), "")
 
 /**
- * One drop on the shelf: a white tile in a 2 dp ink outline, 16 dp in and 11 between parts: the sleeve, the number and
+ * One drop on the shelf: a white tile in a 2 dp orange outline, 16 dp in and 11 between parts: the sleeve, the number and
  * licence (blue), the 10/400 title and grey artist · year, and what you can do (green once it's in
  * your crate, the claiming percentage while it downloads, "claim →" otherwise).
  */
@@ -572,7 +572,7 @@ private fun DropSleeve(number: Int, item: DropItem, isClaimed: Boolean, progress
             .testTag("drop:${item.identifier}")
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onOpen() }
             .background(Room.Background)
-            .border(2.dp, Room.Ink)
+            .border(2.dp, Room.Signal)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(11.dp),
     ) {
