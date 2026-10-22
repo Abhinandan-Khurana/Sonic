@@ -118,11 +118,12 @@ class Deck(
 
     /**
      * Stops the music in [minutes]: it fades out over a few seconds and the needle lifts, like
-     * someone turning the volume down before they leave. Null turns the timer off.
+     * someone turning the volume down before they leave. Null turns the timer off. Only with sleep
+     * mode on (Settings › Flags, off until you turn it on).
      */
     fun setSleepTimer(minutes: Int?) {
         sleepJob?.cancel()
-        if (minutes == null) { _sleepAt.value = null; return }
+        if (minutes == null || !_flags.value.sleepMode) { _sleepAt.value = null; return }
         val at = clock() + minutes * 60_000L
         _sleepAt.value = at
         sleepJob = scope.launch {

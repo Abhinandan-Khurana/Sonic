@@ -286,10 +286,21 @@ class TurntableDeckTest {
         } finally { p.release() }
     }
 
+    @Test fun `every flag is off until you turn it on, and the sleep timer needs sleep mode`() {
+        assertEquals(app.runout.playback.DeckFlags(autoFlip = false, autoPlay = false, sleepMode = false), deck.flags.value)
+        deck.setSleepTimer(15)
+        assertEquals("no timer without sleep mode", null, deck.sleepAt.value)
+        deck.setSleepMode(true)
+        // Kept across launches.
+        val again = Deck(context, VinylSfx(scope), scope, engine) { ready -> ready(player) }
+        assertTrue(again.flags.value.sleepMode)
+    }
+
     @Test fun `the sleep timer fades the music out and lifts the needle, and can be called off`() {
         deck.load(album())
         deck.startStop()
         settle()
+        deck.setSleepMode(true)
         deck.setSleepTimer(15)
         assertTrue(deck.sleepAt.value != null)
         settle(14 * 60_000L)
@@ -301,10 +312,10 @@ class TurntableDeckTest {
         deck.startStop()
         settle()
         deck.setSleepTimer(20)
+        assertTrue(deck.sleepAt.value != null)
         deck.setSleepTimer(null)
         settle(25 * 60_000L)
         assertTrue("off: the music plays on", s.needleDown)
-        deck.setSleepMode(true)
         deck.setSleepTimer(30)
         deck.setSleepMode(false)
         assertEquals("sleep mode off calls the timer off too", null, deck.sleepAt.value)
