@@ -72,7 +72,7 @@ fun SettingsPanel(
             }
             // The wordmark set huge and faint underneath, like a manual's back page.
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                BasicText("RUNOUT", style = Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), maxLines = 1, modifier = Modifier.clearAndSetSemantics {})
+                BasicText(brandMark(Room.HairlineSoft), style = Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), maxLines = 1, modifier = Modifier.clearAndSetSemantics {})
                 BasicText("$VERSION · white / teal · flac only", style = Room.LabelQuiet)
             }
         }
@@ -114,7 +114,7 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
     SettingsSection.ACCOUNT ->
         if (state.soulseekSession.hasAccount) "${state.soulseekSession.username} · ${connectionLabel(state.soulseekSession)}".lowercase() else "not signed in"
     SettingsSection.LIBRARY -> "${recordCount(state.albums.size)} · ${if (state.hasFolder) "1 folder" else "no folder"}"
-    SettingsSection.ABOUT -> "runout $VERSION · rg-1"
+    SettingsSection.ABOUT -> "sonic $VERSION · rg-1"
 }
 
 /**
@@ -200,7 +200,7 @@ private fun LibraryStats(albums: Int, files: Int, folders: Int, unreadable: Int)
 private fun RepairLibrary(state: RoomState, actions: RoomActions) {
     PageSection("02 repair local albums") {
         BasicText(
-            "albums missing or vanishing? rebuild the shelf from your folder. runout forgets its saved list, reads every album again, " +
+            "albums missing or vanishing? rebuild the shelf from your folder. sonic forgets its saved list, reads every album again, " +
                 "and shows each file it couldn't play and why. your music files are never changed.",
             style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
         )
@@ -276,7 +276,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
         }
     }
     Column(Modifier.fillMaxWidth().hairlineTop(Room.Ink).padding(top = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-        BasicText("RUNOUT $VERSION", style = Room.Display.copy(fontSize = 33.sp), maxLines = 1)
+        BasicText(brandMark() + androidx.compose.ui.text.AnnotatedString(" $VERSION"), style = Room.Display.copy(fontSize = 33.sp), maxLines = 1)
         BasicText(if (BuildConfig.DEBUG) "development build · rg-1 v3" else "rg-1 v3", style = Room.LabelQuiet)
     }
 }

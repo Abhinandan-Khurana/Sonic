@@ -1,5 +1,9 @@
 package app.runout.ui
 
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.AnnotatedString
 import android.content.res.AssetManager
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
@@ -51,8 +55,9 @@ import kotlinx.coroutines.withContext
  */
 
 /**
- * The RUNOUT wordmark in Array Bold, drawn rather than set as text: the room never shows the app's
- * name as a text node, so onboarding's wordmark is a graphic that says "Runout" to TalkBack.
+ * The SONIC. wordmark in Array Bold, its dot in signal orange, drawn rather than set as text: the
+ * room never shows the app's name as a text node, so onboarding's wordmark is a graphic that says
+ * "Sonic" to TalkBack.
  * [letters] types it out (0–6); [cursor] shows the orange block cursor after the last letter, and
  * [reserveCursor] keeps its room so typing never shifts the layout.
  */
@@ -66,7 +71,7 @@ internal fun Wordmark(
 ) {
     val measurer = rememberTextMeasurer()
     val style = Room.Display.copy(fontSize = fontSize)
-    val full = remember(fontSize) { measurer.measure(WORDMARK, style) }
+    val full = remember(fontSize) { measurer.measure(brandMark(), style) }
     val density = LocalDensity.current
     val fontPx = with(density) { fontSize.toPx() }
     // The board's cursor: 10 × 30 beside 33 sp type, a hair after the last letter.
@@ -76,10 +81,10 @@ internal fun Wordmark(
     Canvas(
         modifier
             .size(with(density) { width.toDp() }, with(density) { full.size.height.toDp() })
-            .semantics { contentDescription = "Runout" },
+            .semantics { contentDescription = "Sonic" },
     ) {
         val shown = letters.coerceIn(0, WORDMARK.length)
-        val typed = if (shown == WORDMARK.length) full else measurer.measure(WORDMARK.take(shown), style)
+        val typed = if (shown == WORDMARK.length) full else measurer.measure(brandMark(letters = shown), style)
         if (shown > 0) drawText(typed)
         if (cursor) {
             val x = (if (shown > 0) typed.size.width.toFloat() + cursorGap else 0f)
@@ -89,7 +94,17 @@ internal fun Wordmark(
     }
 }
 
-private const val WORDMARK = "RUNOUT"
+private const val WORDMARK = "SONIC."
+
+/**
+ * The name as the brand sets it: SONIC in [ink] (the style's colour when unspecified) and its full
+ * stop in signal orange. [letters] cuts it short for typing it out.
+ */
+internal fun brandMark(ink: Color = Color.Unspecified, letters: Int = WORDMARK.length): AnnotatedString = buildAnnotatedString {
+    val shown = WORDMARK.take(letters.coerceIn(0, WORDMARK.length))
+    withStyle(SpanStyle(color = ink)) { append(shown.removeSuffix(".")) }
+    if (shown.endsWith(".")) withStyle(SpanStyle(color = Room.Signal)) { append(".") }
+}
 
 /** One sleeve in the collage: a flat ground colour (or the night-sky gradient), a sun and a horizon. */
 private class SleeveArt(val sky: List<Pair<Float, Color>>, val sun: Color, val ground: Color)

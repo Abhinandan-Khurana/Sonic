@@ -231,7 +231,7 @@ internal fun SignalChain(path: SignalPath?, modifier: Modifier = Modifier, gap: 
         Verdict(path.verdict.lowercase(), lamp, onVerdictHelp)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             StepRow("Track", path.track)
-            StepRow("Runout", path.runout)
+            StepRow("Sonic", path.runout)
             StepRow("Output", path.output, last = true)
         }
         path.note?.let { BasicText(it.lowercase(), style = Room.Label.copy(color = Room.Accent, lineHeight = 15.sp)) }

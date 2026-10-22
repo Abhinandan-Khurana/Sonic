@@ -59,11 +59,11 @@ object FlacPolicy {
         when {
             head.isEmpty() -> "The file is empty."
             text.startsWith("fLaC") || text.startsWith("ID3") && text.indexOf("fLaC") in 10..head.size -> "Damaged FLAC: the header or the first audio frame is broken, or the download was cut off."
-            text.startsWith("ID3") -> "An MP3 (or other format) renamed to .flac. Only real FLAC plays in Runout."
+            text.startsWith("ID3") -> "An MP3 (or other format) renamed to .flac. Only real FLAC plays in Sonic."
             text.indexOf("fLaC") in 1..head.size -> "Extra data before the FLAC stream. Re-save or re-rip the file."
-            text.startsWith("RIFF") -> "A WAV file renamed to .flac. Only real FLAC plays in Runout."
-            text.contains("ftyp") -> "An M4A/ALAC file renamed to .flac. Only real FLAC plays in Runout."
-            text.startsWith("OggS") -> "An Ogg file renamed to .flac. Only real FLAC plays in Runout."
+            text.startsWith("RIFF") -> "A WAV file renamed to .flac. Only real FLAC plays in Sonic."
+            text.contains("ftyp") -> "An M4A/ALAC file renamed to .flac. Only real FLAC plays in Sonic."
+            text.startsWith("OggS") -> "An Ogg file renamed to .flac. Only real FLAC plays in Sonic."
             else -> "Not FLAC inside, despite the .flac name."
         }
     }.getOrDefault("Couldn't open the file. Choose the folder again in Settings › Library.")

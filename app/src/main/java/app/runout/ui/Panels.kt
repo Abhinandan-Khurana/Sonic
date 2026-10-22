@@ -207,16 +207,16 @@ internal object SoundHelp {
     ))
     val HI_RES = TeHelp("help · sound › output", "hi-res output", listOf(
         "keeps 24-bit files at full depth on the way to android, as 32-bit float. android's mixer still sets the output rate, usually 48 khz, unless pure and a usb dac play bit-perfect; the signal section says which.",
-        "when off, runout sends 16-bit: a 16-bit file goes out as it is, and a deeper or processed one is dithered once.",
+        "when off, sonic sends 16-bit: a 16-bit file goes out as it is, and a deeper or processed one is dithered once.",
     ))
     val VERDICT = TeHelp("help · sound › signal", "the signal verdict", listOf(
-        "one line on what reaches your ears: the track, what runout does to it, and what the output takes.",
+        "one line on what reaches your ears: the track, what sonic does to it, and what the output takes.",
         "green: bit-perfect, nothing changed. amber: a lossless source, but resampled, processed or cut to 16-bit on the way. red: lossy, because bluetooth re-encodes the music.",
         "hold the deck's led window to see this chain from the room.",
     ))
     val EQ = TeHelp("help · sound › equaliser", "eq", listOf(
         "ten bands from 31 hz to 16 khz, applied after replaygain.",
-        "pick a preset, drag a band, or import an autoeq profile. runout lowers the level a little first, so boosts never clip.",
+        "pick a preset, drag a band, or import an autoeq profile. sonic lowers the level a little first, so boosts never clip.",
     ))
     val REPLAYGAIN = TeHelp("help · sound › loudness", "replaygain", listOf(
         "evens out loudness, so you don't reach for the volume between records.",

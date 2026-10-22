@@ -514,7 +514,7 @@ private fun DownloadsStep(state: RoomState, actions: RoomActions, onDone: () -> 
         if (state.downloadFolder != null && state.downloadFolder != atEntry) onDone()
     }
     StepPage(3, onBack, picture = "step-03", copy = {
-        StepCopy("keep your records", "WHERE SHOULD DOWNLOADS GO?", "finished flac downloads land in this folder, play in other apps too, and stay if you uninstall runout.")
+        StepCopy("keep your records", "WHERE SHOULD DOWNLOADS GO?", "finished flac downloads land in this folder, play in other apps too, and stay if you uninstall sonic.")
     }) {
         StepKey(if (state.downloadFolder == null) "choose download folder" else "change download folder", actions::pickDownloadFolder, "setup-download-folder", Modifier.fillMaxWidth())
         TextKey(if (state.downloadFolder != null) "keep “${state.downloadFolder}”" else "choose later", onDone, "setup-later")
@@ -587,7 +587,7 @@ private fun RhythmStep(state: RoomState, actions: RoomActions, onDone: () -> Uni
         StepCopy("choose your rhythm", "WHEN SHOULD YOU STAY ONLINE?", "both reconnect after a network blip. your own records always play offline.")
         Column(Modifier.fillMaxWidth()) {
             RhythmCard(
-                "while using runout", "less battery and data. messages arrive when you come back.",
+                "while using sonic", "less battery and data. messages arrive when you come back.",
                 selected = !state.soulseekBackgroundConsent, enabled = connected, tag = "rhythm:app",
             ) { actions.setSoulseekStayOnline(false); onDone() }
             RhythmCard(

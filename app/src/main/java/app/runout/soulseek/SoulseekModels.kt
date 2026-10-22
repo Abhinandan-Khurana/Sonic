@@ -8,7 +8,7 @@ enum class SoulseekDisconnectReason(val label: String) {
     NETWORK_LOST("Connection lost. Reconnecting…"), AUTH_REJECTED("Username or password rejected"),
     DISPLACED("This Soulseek ID connected in another client. Reconnect when you are ready."),
     MANUAL("Disconnected by you"), BACKGROUND_IDLE("Paused while the app is in the background"),
-    SERVICE_TIMEOUT("Android stopped background activity. Open Runout to resume."), PROTOCOL_ERROR("Connection interrupted")
+    SERVICE_TIMEOUT("Android stopped background activity. Open Sonic to resume."), PROTOCOL_ERROR("Connection interrupted")
 }
 data class SoulseekSession(
     val state: SoulseekConnection = SoulseekConnection.OFFLINE,

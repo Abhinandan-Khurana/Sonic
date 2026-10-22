@@ -1,6 +1,6 @@
-# Runout
+# Sonic.
 
-> A vinyl listening room for your FLAC records, on Android.
+> A vinyl listening room for your FLAC records, on Android. Formerly Runout.
 
 [![Release](https://img.shields.io/github/v/release/Abhiroop1122/runout?label=Release&color=blue)](https://github.com/Abhiroop1122/runout/releases/latest)
 [![License](https://img.shields.io/github/license/Abhiroop1122/runout?label=License&color=green)](LICENSE)
@@ -9,14 +9,14 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](app/build.gradle.kts)
 [![Rust](https://img.shields.io/badge/native-Rust%201.91-orange?logo=rust&logoColor=white)](native/README.md)
 
-**Runout** turns a folder of FLAC albums into a listening room. Flick through a crate of
+**Sonic** turns a folder of FLAC albums into a listening room. Flick through a crate of
 sleeves, pull a record out, drop it on a glass turntable and lower the needle. Dig for albums
 on Soulseek, claim free Friday Drops from the Internet Archive, and swap records with friends.
 
 <p align="center">
   <img src="docs/images/screens/home.png" width="250" alt="The listening room: a glass turntable with orange keys above a crate of record sleeves, and four icon tabs" />
   &nbsp;
-  <img src="docs/images/screens/intro.png" width="250" alt="The intro: a record spinning on a platter, its grooves glowing orange, with RUNOUT in dot-matrix letters" />
+  <img src="docs/images/screens/intro.png" width="250" alt="The intro: a record spinning on a platter, its grooves glowing orange, with SONIC in dot-matrix letters" />
   &nbsp;
   <img src="docs/images/screens/login.png" width="250" alt="Sign-in: a collage of records, the app mark, the headline 'Every record you own. One room to play them.', and Soulseek ID and password fields" />
 </p>
@@ -47,29 +47,29 @@ on Soulseek, claim free Friday Drops from the Internet Archive, and swap records
 
 ## Download
 
-**[Runout 0.5.1](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1)** is the current
+**[Sonic 0.5.1](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1)** is the current
 release. Every build is published with its checksum and a verification report.
 
 | Asset | File | Size |
 | :--- | :--- | :---: |
-| **Android 9.0 or newer** | `Runout-0.5.1.apk` | 46.3 MB |
-| **Integrity** | `Runout-0.5.1.apk.sha256` | 95 B |
-| **Verification report** | `Runout-0.5.1-VERIFICATION.md` | 3.3 KB |
+| **Android 9.0 or newer** | `Sonic-0.5.1.apk` | 46.3 MB |
+| **Integrity** | `Sonic-0.5.1.apk.sha256` | 95 B |
+| **Verification report** | `Sonic-0.5.1-VERIFICATION.md` | 3.3 KB |
 
 Verify the download before installing:
 
 ```bash
-sha256sum -c Runout-0.5.1.apk.sha256
+sha256sum -c Sonic-0.5.1.apk.sha256
 ```
 
 ```
-d0ae199fe649f2844a4a303d01762cb6d0c123d6d4a93495eb829ec19595bbbc  Runout-0.5.1.apk
+d0ae199fe649f2844a4a303d01762cb6d0c123d6d4a93495eb829ec19595bbbc  Sonic-0.5.1.apk
 ```
 
-Windows: `Get-FileHash Runout-0.5.1.apk -Algorithm SHA256` and compare with the checksum file.
+Windows: `Get-FileHash Sonic-0.5.1.apk -Algorithm SHA256` and compare with the checksum file.
 
 - **Android 9.0 (API 28) or newer**, on ARM64, ARMv7, x86-64 or x86.
-- 0.5.1 installs as **Runout Dev** (`app.runout.dev`) with its own crate and sign-in, alongside
+- 0.5.1 installs as **Sonic Dev** (`app.runout.dev`) with its own crate and sign-in, alongside
   the signed `app.runout` build from [0.3.0](https://github.com/Abhiroop1122/runout/releases/tag/v0.3.0).
 - It installs in place over the 0.4.x and 0.5.x development builds, which share the same
   certificate. Coming from 0.4.x? Uninstall that first — the certificate changed.
@@ -131,7 +131,7 @@ any of them, and claim it into your crate.
 ## Friends
 
 Chat with other Soulseek listeners, keep a friends list with online dots, and send a record as a
-card. A card reads as plain text in any Soulseek client; in Runout it's a sleeve with **Find on
+card. A card reads as plain text in any Soulseek client; in Sonic it's a sleeve with **Find on
 Soulseek**.
 
 <p align="center">
@@ -147,7 +147,7 @@ Soulseek**.
 - **Hi-res output** is about the format: each file plays at its own sample rate in 32-bit float
   instead of being cut to 16-bit. The two combine.
 - **Audio quality:** a chip on the home screen ("24/96 → Phone speaker") opens the whole chain,
-  Track → Runout → Output, with each step's bit depth and rate.
+  Track → Sonic → Output, with each step's bit depth and rate.
 - A 10-band EQ with presets, AutoEq headphone profiles, ReplayGain, a limiter, and an optional
   "warmth".
 
@@ -169,8 +169,8 @@ Soulseek**.
 ## Repair local albums
 
 If albums are missing, Settings › Library › **Repair local albums** rebuilds the shelf from your
-folder and lists every file Runout couldn't read, with the reason (an MP3 renamed to `.flac`, a
-damaged or cut-off FLAC). Runout only reads your folder, so it never changes the files.
+folder and lists every file Sonic couldn't read, with the reason (an MP3 renamed to `.flac`, a
+damaged or cut-off FLAC). Sonic only reads your folder, so it never changes the files.
 
 ## FLAC only
 
@@ -185,7 +185,7 @@ synthesised sounds are fine.
   - An unused name creates an account, including a mistyped one.
   - Signing in disconnects any other client using the same ID.
   - Its protocol does not encrypt credentials or private messages.
-- **What Runout sends:** there is no Runout account server, and Soulseek credentials are never
+- **What Sonic sends:** there is no Sonic account server, and Soulseek credentials are never
   sent to the Internet Archive. They are encrypted with an Android Keystore key, kept out of
   backups, and wiped from memory as far as the platform allows.
 - **Cover art lookup is off unless you turn it on.**
@@ -196,12 +196,12 @@ synthesised sounds are fine.
 - **Background mode:** optional. It keeps messages and sharing alive with an ongoing notification
   and a Disconnect action.
 - **Downloads:** they land in a folder you pick. They stay readable by other apps and survive
-  uninstalling Runout.
+  uninstalling Sonic.
 
 ## Existing installations
 
 The FLAC migration keeps your original music files and backs up changed library indexes as
-`*.json.before-flac`. Non-FLAC music disappears from Runout, but valid FLAC tracks in mixed albums
+`*.json.before-flac`. Non-FLAC music disappears from Sonic, but valid FLAC tracks in mixed albums
 remain. Records made with the old Pressing Plant stay playable; the Pressing Plant itself is
 gone.
 
@@ -314,7 +314,7 @@ Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT
 
 ## License and credits
 
-Runout is MIT licensed; original authorship is preserved in [LICENSE](LICENSE). Soulseek support
+Sonic is MIT licensed; original authorship is preserved in [LICENSE](LICENSE). Soulseek support
 vendors [soulseek-rs-lib v19.1.0](https://github.com/michel/soulseek-rs/releases/tag/v19.1.0),
 with its MIT notice and documented integration changes under [native/](native/README.md). Native
 dependency notices are bundled in the APK.
@@ -322,7 +322,7 @@ dependency notices are bundled in the APK.
 [Seeker](https://github.com/jackBonadies/SeekerAndroid),
 [Soulseek.NET](https://github.com/jpdillingham/Soulseek.NET) and the
 [Nicotine+ protocol documentation](https://nicotine-plus.org/doc/SLSKPROTOCOL.html) informed the
-investigation; their GPL implementations are not copied into Runout.
+investigation; their GPL implementations are not copied into Sonic.
 
 Inter and Silkscreen use the SIL Open Font License. AndroidX, Media3, Compose, OkHttp and Kyant
 Backdrop keep their own notices. Internet Archive albums keep their credited Creative Commons

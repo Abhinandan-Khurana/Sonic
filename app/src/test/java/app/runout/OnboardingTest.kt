@@ -116,7 +116,7 @@ class OnboardingTest {
 
     @Test fun `the sign-in shows the app's name and keeps listening offline as a quiet link`() {
         compose.setContent { SetupScreen(connected.copy(soulseekSession = SoulseekSession()), RecordingActions(), 1) {} }
-        compose.onNodeWithContentDescription("Runout").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Sonic").assertIsDisplayed()
         compose.onNodeWithText("Drop the needle.").assertDoesNotExist()
         compose.onNodeWithText("Create an ID").assertDoesNotExist()
         compose.onNodeWithText("Remember my sign-in").assertDoesNotExist()

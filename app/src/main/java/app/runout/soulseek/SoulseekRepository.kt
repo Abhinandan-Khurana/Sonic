@@ -586,7 +586,7 @@ class SoulseekRepository(
             context.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted == true
 
     private fun interruptionReason(): String =
-        if (backgroundRestricted()) "Android paused this download: Background usage is off for Runout. Allow it in the app's Battery settings, or keep Runout open. It continues when you're back."
+        if (backgroundRestricted()) "Android paused this download: Background usage is off for Sonic. Allow it in the app's Battery settings, or keep Sonic open. It continues when you're back."
         else "Android interrupted this download. Your progress is kept, and it continues by itself."
 
     private fun scheduleAutoResume(id: String) {
@@ -624,7 +624,7 @@ class SoulseekRepository(
     fun onServiceTimeout(): Job = work {
         clearSessionWork(SoulseekDisconnectReason.SERVICE_TIMEOUT.label, false)
         connection.disconnect(SoulseekDisconnectReason.SERVICE_TIMEOUT)
-        _error.value = "Android stopped background activity. Your progress is saved. Open Runout and reconnect."
+        _error.value = "Android stopped background activity. Your progress is saved. Open Sonic and reconnect."
     }
     fun disconnectFromNotification(): Job = work {
         clearSessionWork(SoulseekDisconnectReason.MANUAL.label, false)
@@ -747,7 +747,7 @@ class SoulseekRepository(
                     catch (e: RuntimeException) {
                         _sharing.value = false; shares.clear(); _uploads.value = emptyList()
                         command("shares") { put("files", JSONArray()) }
-                        _error.value = "Android paused background sharing. Open Runout to enable sharing again."
+                        _error.value = "Android paused background sharing. Open Sonic to enable sharing again."
                     }
                 }
             }
@@ -798,7 +798,7 @@ class SoulseekRepository(
         val folder = storage.albumDirectory(albumTitle, albumId)
         var row = dao.transfer(initial.id) ?: return@withLock
         val finalName = initial.id.take(10) + " " + SoulseekPolicy.safeName(stage.name, "Track.flac")
-        val partialName = ".${initial.id}.runout-part"
+        val partialName = ".${initial.id}.sonic-part"
         val target = row.publishedUri?.let { DocumentFile.fromSingleUri(context, Uri.parse(it)) }?.takeIf { it.exists() }
             ?: folder.findFile(partialName)
             ?: folder.createFile("application/octet-stream", partialName)
@@ -975,7 +975,7 @@ class SoulseekRepository(
             val source = if (track.uri.startsWith("file:")) File(Uri.parse(track.uri).path!!) else File(stagingDir, track.fileName)
             require(source.canonicalFile.parentFile == stagingDir.canonicalFile && FlacPolicy.read(source) != null) { "Internet Archive supplied an invalid FLAC file." }
             val name = SoulseekPolicy.safeName(track.fileName.ifBlank { source.name }, "Track.flac")
-            val partialName = ".runout-${SoulseekPolicy.digest(album.id).take(16)}-$index.part"
+            val partialName = ".sonic-${SoulseekPolicy.digest(album.id).take(16)}-$index.part"
             val target = folder.findFile(name)?.takeIf { it.isFile } ?: folder.findFile(partialName) ?: folder.createFile("application/octet-stream", partialName) ?: throw IOException("Could not create a file in your download folder.")
             storage.copyValidated(source, target.uri, source.length())
             currentCoroutineContext().ensureActive(); requireSignedIn()
@@ -1043,7 +1043,7 @@ class SoulseekRepository(
     private fun writeDownloadRecord(folder: DocumentFile, album: Album, links: List<String>) {
         runCatching {
             val bytes = java.io.ByteArrayOutputStream().use { out ->
-                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("runout", "Runout", 0), album, sleeve = album.coverPath?.let(::File), sources = links + listOf("thumbnails/${album.id}.jpg"))
+                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("sonic", "Sonic.", 0), album, sleeve = album.coverPath?.let(::File), sources = links + listOf("thumbnails/${album.id}.jpg"))
                 out.toByteArray()
             }
             storage.writeDocument(folder, "record.vinyl", bytes)

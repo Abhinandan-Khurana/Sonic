@@ -608,7 +608,7 @@ class ListeningRoomUiTest {
         // The signal chain heads the list: the file, Runout's path, and where it goes out.
         compose.onNodeWithTag("signal-path").assertExists()
         compose.onNodeWithTag("spec:Track").assertTextContains("24-bit · 96 khz", ignoreCase = true)
-        compose.onNodeWithTag("spec:Runout").assertTextContains("32-bit float", substring = true, ignoreCase = true)
+        compose.onNodeWithTag("spec:Sonic").assertTextContains("32-bit float", substring = true, ignoreCase = true)
         compose.onNodeWithTag("settings:SOUND").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("settings:SOUND").performClick()
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()
@@ -696,7 +696,7 @@ class ListeningRoomUiTest {
         compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), RecordingActions(), initialPanel = Panel.FRIENDS) }
         compose.onNodeWithTag("messages-local-note").assertIsDisplayed()
         compose.onNodeWithText("messages are kept only on this phone.").assertIsDisplayed()
-        compose.onNodeWithText("uninstalling runout deletes them.").assertIsDisplayed()
+        compose.onNodeWithText("uninstalling sonic deletes them.").assertIsDisplayed()
         compose.onNodeWithTag("friend:maya").performClick()
         compose.onNodeWithTag("messages-local-note").assertDoesNotExist()
     }

@@ -12,7 +12,7 @@ interface Http {
 }
 
 object DefaultHttp : Http {
-    const val USER_AGENT = "Runout/0.5.1 ( https://github.com/Abhiroop1122/runout )"
+    const val USER_AGENT = "Sonic/0.7.0 ( https://github.com/Abhiroop1122/runout )"
 
     private fun open(url: String, rangeFrom: Long = 0L): HttpURLConnection? {
         var current = url

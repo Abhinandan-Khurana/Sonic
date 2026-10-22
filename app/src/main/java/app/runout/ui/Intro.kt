@@ -173,7 +173,7 @@ fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
             .background(Room.Background)
             .clearAndSetSemantics {
                 testTag = "onboarding-intro"
-                contentDescription = "Runout. A record drops onto the platter. Tap to skip."
+                contentDescription = "Sonic. A record drops onto the platter. Tap to skip."
                 role = Role.Button
                 onClick { finish(); true }
             }

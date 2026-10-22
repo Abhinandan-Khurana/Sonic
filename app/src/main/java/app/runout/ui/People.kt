@@ -137,7 +137,7 @@ private fun CreateAccount(profile: Profile, actions: RoomActions) {
         ColourDots(Profile.ACCENTS, accent, { accent = it }, Modifier.padding(vertical = 8.dp))
         Pill("Create account", { actions.createAccount(u, name, accent) }, active = true, enabled = u.isNotEmpty() && problem == null)
         BasicText(
-            "There's no Runout server. Your account is a key made on this phone, and your profile (username, name, colour and shelf) is published, signed, to free public relays so people can find you. Anyone can see it. Nobody can change it but you.",
+            "There's no Sonic server. Your account is a key made on this phone, and your profile (username, name, colour and shelf) is published, signed, to free public relays so people can find you. Anyone can see it. Nobody can change it but you.",
             style = Room.LabelQuiet, modifier = Modifier.padding(top = 8.dp),
         )
         BasicText(

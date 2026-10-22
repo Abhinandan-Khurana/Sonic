@@ -72,7 +72,7 @@ abstract class SoulseekForegroundService : Service() {
         val disconnect = PendingIntent.getService(this, notificationId, Intent(this, javaClass).setAction(DISCONNECT), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Runout")
+            .setContentTitle("Sonic.")
             .setContentText(text)
             .setContentIntent(open)
             .setOngoing(true)

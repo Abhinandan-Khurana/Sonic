@@ -1690,7 +1690,7 @@ private val HELP_LED = TeHelp(
     "help · room · first time", "the led window",
     listOf(
         "shows the track and time while a record plays.",
-        "hold it to open the signal chain: what the file is, what runout does, and what your speaker gets.",
+        "hold it to open the signal chain: what the file is, what sonic does, and what your speaker gets.",
     ),
 )
 

@@ -88,7 +88,7 @@ private fun lampColor(session: SoulseekSession): Color = when {
 private val HelpCovers = TeHelp(
     "help · soulseek › covers", "find missing covers online",
     listOf(
-        "when an album has no cover, runout sends its artist and title to musicbrainz, the cover art archive and the internet archive.",
+        "when an album has no cover, sonic sends its artist and title to musicbrainz, the cover art archive and the internet archive.",
         "nothing else leaves your phone: no files, no listening history.",
         "off: albums without art get a plain sleeve.",
     ),
@@ -124,7 +124,7 @@ private val HelpEncryption = TeHelp(
 private val HelpBackgroundUsage = TeHelp(
     "help · downloads", "background usage is off",
     listOf(
-        "android pauses runout's downloads as soon as you leave the app.",
+        "android pauses sonic's downloads as soon as you leave the app.",
         "allow background usage in app info › battery to let them finish while the phone sleeps. paused downloads continue when you come back.",
     ),
 )
@@ -233,7 +233,7 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
         NetworkNote(state, actions)
         Section("02 keep your downloads") {
             if (state.downloadFolder == null) BasicText(
-                "choose a music folder before downloading. flac files in this folder stay accessible to other players and remain after uninstalling runout.",
+                "choose a music folder before downloading. flac files in this folder stay accessible to other players and remain after uninstalling sonic.",
                 style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
             )
             FolderRow(state.downloadFolder, actions::pickDownloadFolder, "download-folder")
@@ -561,14 +561,14 @@ private fun TransferRow(index: Int, transfer: SoulseekTransfer, state: RoomState
             else -> Unit
         }
         val why = when {
-            transfer.recovery == Recovery.RETRY -> "${reason ?: "the peer went away"}. runout asks again by itself and keeps what's downloaded."
+            transfer.recovery == Recovery.RETRY -> "${reason ?: "the peer went away"}. sonic asks again by itself and keeps what's downloaded."
             transfer.recovery == Recovery.SEEK -> "${reason ?: "this copy failed"}. looking for the identical file from someone else."
             transfer.replaced != null && transfer.state != SoulseekTransferState.FAILED -> "now from ${transfer.username}: ${transfer.replaced}'s copy failed."
-            transfer.state == SoulseekTransferState.FAILED && transfer.failure == FailureKind.FOLDER -> "runout couldn't save it to your music folder. choose the folder again, then retry."
+            transfer.state == SoulseekTransferState.FAILED && transfer.failure == FailureKind.FOLDER -> "sonic couldn't save it to your music folder. choose the folder again, then retry."
             transfer.state == SoulseekTransferState.FAILED && transfer.failure == FailureKind.BROKEN -> "the file arrived broken, so it wasn't saved."
 
             restricted && transfer.state == SoulseekTransferState.PAUSED && (transfer.error == null || SoulseekPolicy.isInterruption(transfer.error)) ->
-                "android paused this download: background usage is off for runout. it continues when you're back."
+                "android paused this download: background usage is off for sonic. it continues when you're back."
             // Paused while signed out, and signed back in since: the note's first half no longer applies.
             signedIn && transfer.state == SoulseekTransferState.PAUSED && transfer.error?.contains("sign in", ignoreCase = true) == true ->
                 "interrupted. resume to continue."
@@ -696,7 +696,7 @@ private fun LocalMessagesNote() {
         Box(Modifier.padding(top = 3.dp).size(8.dp).background(Room.Warning))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             BasicText("messages are kept only on this phone.", style = Room.Label)
-            BasicText("uninstalling runout deletes them.", style = Room.Label)
+            BasicText("uninstalling sonic deletes them.", style = Room.Label)
         }
     }
 }
@@ -1012,11 +1012,11 @@ internal data class RecordCard(val artist: String, val album: String, val qualit
         fun e(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
         val q = quality?.let { "&q=${e(it)}" } ?: ""
         val source = if (peer != null && folder != null) "&u=${e(peer)}&d=${e(folder)}" else ""
-        return "♪ $album — $artist" + (quality?.let { " · $it" } ?: "") + "\nrunout:record?artist=${e(artist)}&album=${e(album)}$q$source"
+        return "♪ $album — $artist" + (quality?.let { " · $it" } ?: "") + "\nsonic:record?artist=${e(artist)}&album=${e(album)}$q$source"
     }
 
     companion object {
-        private val line = Regex("runout:record\\?artist=([^&\\s]*)&album=([^&\\s]*)(?:&q=([^&\\s]*))?(?:&u=([^&\\s]*))?(?:&d=([^&\\s]*))?")
+        private val line = Regex("(?:sonic|runout):record\\?artist=([^&\\s]*)&album=([^&\\s]*)(?:&q=([^&\\s]*))?(?:&u=([^&\\s]*))?(?:&d=([^&\\s]*))?")
         fun of(album: app.runout.model.Album, peer: String? = null, folder: String? = null) = RecordCard(album.artist, album.title, album.quality.label, peer, folder)
         fun parse(text: String): RecordCard? {
             val m = line.find(text) ?: return null
@@ -1077,7 +1077,7 @@ private fun BackgroundUseNote(onHelp: () -> Unit) {
             InfoDot("background usage", onHelp)
         }
         BasicText(
-            "android stops downloads as soon as you leave the app. keep runout open, or allow background usage: app info › battery › allow background usage. interrupted downloads continue when you come back.",
+            "android stops downloads as soon as you leave the app. keep sonic open, or allow background usage: app info › battery › allow background usage. interrupted downloads continue when you come back.",
             style = Room.Label.copy(lineHeight = 15.sp),
         )
         TeButton("open app info", {

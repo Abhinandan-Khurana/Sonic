@@ -156,7 +156,7 @@ private const val VIEW_ASPECT = 1.72f
 
 /** What's on the deck, in two parts: for TalkBack, read over the LED windows. */
 fun screenLines(deck: DeckState): Pair<String, String> {
-    val album = deck.album ?: return "RUNOUT · DROP A RECORD ON THE PLATTER" to "NO RECORD"
+    val album = deck.album ?: return "SONIC. DROP A RECORD ON THE PLATTER" to "NO RECORD"
     val track = deck.currentTrack
     val title = "${deck.trackCode} ${track?.title ?: album.title} · ${album.artist}"
     val s = deck.trackPositionMs / 1000
