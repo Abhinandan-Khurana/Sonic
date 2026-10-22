@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import app.runout.ui.settings.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,50 +78,13 @@ internal fun connectionLabel(session: SoulseekSession) = when(session.state) {
 }
 
 /** The lamp colour for a Soulseek connection: green online, amber on the way, red on a problem. */
-private fun lampColor(session: SoulseekSession): Color = when {
+internal fun lampColor(session: SoulseekSession): Color = when {
     session.connected -> Room.Online
     session.state == SoulseekConnection.ERROR || session.error != null -> Room.Danger
     session.state == SoulseekConnection.CONNECTING || session.state == SoulseekConnection.RECONNECTING -> Room.Warning
     else -> Room.Faint
 }
 
-// The help panels behind each TE Help "?" on these pages, worded as on the TE · Help panels board.
-private val HelpCovers = TeHelp(
-    "help · soulseek › covers", "find missing covers online",
-    listOf(
-        "when an album has no cover, sonic sends its artist and title to musicbrainz, the cover art archive and the internet archive.",
-        "nothing else leaves your phone: no files, no listening history.",
-        "off: albums without art get a plain sleeve.",
-    ),
-)
-private val HelpSharing = TeHelp(
-    "help · soulseek › sharing", "share selected flac folder",
-    listOf(
-        "other soulseek users can browse the folder you pick and download from it.",
-        "only that folder is shared, never the rest of your phone. sharing helps your downloads move faster.",
-    ),
-)
-private val HelpWifiOnly = TeHelp(
-    "help · soulseek › wi-fi only", "share on wi-fi only",
-    listOf(
-        "on mobile data, nobody can start a download from you. an upload that's already running is allowed to finish.",
-        "sharing picks up again by itself when you're back on wi-fi or ethernet.",
-    ),
-)
-private val HelpBackground = TeHelp(
-    "help · soulseek › background", "stay online in the background",
-    listOf(
-        "keeps you signed in to soulseek after you leave the app, so downloads and messages keep arriving.",
-        "it uses a little battery and shows a quiet notification while it runs.",
-    ),
-)
-private val HelpEncryption = TeHelp(
-    "help · soulseek › security", "not encrypted",
-    listOf(
-        "soulseek sends your id, password and private messages without encryption.",
-        "use a password you don't use anywhere else, and don't share anything private in chats.",
-    ),
-)
 private val HelpBackgroundUsage = TeHelp(
     "help · downloads", "background usage is off",
     listOf(
@@ -180,192 +144,6 @@ private fun SignInNotice(onAccount: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
         BasicText("sign in with soulseek to search, download flac and send private messages.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
         TeButton("sign in with soulseek", onAccount)
-    }
-}
-
-/**
- * Settings › Soulseek, below the back link: the intro, then four numbered sections (account,
- * downloads folder, collection, sharing) ruled in hairlines, and the amber "not encrypted" note.
- */
-@Composable
-fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -> Unit, onSignIn: () -> Unit = {}) {
-    val session = state.soulseekSession
-    var help by remember { mutableStateOf<TeHelp?>(null) }
-    Column(Modifier.fillMaxWidth().testTag("panel:account"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        BasicText(
-            "your local flac library is yours to play without an account. sign in to search soulseek, download from soulseek or the internet archive, and message people.",
-            style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
-        )
-        Section(if (session.hasAccount) "01 account · ${session.username}" else "01 account") {
-            Row(
-                Modifier.fillMaxWidth().hairlineTop().hairlineBottom().padding(vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(11.dp),
-            ) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.size(8.dp).background(if (session.hasAccount) lampColor(session) else Room.Faint))
-                    BasicText(
-                        when {
-                            !session.hasAccount -> "not signed in"
-                            session.connected -> "connected to soulseek"
-                            session.error != null -> session.error.lowercase()
-                            session.state == SoulseekConnection.CONNECTING -> "connecting to soulseek"
-                            session.state == SoulseekConnection.RECONNECTING -> "reconnecting to soulseek"
-                            else -> "connection paused"
-                        },
-                        style = Room.Label.copy(color = if (session.hasAccount && session.error != null) Room.Danger else Room.Ink, lineHeight = 15.sp),
-                        modifier = Modifier.testTag("account-connection"),
-                    )
-                }
-                if (session.hasAccount) {
-                    if (!session.connected) TeButton("reconnect", actions::reconnectSoulseek, kind = KeyKind.OUTLINE, enabled = session.state != SoulseekConnection.RECONNECTING)
-                    TeButton("sign out", actions::signOutSoulseek, kind = KeyKind.OUTLINE)
-                } else {
-                    // One sign-in for the whole app: the same screen as onboarding, always remembered.
-                    TeButton("sign in with soulseek", onSignIn, Modifier.testTag("account-sign-in"))
-                }
-            }
-            if (!session.hasAccount) {
-                state.soulseekSavedUsername?.let { TeLink("sign in again as $it", actions::signInSavedSoulseek, tag = "account-saved") }
-                TeLink("continue offline", onOffline, tag = "account-offline")
-            }
-        }
-        NetworkNote(state, actions)
-        Section("02 keep your downloads") {
-            if (state.downloadFolder == null) BasicText(
-                "choose a music folder before downloading. flac files in this folder stay accessible to other players and remain after uninstalling sonic.",
-                style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
-            )
-            FolderRow(state.downloadFolder, actions::pickDownloadFolder, "download-folder")
-        }
-        Section("03 collection & storage") {
-            HelpToggle(
-                "Find missing covers online",
-                "Sends artist and album title to MusicBrainz, the Cover Art Archive and the Internet Archive. Off unless you opt in.",
-                state.coverLookupEnabled, actions::setCoverLookupEnabled,
-            ) { help = HelpCovers }
-        }
-        Section("04 share flac on soulseek") {
-            BasicText(
-                "choose a folder to share. only validated flac files in that folder are visible to other users.",
-                style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
-            )
-            if (state.sharedFolder == null) TeButton("choose sharing folder", actions::pickSharedFolder, Modifier.fillMaxWidth().testTag("shared-folder"), kind = KeyKind.OUTLINE)
-            else FolderRow(state.sharedFolder, actions::pickSharedFolder, "shared-folder")
-            HelpToggle(
-                "Share selected FLAC folder",
-                "Other Soulseek users can search and download files you explicitly share.",
-                state.soulseekShareConsent, actions::setSoulseekSharing,
-                enabled = session.hasAccount && (state.soulseekShareConsent || (session.connected && state.sharedFolder != null)),
-            ) { help = HelpSharing }
-            HelpToggle(
-                "Share on Wi-Fi only",
-                "Uploads stop on mobile data and start again on Wi-Fi.",
-                state.soulseekWifiOnly, actions::setSoulseekWifiOnly,
-                enabled = session.hasAccount,
-            ) { help = HelpWifiOnly }
-            Column(
-                Modifier.fillMaxWidth().alpha(if (session.hasAccount) 1f else 0.4f).hairlineTop().padding(vertical = 16.dp).testTag("upload-slots"),
-                verticalArrangement = Arrangement.spacedBy(11.dp),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BasicText("uploads at once", style = Room.Text)
-                    BasicText("how many people can download from you at the same time. fewer is easier on a slow connection.", style = Room.LabelQuiet)
-                }
-                Segments(app.runout.soulseek.SoulseekPreferences.UPLOAD_SLOT_CHOICES, state.soulseekUploadSlots, { "$it" }, tag = { "upload-slots:$it" }) {
-                    if (session.hasAccount) actions.setSoulseekUploadSlots(it)
-                }
-            }
-            HelpToggle(
-                "Stay online in the background",
-                "Keeps private messages and sharing available with an ongoing notification you can disconnect from.",
-                state.soulseekBackgroundConsent, actions::setSoulseekStayOnline,
-                enabled = session.hasAccount && (state.soulseekBackgroundConsent || session.connected),
-            ) { help = HelpBackground }
-            if (state.soulseekShareConsent && state.soulseekWaitingForWifi) BasicText("sharing is paused until you're on wi-fi.", style = Room.LabelQuiet.copy(lineHeight = 15.sp), modifier = Modifier.testTag("sharing-waiting-wifi"))
-            else if(state.soulseekShareConsent && !state.soulseekSharing) BasicText("sharing is paused. it resumes after connection and folder checks succeed.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
-            if(state.soulseekBackgroundConsent && !state.soulseekStayOnline) BasicText("background mode is paused. check notification permission and reconnect to resume.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
-        }
-        // The one warning on the page: amber, a bold "!", and its "?".
-        Row(Modifier.fillMaxWidth().background(Room.Warning).padding(11.dp), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText("!", style = Room.Heading.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
-            BasicText("soulseek's protocol does not encrypt sign-in credentials or private messages.", style = Room.Label.copy(lineHeight = 15.sp), modifier = Modifier.weight(1f))
-            InfoDot("encryption") { help = HelpEncryption }
-        }
-    }
-    TeHelpSheet(help) { help = null }
-}
-
-/** A numbered section: its 10/400 grey label, then its parts 11 dp apart. */
-@Composable
-private fun Section(label: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-        BasicText(label, style = Room.LabelQuiet)
-        content()
-    }
-}
-
-/** A folder between hairlines: its path in 12/400 and "change →" (or "choose →") at the right. */
-@Composable
-private fun FolderRow(folder: String?, onPick: () -> Unit, tag: String) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .hairlineTop()
-            .hairlineBottom()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onPick)
-            .testTag(tag)
-            .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
-    ) {
-        BasicText(folder?.let(::folderLabel) ?: "no folder yet", style = Room.Text.copy(color = if (folder == null) Room.Quiet else Room.Ink), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        BasicText(if (folder == null) "choose" else "change", style = Room.Text)
-        BasicText("→", style = Room.Text)
-    }
-}
-
-/** A folder picked through Android's picker, as a path: "content://…/tree/primary%3AMusic" reads "/Music". */
-private fun folderLabel(uri: String): String {
-    val decoded = runCatching { android.net.Uri.decode(uri) }.getOrNull() ?: uri
-    val tail = decoded.substringAfterLast("/tree/").substringAfterLast(':')
-    return "/" + tail.trimStart('/')
-}
-
-/**
- * The TE Toggle Row with a TE Help "?" after the title that opens [onHelp]'s panel: a hairline
- * above, 16 dp above and below, 12/400 title over a 10/400 grey line, and the switch.
- */
-@Composable
-private fun HelpToggle(
-    title: String,
-    detail: String?,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-    enabled: Boolean = true,
-    tag: String = "toggle:$title",
-    onHelp: (() -> Unit)? = null,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.4f)
-            .hairlineTop()
-            .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Switch) { onChange(!checked) }
-            .semantics { stateDescription = if (checked) "On" else "Off" }
-            .testTag(tag)
-            .padding(vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BasicText(title.lowercase(), style = Room.Text)
-                if (onHelp != null) InfoDot(title, onHelp)
-            }
-            if (detail != null) BasicText(detail.lowercase(), style = Room.LabelQuiet)
-        }
-        Switch(checked)
     }
 }
 

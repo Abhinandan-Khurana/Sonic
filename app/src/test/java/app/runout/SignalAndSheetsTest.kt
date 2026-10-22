@@ -20,7 +20,7 @@ import app.runout.sound.SoundSettings
 import app.runout.ui.Panel
 import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
-import app.runout.ui.SettingsSection
+import app.runout.ui.settings.SettingsSection
 import app.runout.ui.signalPath
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Assert.assertEquals

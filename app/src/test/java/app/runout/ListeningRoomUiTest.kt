@@ -1,5 +1,8 @@
 package app.runout
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
@@ -62,7 +65,7 @@ import app.runout.ui.CoverCache
 import app.runout.ui.Panel
 import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
-import app.runout.ui.SettingsSection
+import app.runout.ui.settings.SettingsSection
 import app.runout.soulseek.*
 import app.runout.sharing.VinylPackage
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -446,6 +449,46 @@ class ListeningRoomUiTest {
         assertEquals(listOf("wifi:false", "slots:3"), calls)
         compose.onNodeWithTag("sharing-waiting-wifi").performScrollTo().assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/soulseek_upload_settings.png")
+    }
+
+    @Test
+    fun `settings run sound, flags, library, soulseek, about, and library keeps the folders and covers`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setCoverLookupEnabled(enabled: Boolean) { calls += "covers:$enabled" }
+            override fun pickDownloadFolder() { calls += "pick-download" }
+        }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.SETTINGS) }
+        val rows = compose.onAllNodes(SemanticsMatcher("a settings row") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("settings:") == true })
+            .fetchSemanticsNodes().map { it.config[SemanticsProperties.TestTag] }
+        assertEquals(listOf("SOUND", "FLAGS", "LIBRARY", "ACCOUNT", "ABOUT").map { "settings:$it" }, rows)
+        compose.onNodeWithTag("settings:LIBRARY").performScrollTo().performClick()
+        compose.onNodeWithText("02 download folder").assertExists()
+        compose.onNodeWithTag("download-folder").performScrollTo().performClick()
+        compose.onNodeWithTag("toggle:Find missing covers online").performScrollTo().performClick()
+        assertEquals(listOf("pick-download", "covers:true"), calls)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_library.png")
+    }
+
+    @Test
+    fun `soulseek settings grey out how you share until sharing is on`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setSoulseekWifiOnly(enabled: Boolean) { calls += "wifi:$enabled" }
+            override fun setSoulseekUploadSlots(slots: Int) { calls += "slots:$slots" }
+            override fun setTurtleMode(enabled: Boolean) { calls += "turtle:$enabled" }
+        }
+        val s = state().copy(soulseekSession = SoulseekSession(SoulseekConnection.CONNECTED, "abhi", authenticated = true), soulseekShareConsent = false)
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
+        compose.onNodeWithText("03 sharing").assertExists()
+        compose.onNodeWithText("04 connection").assertExists()
+        compose.onNodeWithTag("toggle:Share on Wi-Fi only").performScrollTo().assertIsNotEnabled().performClick()
+        compose.onNodeWithTag("upload-slots:3").performScrollTo().performClick()
+        compose.onNodeWithTag("settings-turtle").performScrollTo().performClick()
+        assertEquals(listOf("turtle:true"), calls)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/soulseek_settings.png")
     }
 
     private fun broken(id: String, user: String, name: String, state: SoulseekTransferState, error: String, kind: FailureKind, recovery: Recovery? = null, retryAt: Long? = null) =
