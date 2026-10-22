@@ -133,11 +133,12 @@ internal fun Modifier.overhangTap(role: Role = Role.Button, enabled: Boolean = t
  */
 internal fun Modifier.fillPageHeight(): Modifier = composed {
     val density = LocalDensity.current
-    val bottomInset = WindowInsets.safeDrawing.union(WindowInsets.ime).getBottom(density)
+    // The keyboard or the nav bar, whichever is taller (the nav bar sits behind the keyboard).
+    val bottomInset = pageBottom().getBottom(density)
     var top by remember { mutableIntStateOf(-1) }
     var rootHeight by remember { mutableIntStateOf(0) }
     val min = if (top < 0) 0.dp else with(density) {
-        (rootHeight - top - bottomInset - NAV_HEIGHT.roundToPx() - 22.dp.roundToPx()).coerceAtLeast(0).toDp()
+        (rootHeight - top - bottomInset - 22.dp.roundToPx()).coerceAtLeast(0).toDp()
     }
     this
         .onGloballyPositioned { c ->

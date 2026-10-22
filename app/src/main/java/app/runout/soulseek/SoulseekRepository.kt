@@ -230,6 +230,12 @@ class SoulseekRepository(
         try { command("search") { put("id", id); put("query", text); put("timeoutMs", 30000) } }
         catch (e: Exception) { _searching.value = false; _searchStatus.update { it.copy(phase = SearchPhase.FAILED, error = friendly(e)) }; throw e }
     } }
+    /** Dig left behind: the search stopped and its results gone, so Dig opens on its own page. */
+    fun clearSearch(): Job = work { searchMutex.withLock {
+        searchId?.let { id -> runCatching { command("cancel_search") { put("id", id) } }.onFailure { if (it is CancellationException) throw it } }
+        searchId = null; _searching.value = false
+        searchIndex.clear(); _searchResults.value = emptyList(); _searchStatus.value = SoulseekSearchStatus()
+    } }
     fun stopSearch(): Job = work { searchMutex.withLock {
         searchId?.let { id -> command("cancel_search") { put("id", id) } }
         searchId = null; _searching.value = false

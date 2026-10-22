@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.union
+import androidx.compose.runtime.key
 import app.runout.ui.deck.RecordMaps
 import app.runout.ui.deck.DiscRenderer
 import app.runout.ui.deck.DeckRenderer
@@ -245,6 +248,8 @@ interface RoomActions : DeckActions {
     fun signOutSoulseek() {}
     fun searchSoulseek(query: String) {}
     fun stopSoulseekSearch() {}
+    /** Ends Dig's search and empties it: Dig opens on its own page next time. */
+    fun clearSearch() {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}
     fun downloadSoulseekFolder(result: SoulseekSearchResult) {}
     fun pauseSoulseekTransfer(id: String) {}
@@ -307,6 +312,8 @@ fun RoomScreen(
     initialPanel: Panel? = null,
     /** Which Settings page is open; null is the list. */
     initialSettings: SettingsSection? = null,
+    /** How long Dig keeps a search after you leave it (short in tests). */
+    digForgetMs: Long = DIG_FORGET_MS,
 ) {
     val density = LocalDensity.current
     val appContext = androidx.compose.ui.platform.LocalContext.current
@@ -339,6 +346,8 @@ fun RoomScreen(
     // Pages reached from another page (Downloads from Settings, Dig from Downloads): back returns there.
     val pageHistory = remember { mutableStateListOf<Panel>() }
     val pageSteps = remember { PageSteps() }
+    // A place's page is drawn fresh when this changes: tapping the open place again takes it home.
+    var home by remember { mutableIntStateOf(0) }
     fun closePanel() {
         if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
         pageHistory.clear()
@@ -355,6 +364,16 @@ fun RoomScreen(
     // The head's "← back": out of the innermost step, else to the page before; null leaves "close ×".
     // Read by the head itself, so a step coming or going doesn't recompose the room.
     val headBack: () -> (() -> Unit)? = { pageSteps.steps.lastOrNull()?.second ?: if (pageHistory.isNotEmpty()) ({ backPage() }) else null }
+    // Ten seconds away from Dig and its search is over: Dig opens on its own page next time.
+    var wasDig by remember { mutableStateOf(false) }
+    LaunchedEffect(panel == Panel.DIG) {
+        if (panel == Panel.DIG) { wasDig = true; return@LaunchedEffect }
+        if (!wasDig) return@LaunchedEffect
+        delay(digForgetMs)
+        wasDig = false
+        actions.closeSoulseekFolder()
+        actions.clearSearch()
+    }
     // A folder preview always opens inside the Dig sheet, wherever it was asked for.
     LaunchedEffect(state.folderPreview != null) {
         if (state.folderPreview != null && panel == null) panel = Panel.DIG
@@ -549,12 +568,11 @@ fun RoomScreen(
                 )
             }
             val front = state.albums.firstOrNull { it.id == frontId } ?: state.albums.firstOrNull()
-            val line = nowLine(state, pulled != null && ejecting == null, nearPlatter)
             val help = @Composable { h: TeHelp, m: Modifier -> if (roomHelps) HelpKey(h.title, m) { roomHelp = h } }
 
             if (portrait) {
-                // TE · Home: top bar, the deck's band, the crate, its caption, the track wheel and the
-                // "now spinning" line, with the nav bar (drawn by the room) underneath.
+                // TE · Home: top bar, the deck's band, the crate, its caption and the track wheel, with
+                // the nav bar (drawn by the room) underneath.
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -578,7 +596,6 @@ fun RoomScreen(
                         Box(Modifier.fillMaxWidth().weight(105f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
                             TrackWheel(state, actions, rows = 4, help = { help(HELP_WHEEL, it) })
                         }
-                        NowSpinning(line, hint = state.albums.size > 1)
                     }
                 }
             } else {
@@ -608,7 +625,6 @@ fun RoomScreen(
                             Box(Modifier.fillMaxWidth().weight(80f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
                                 TrackWheel(state, actions, rows = 3)
                             }
-                            NowSpinning(line, hint = state.albums.size > 1, landscape = true)
                         }
                     }
                 }
@@ -943,7 +959,7 @@ fun RoomScreen(
                     onClose = { closePanel() },
                     onBack = headBack,
                     catchTaps = open != null,
-                ) { CompositionLocalProvider(LocalPageSteps provides pageSteps) { panelContent(shown) } }
+                ) { CompositionLocalProvider(LocalPageSteps provides pageSteps) { key(shown, home) { panelContent(shown) } } }
             }
         }
 
@@ -960,8 +976,11 @@ fun RoomScreen(
             if (page != null) shown = page
             val title = if (shown == Panel.SETTINGS) settings?.label ?: shown.title else shown.title
             // Dig and Friends scroll their own lists; the rest scroll as one page.
-            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
-                CompositionLocalProvider(LocalPageSteps provides pageSteps) { panelContent(shown) }
+            // Sideways, the places that need the phone upright say so instead; turned back, the page is as it was.
+            val upright = portrait || shown !in UPRIGHT_ONLY
+            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = upright && shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
+                if (!upright) UprightNote(Modifier.fillMaxWidth().weight(1f), large = true)
+                else CompositionLocalProvider(LocalPageSteps provides pageSteps) { key(shown, home) { panelContent(shown) } }
             }
         }
 
@@ -973,15 +992,24 @@ fun RoomScreen(
                 active = page,
                 badges = navBadges(state),
                 onOpen = {
+                    // The open place again: back to its own page (Settings' list, the chats, the
+                    // week's drops, Dig's search), never out to the room.
+                    if (panel == it) {
+                        if (it == Panel.DROPS) actions.listen(null)
+                        home++
+                    }
                     if (it == Panel.SETTINGS) settings = null
                     // Friends always opens on its own page, not on the last chat.
                     if (it == Panel.FRIENDS) actions.closeSoulseekConversation()
+                    // A folder preview belongs to Dig's visit: leaving Dig, or tapping it again, closes it.
+                    if (state.folderPreview != null && (panel == Panel.DIG || it == Panel.DIG)) actions.closeSoulseekFolder()
                     // The nav bar starts afresh: nothing to go back to.
                     pageHistory.clear()
-                    panel = if (panel == it) null else it
+                    panel = it
                     pulledId = null
                 },
                 onHome = if (page != null) ({ closePanel() }) else null,
+                upright = portrait,
                 modifier = Modifier
                     .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
                     .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
@@ -1021,12 +1049,12 @@ fun RoomScreen(
             )
         }
 
-        // Where toasts sit: above the "now spinning" line and the tabs, on the room's half in landscape.
+        // Where toasts sit: above the tabs, on the room's half in landscape.
         val toastAt = Modifier
             .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
             .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(bottom = NAV_HEIGHT + 49.dp, start = 22.dp, end = 22.dp)
+            .padding(bottom = NAV_HEIGHT + 16.dp, start = 22.dp, end = 22.dp)
             .widthIn(max = 520.dp)
 
         // Platter occupied: the error toast for 4 s, with "eject →" (the put-back).
@@ -1262,9 +1290,10 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
         Column(
             Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .windowInsetsPadding(WindowInsets.ime)
-                .padding(bottom = if (navRoom) NAV_HEIGHT else 0.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                // The nav bar's room, or the keyboard's when it's up (the nav bar is behind it then):
+                // the larger of the two, never both.
+                .windowInsetsPadding(pageBottom(navRoom)),
         ) {
             TeScreenHead(index, title, onClose, onBack = onBack)
             val body = Modifier.fillMaxWidth().weight(1f)
@@ -1277,6 +1306,15 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
         }
     }
 }
+
+/** What a page keeps clear at its foot: the keyboard when it's up, else the nav bar and the system's bar. */
+@Composable
+internal fun pageBottom(navRoom: Boolean = true): WindowInsets =
+    WindowInsets.ime.union(WindowInsets.navigationBars.add(WindowInsets(bottom = if (navRoom) NAV_HEIGHT else 0.dp)))
+        .only(WindowInsetsSides.Bottom)
+
+/** How long Dig keeps a search after you leave it. */
+internal const val DIG_FORGET_MS = 10_000L
 
 /** The room's column in landscape: 412.5 of 892 on the board, beside the deck's band. */
 internal const val LANDSCAPE_ROOM = 0.4625f
@@ -1430,35 +1468,6 @@ private fun AlbumCaption(album: Album, portrait: Boolean) {
     }
 }
 
-/** The line above the nav: an orange lamp and what's happening, and "flick ← →" for the crate. */
-@Composable
-private fun NowSpinning(line: Pair<String, Boolean>, hint: Boolean, landscape: Boolean = false) {
-    Row(
-        Modifier.fillMaxWidth().hairlineTop(Room.HairlineSoft).padding(horizontal = 22.dp, vertical = if (landscape) 6.dp else 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Lamp(if (line.second) Room.Signal else null)
-        BasicText(line.first, style = Room.Label, maxLines = 1, modifier = Modifier.weight(1f).testTag("now-line"))
-        if (hint) BasicText("flick ← →", style = Room.LabelQuiet)
-    }
-}
-
-/** What the line above the nav says, and whether its lamp is lit. */
-private fun nowLine(state: RoomState, pulled: Boolean, overPlatter: Boolean): Pair<String, Boolean> {
-    val deck = state.deck
-    val side = deck.side?.letter?.lowercaseChar()
-    return when {
-        overPlatter && deck.album == null -> "let go to drop · side a" to true
-        pulled && deck.album == null -> "drag the record onto the platter" to true
-        deck.album == null -> "nothing on the platter" to false
-        deck.sideFinished -> "side $side finished — tap the record to flip it" to true
-        // Stopped with the needle down: the start key, a call or unplugged headphones paused it.
-        deck.needleDown && !deck.isPlaying -> "stopped — side $side · ${(deck.currentTrackTitle ?: deck.album.title).lowercase()} · press start" to false
-        deck.needleDown -> "now spinning — side $side · ${(deck.currentTrackTitle ?: deck.album.title).lowercase()}" to true
-        else -> "${deck.album.title.lowercase()} · side $side cued — lower the tonearm" to true
-    }
-}
 
 /** No records yet: TE · Home · empty, the 33/700 title, a line and the key, low for the thumb. */
 @Composable

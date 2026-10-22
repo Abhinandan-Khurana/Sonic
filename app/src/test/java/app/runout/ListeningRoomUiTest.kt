@@ -192,8 +192,9 @@ class ListeningRoomUiTest {
     @Test
     fun `landscape room, playing and pulled, renders`() {
         still("01_landscape_playing", state(deck = playing()), crateIndex = 3)
-        compose.onNodeWithText("now spinning — side a", substring = true).assertIsDisplayed()
-        compose.onNodeWithTag("nav:DROPS").assertIsDisplayed()
+        // Sideways the room is for listening: the places wait for the phone to be upright.
+        compose.onNodeWithTag("landscape-note").assertIsDisplayed()
+        compose.onNodeWithTag("nav:DROPS").assertDoesNotExist()
     }
 
     @Test
@@ -217,7 +218,8 @@ class ListeningRoomUiTest {
     @Test
     fun `a paused record with the needle down reads as stopped, not spinning`() {
         still("01b_stopped", state(deck = playing().copy(isPlaying = false)))
-        compose.onNodeWithText("stopped — side a", substring = true).assertIsDisplayed()
+        // The line above the tabs is gone; the deck's LED and the top bar say it.
+        compose.onNodeWithTag("now-line").assertDoesNotExist()
         compose.onNodeWithText("now spinning", substring = true).assertDoesNotExist()
     }
 
@@ -247,6 +249,59 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("menu:Details").performClick()
         compose.onNodeWithTag("record-details").assertIsDisplayed()
         compose.onAllNodesWithText("cc by 4.0", substring = true).onFirst().assertExists()
+    }
+
+    @Test
+    fun `tapping the open place again goes to its own page, not out to the room`() {
+        portrait()
+        compose.setContent {
+            RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.SOUND)
+        }
+        compose.onNodeWithTag("panel:sound").assertExists()
+        compose.onNodeWithTag("nav:SETTINGS").performClick()
+        compose.onNodeWithTag("settings:SOUND").assertExists()
+        compose.onNodeWithTag("nav:SETTINGS").performClick()
+        compose.onNodeWithTag("panel:settings").assertExists()
+        // Friends: from a chat back to the chats.
+        compose.onNodeWithTag("nav:FRIENDS").performClick()
+        compose.onNodeWithTag("friend:maya").performClick()
+        compose.onNodeWithTag("field:Private message").assertExists()
+        compose.onNodeWithTag("nav:FRIENDS").performClick()
+        compose.onNodeWithTag("field:Private message").assertDoesNotExist()
+        compose.onNodeWithTag("new-chat").assertExists()
+        // Drops: from a drop back to the week.
+        compose.onNodeWithTag("nav:DROPS").performClick()
+        compose.onNodeWithTag("drop:NS050").performScrollTo().performClick()
+        compose.onNodeWithTag("drop-preview").assertExists()
+        compose.onNodeWithTag("nav:DROPS").performClick()
+        compose.onNodeWithTag("drop-preview").assertDoesNotExist()
+        compose.onNodeWithTag("drop:NS050").assertExists()
+    }
+
+    @Test
+    fun `leaving dig forgets its search a while later`() {
+        portrait()
+        val cleared = java.util.concurrent.atomic.AtomicInteger()
+        val actions = object : RecordingActions() { override fun clearSearch() { cleared.incrementAndGet() } }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DIG, digForgetMs = 200) }
+        compose.waitForIdle()
+        assertEquals("not while you're in dig", 0, cleared.get())
+        compose.onNodeWithTag("nav:DROPS").performClick()
+        compose.waitForIdle()
+        // The wait is a plain delay on the main looper: run the looper's clock past it.
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
+        compose.waitUntil(5_000) { cleared.get() == 1 }
+    }
+
+    @Test
+    fun `sideways the places wait for the phone upright, and downloads still open`() {
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialPanel = Panel.DIG) }
+        compose.onAllNodesWithTag("landscape-note").assertCountEquals(2)
+        compose.onNodeWithTag("screen:search").assertDoesNotExist()
+        compose.onNodeWithTag("nav:ROOM").performClick()
+        compose.onNodeWithTag("open-downloads").performClick()
+        compose.onNodeWithTag("panel:transfers").assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/landscape_downloads.png")
     }
 
     @Test
@@ -466,6 +521,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `Settings opens on Sound, which controls Pure mode, hi-res and the EQ`() {
+        portrait()
         val actions = object : RecordingActions() {
             var sound by mutableStateOf(SoundSettings())
             override fun updateSound(transform: (SoundSettings) -> SoundSettings) { sound = transform(sound) }
@@ -512,6 +568,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `Friday Drops shows the week and claims a record`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
         compose.onNodeWithText("Week of 16 October", ignoreCase = true).assertIsDisplayed()
@@ -534,6 +591,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `an unloaded drop asks for this week's records`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(drops = DropState.Idle), actions, initialPanel = Panel.DROPS) }
         compose.waitForIdle()
@@ -543,6 +601,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `private messages open by Soulseek username and send through the action`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), actions, initialPanel = Panel.FRIENDS) }
         compose.onNodeWithTag("panel:messages").assertIsDisplayed()
@@ -558,6 +617,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `Settings sends you to the one sign-in, which checks the ID and always keeps you signed in`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
         // No second sign-in form and no "Remember me": Settings opens the same login as onboarding.
@@ -585,6 +645,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `Internet Archive claim actions are disabled without Soulseek sign in`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.DROPS) }
         compose.onNodeWithText("Sign in with Soulseek", ignoreCase = true).assertIsDisplayed()
@@ -611,6 +672,7 @@ class ListeningRoomUiTest {
 
     @Test
     fun `the footer is four icon tabs and the Pressing Plant is gone`() {
+        portrait()
         compose.setContent { RoomScreen(state(), RecordingActions()) }
         listOf("DIG", "DROPS", "FRIENDS", "SETTINGS").forEach { compose.onNodeWithTag("nav:$it").assertIsDisplayed() }
         compose.onNodeWithTag("nav:PRESSING").assertDoesNotExist()

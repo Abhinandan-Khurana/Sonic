@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
                     override fun signOutSoulseek() { activeConversation.value = null; graph.soulseek.logout() }
                     override fun searchSoulseek(query: String) { graph.soulseek.search(query) }
                     override fun stopSoulseekSearch() { graph.soulseek.stopSearch() }
+                    override fun clearSearch() { graph.soulseek.clearSearch(); graph.discovery.clear() }
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {
                             pendingDownload = result; graph.soulseek.onExternalFlow(true); downloadPicker.launch(null)
@@ -333,12 +334,24 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    /** The room fills the screen; the system bars appear only when swiped in. */
+    /**
+     * Upright, the status bar stays (clock, battery, notifications) in dark ink on the white room and
+     * only the navigation bar hides; sideways the room fills the screen. Hidden bars appear when swiped in.
+     */
     private fun immerse() {
+        val sideways = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         WindowCompat.getInsetsController(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
+            if (sideways) hide(WindowInsetsCompat.Type.systemBars())
+            else { show(WindowInsetsCompat.Type.statusBars()); hide(WindowInsetsCompat.Type.navigationBars()) }
+            isAppearanceLightStatusBars = true
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // The activity keeps itself across turns: switch between upright and sideways bars here.
+        immerse()
     }
 
     override fun onNewIntent(intent: Intent) {

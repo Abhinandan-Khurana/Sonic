@@ -28,6 +28,8 @@ class DiscoveryRepository(albums: StateFlow<List<Album>>, soulseek: SoulseekRepo
     }.flowOn(Dispatchers.Default).stateIn(scope,SharingStarted.Eagerly,DiscoveryState())
     fun setQuery(value: String) { _query.value = value.take(256) }
     fun setOptions(value: DiscoveryOptions) { options.value = value }
+    /** An empty search box; where to search (this device or Soulseek) stays as you left it. */
+    fun clear() { _query.value = "" }
     fun broaden() {
         val text = query.value.replace(Regex("\\([^)]*\\)|\\[[^]]*\\]|\\b(19|20)\\d{2}\\b")," ")
         _query.value = text.trim().replace(Regex("\\s+")," ").ifBlank { query.value }

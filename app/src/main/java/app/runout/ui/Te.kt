@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -129,7 +130,7 @@ private val NAV = listOf(Panel.DIG, Panel.DROPS, Panel.FRIENDS, Panel.SETTINGS)
  * 8 dp apart. The open place is a black cell with white ink. An orange square marks news.
  */
 @Composable
-fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifier: Modifier = Modifier, onHome: (() -> Unit)? = null) {
+fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifier: Modifier = Modifier, onHome: (() -> Unit)? = null, upright: Boolean = true) {
     val tick = rememberTick()
     Row(modifier.fillMaxWidth().background(Room.Background)) {
         // On a page, a "room" cell slides in from the left: home is under the thumb, not in the top corner.
@@ -154,6 +155,11 @@ fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifi
                 Canvas(Modifier.size(20.dp)) { drawRoomIcon(Color.White) }
                 BasicText("room", style = Room.Label.copy(color = Color.White))
             }
+        }
+        // Sideways the room is for listening: the places wait until the phone is upright again.
+        if (!upright) {
+            UprightNote(Modifier.weight(1f))
+            return@Row
         }
         NAV.forEach { p ->
             val on = p == active
@@ -186,6 +192,45 @@ internal fun DrawScope.drawRoomIcon(color: Color) {
     drawCircle(color, 9.5f * k, Offset(12f * k, 12f * k), style = s)
     drawCircle(color, 2.5f * k, Offset(12f * k, 12f * k), style = s)
     drawArc(color, 200f, 70f, false, Offset(5.5f * k, 5.5f * k), Size(13f * k, 13f * k), style = s)
+}
+
+/** The places that need the phone upright: in landscape the room is only for listening. */
+internal val UPRIGHT_ONLY = setOf(Panel.DIG, Panel.DROPS, Panel.FRIENDS, Panel.SETTINGS)
+
+/**
+ * "Turn your phone upright" with the turn-upright icon: in the nav bar's place in landscape, and
+ * larger ([large]) where a place's page would be.
+ */
+@Composable
+fun UprightNote(modifier: Modifier = Modifier, large: Boolean = false) {
+    val text = "turn your phone upright to dig, browse drops, chat and change settings."
+    if (large) Column(
+        modifier.testTag("landscape-note").semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+    ) {
+        Canvas(Modifier.size(44.dp)) { drawTurnUpright(Room.Ink) }
+        BasicText(text, style = Room.Label.copy(color = Room.Body, textAlign = TextAlign.Center, lineHeight = 15.sp), modifier = Modifier.widthIn(max = 260.dp))
+    } else Row(
+        modifier.testTag("landscape-note").semantics(mergeDescendants = true) {}.padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        Canvas(Modifier.size(20.dp)) { drawTurnUpright(Room.Ink) }
+        BasicText(text, style = Room.Label.copy(color = Room.Body, lineHeight = 13.sp), maxLines = 2)
+    }
+}
+
+/** A phone standing upright with a curved arrow turning round it, on the nav icons' 24-unit grid. */
+internal fun DrawScope.drawTurnUpright(color: Color) {
+    val k = size.width / 24f
+    val s = Stroke(width = 1.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    drawRoundRect(color, Offset(10f * k, 3f * k), Size(10f * k, 18f * k), CornerRadius(2f * k), style = s)
+    drawLine(color, Offset(14f * k, 18f * k), Offset(16f * k, 18f * k), s.width, StrokeCap.Round)
+    // The turn: an arc up the left side, its arrowhead at the top pointing towards the phone.
+    drawArc(color, 100f, 150f, false, Offset(2f * k, 5f * k), Size(10f * k, 14f * k), style = s)
+    drawLine(color, Offset(5.2f * k, 6.2f * k), Offset(8.4f * k, 5.6f * k), s.width, StrokeCap.Round)
+    drawLine(color, Offset(5.2f * k, 6.2f * k), Offset(5.9f * k, 9.3f * k), s.width, StrokeCap.Round)
 }
 
 /** Lucide's search, calendar, message-square and sliders-horizontal, drawn on their 24-unit grid. */
