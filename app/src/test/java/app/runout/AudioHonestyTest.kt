@@ -321,6 +321,16 @@ class AudioHonestyTest {
         assertEquals("Lossless", signalPath(OutputStatus(16, 44_100, device = speaker, crackle = true), SoundSettings(pure = true))!!.verdict)
     }
 
+    @Test fun `a file at a rate the USB DAC doesn't take reads as resampled, not plain lossless`() {
+        val dac = OutputDevice(OutputKind.USB, "Samsung USB C Earphones", rates = listOf(48_000, 96_000))
+        val hiRes = signalPath(OutputStatus(24, 192_000, floatPath = true, device = dac, bitPerfect = BitPerfect.UNSUPPORTED), SoundSettings(pure = true))!!
+        assertEquals("Lossless source, resampled for the DAC", hiRes.verdict)
+        assertTrue(hiRes.output.detail.startsWith("This DAC takes 48 kHz or 96 kHz, so 192 kHz is resampled"))
+        assertFalse(hiRes.output.ok)
+        val native = signalPath(OutputStatus(24, 96_000, floatPath = true, device = dac, bitPerfect = BitPerfect.UNSUPPORTED), SoundSettings(pure = true))!!
+        assertEquals("Lossless, through Android's mixer", native.verdict)
+    }
+
     @Test fun `Android's Spatial Audio is named, and Pure keeps Runout out of it`() {
         val xm5 = OutputDevice(OutputKind.BLUETOOTH, "WH-1000XM5", type = AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, spatial = true)
         val bt = signalPath(OutputStatus(24, 192_000, floatPath = true, device = xm5), SoundSettings())!!

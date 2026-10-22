@@ -53,6 +53,8 @@ data class OutputDevice(
     val id: Int = 0,
     /** Android's Spatial Audio would reshape music played here into 3D sound (Android 12L+). */
     val spatial: Boolean = false,
+    /** The sample rates the device itself takes, as it reports them; empty when it takes any or doesn't say. */
+    val rates: List<Int> = emptyList(),
 ) {
     val label: String get() = if (name != null) "${kind.label} · $name" else kind.label
 }
@@ -374,7 +376,8 @@ object OutputDevices {
         // The reported rate belongs to the phone's own (primary) output; a USB, Bluetooth or HDMI
         // path runs at its own rate, which Android doesn't tell apps.
         val rate = if (kind == OutputKind.SPEAKER || kind == OutputKind.WIRED) am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0 else 0
-        OutputDevice(kind, name, rate, device?.type ?: if (routeName != null) AudioDeviceInfo.TYPE_BLUETOOTH_A2DP else 0, device?.id ?: 0, spatial(am))
+        OutputDevice(kind, name, rate, device?.type ?: if (routeName != null) AudioDeviceInfo.TYPE_BLUETOOTH_A2DP else 0, device?.id ?: 0, spatial(am),
+            device?.sampleRates?.filter { it > 0 }?.sorted().orEmpty())
     }.getOrDefault(OutputDevice())
 
     // Whether Android would spatialize stereo music on the current route; Pure opts Runout out.

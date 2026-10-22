@@ -120,6 +120,8 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
     val spatialNote = if (spatial) " Android's Spatial Audio also reshapes it into 3D sound: turn it off for this output in Android's settings, or switch Pure on." else ""
     val mixer = d.mixerRate
     val resampled = mixer > 0 && mixer != o.sampleRate
+    // A USB DAC lists the rates it takes: a file at any other rate is resampled before it gets there.
+    val dacResamples = d.kind == OutputKind.USB && d.rates.isNotEmpty() && o.sampleRate !in d.rates
     val bitPerfect = o.bitPerfect == BitPerfect.ON && d.kind == OutputKind.USB && s.pure && !folded
     val routed = when {
         // Bluetooth first: nothing that goes over it is bit-perfect or lossless.
@@ -127,9 +129,12 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
         bitPerfect -> SignalPath.Step(d.label, source, "Bit-perfect: the DAC gets the file's own samples.")
         d.kind == OutputKind.USB -> SignalPath.Step(
             d.label,
-            if (mixer > 0) "Mixer · ${rate(mixer)}" else "Mixer",
-            if (s.pure) o.bitPerfect.label + "." else "Through Android's mixer. Turn on Pure for bit-perfect (Android 14 and later).",
-            ok = !resampled,
+            if (dacResamples) "Mixer · resampled" else if (mixer > 0) "Mixer · ${rate(mixer)}" else "Mixer",
+            buildString {
+                if (dacResamples) append("This DAC takes ${d.rates.joinToString(" or ") { rate(it) }}, so ${rate(o.sampleRate)} is resampled on the way. ")
+                append(if (s.pure) o.bitPerfect.label + "." else "Through Android's mixer. Turn on Pure for bit-perfect (Android 14 and later).")
+            },
+            ok = !resampled && !dacResamples,
         )
         d.kind == OutputKind.OTHER -> SignalPath.Step(
             d.label,
@@ -154,6 +159,7 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
         folded -> "Cut to 16-bit"
         d.kind == OutputKind.OTHER -> "Through Android's mixer"
         resampled -> "$lossless, resampled to ${rate(mixer)}"
+        dacResamples -> "${if (processed) "Lossless source, processed" else "Lossless source"}, resampled for the DAC"
         d.kind == OutputKind.USB -> "$lossless, through Android's mixer"
         else -> lossless
     }
