@@ -224,19 +224,24 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `pulling a record, then a long press offers to send it with audio`() {
+    fun `pulling a record, then a long press opens its details, with no send in sight`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }
         compose.onNodeWithTag("sleeve:Night Drive").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("pulled-disc").assertIsDisplayed()
-        // No buttons beside the disc any more: what you can do lives behind a long press.
-        compose.onNodeWithText("send with audio").assertDoesNotExist()
         compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
-        compose.onNodeWithText("send with audio").assertIsDisplayed() // Creative Commons
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_menu.png")
-        compose.onNodeWithTag("menu:Send with audio").performClick()
-        assertEquals(listOf("share:Night Drive"), actions.log.filter { it.startsWith("share") })
+        // Straight to the details: no menu in between, and nothing offers to send the record.
+        compose.onNodeWithTag("record-details").assertIsDisplayed()
+        compose.onNodeWithTag("record-menu").assertDoesNotExist()
+        compose.onNodeWithText("send", substring = true).assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_details.png")
+        // The record is out of its sleeve, so the details can put it back.
+        compose.onNodeWithTag("details:put-back").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("record-details").assertDoesNotExist()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+        assertTrue(actions.log.none { it.startsWith("share") })
     }
 
     @Test
@@ -246,9 +251,59 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("caption-artist").assertIsDisplayed().assertTextContains("vela park", substring = true)
         compose.onNodeWithText("cc by 4.0").assertDoesNotExist()
         compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
-        compose.onNodeWithTag("menu:Details").performClick()
         compose.onNodeWithTag("record-details").assertIsDisplayed()
         compose.onAllNodesWithText("cc by 4.0", substring = true).onFirst().assertExists()
+    }
+
+    @Test
+    fun `a record's details end with the whole record's running time`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        // 4.2 + 3.9 + 5.1 + 4.4 + 3.6 + 4.8 + 4.0 + 3.7 + 5.3 minutes.
+        compose.onNodeWithTag("record-total").assertTextContains("total").assertTextContains("39:00")
+        // A record from the music folder stays on the shelf: no remove link for it.
+        compose.onNodeWithTag("details:remove").assertDoesNotExist()
+        compose.onNodeWithTag("details:put-back").assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/record_details.png")
+        assertEquals("4:22", app.runout.ui.runningTime(262_000))
+        assertEquals("1:02:33", app.runout.ui.runningTime(3_753_000))
+    }
+
+    @Test
+    fun `a received record's details can remove it, after asking`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 2) }
+        compose.onNodeWithTag("sleeve:Paper Moons").performTouchInput { longClick() }
+        compose.onNodeWithTag("details:remove").assertTextContains("remove record").performClick()
+        compose.onNodeWithTag("record-details").assertDoesNotExist()
+        compose.onNodeWithTag("confirm").assertIsDisplayed()
+        compose.onNodeWithText("REMOVE RECORD?").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the share key in the details sends the sheet as a picture`() {
+        portrait()
+        var shared: Pair<File, String>? = null
+        val actions = object : RecordingActions() { override fun shareImage(file: File, title: String) { shared = file to title } }
+        compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        compose.onNodeWithContentDescription("Share as a picture").assertIsDisplayed()
+        compose.onNodeWithTag("details:share").performClick()
+        // Robolectric only draws the window when asked to: a screenshot draws the sheet into the picture.
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/record_details_sharing.png")
+        compose.waitUntil(10_000) { shared != null }
+        val (file, title) = shared!!
+        assertEquals("Night Drive", title)
+        assertTrue(file.path, file.exists() && file.length() > 0)
+        assertEquals(listOf(0x89, 'P'.code, 'N'.code, 'G'.code), file.readBytes().take(4).map { it.toInt() and 0xFF })
+        // The whole sheet, every track, on white: taller than the card's capped list, and its corner is white.
+        val picture = android.graphics.BitmapFactory.decodeFile(file.path)
+        assertTrue("${picture.width} x ${picture.height}", picture.width > 300 && picture.height > picture.width)
+        assertEquals(AColor.WHITE, picture.getPixel(picture.width / 2, 40))
+        file.copyTo(File("build/outputs/roborazzi/record_details_picture.png"), overwrite = true)
+        // Back to the card once the picture is made.
+        compose.onNodeWithTag("record-details").assertIsDisplayed()
     }
 
     @Test
@@ -355,7 +410,7 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `a record missing a track says so on its sleeve, and its menu fetches it`() {
+    fun `a record missing a track says so on its sleeve, and its details fetch it`() {
         portrait()
         val transfers = listOf(broken("f", "lee", "02 Lowlight.flac", SoulseekTransferState.FAILED, "The user went offline", FailureKind.PEER_AWAY))
         val fetched = mutableListOf<String>()
@@ -364,8 +419,8 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("missing-tag", useUnmergedTree = true).assertExists().assertTextEquals("1 MISSING")
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/sleeve_missing.png")
         compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/menu_fetch_missing.png")
-        compose.onNodeWithTag("menu:Fetch missing track").performClick()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/details_fetch_missing.png")
+        compose.onNodeWithTag("details:fetch-missing").assertTextContains("fetch missing track").performClick()
         assertEquals(listOf(albums.first { it.title == "Night Drive" }.id), fetched)
         compose.onNodeWithTag("panel:transfers").assertExists()
     }
@@ -391,7 +446,7 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `readme shot of the record menu`() {
+    fun `readme shot of a record's details, opened by a long press`() {
         portrait()
         compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
         compose.onNodeWithTag("sleeve:Night Drive").performClick()

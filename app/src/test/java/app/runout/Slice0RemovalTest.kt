@@ -32,10 +32,10 @@ class Slice0RemovalTest {
         return removed
     }
 
-    /** Remove lives in the record's long-press menu. */
+    /** Remove lives in the record's details, opened by a long press. */
     private fun askToRemove() {
         compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
-        compose.onNodeWithTag("menu:Remove").performClick()
+        compose.onNodeWithTag("details:remove").performScrollTo().performClick()
     }
 
     @Test fun `received record is not removed until confirmed`() {
