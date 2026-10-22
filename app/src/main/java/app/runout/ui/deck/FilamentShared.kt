@@ -59,12 +59,15 @@ object FilamentShared {
  * The room's studio light, added to [scene]: a high key light from the front left, a dimmer fill
  * from the right, a glint from behind and an even ambient, scaled so they sum to 1 on an upward face
  * (Lambert: Σ light·cos/π + ambient). With linear tone mapping at an exposure of 1, a record lying
- * flat shows its face in the very colours the room paints it in.
+ * flat shows its face in the very colours the room paints it in. Over the platter hangs a lamp: a
+ * soft spot up behind it, placed so the camera sees its reflection on the record. It adds little
+ * light, but the vinyl's glossy bands catch it, and the highlight stays put while the record turns.
  */
 class StudioLights(private val engine: Engine, private val scene: Scene, shadows: Boolean) {
     private val sun = EntityManager.get().create()
     private val fill = EntityManager.get().create()
     private val glint = EntityManager.get().create()
+    private val lamp = EntityManager.get().create()
     private val ambient: IndirectLight
 
     init {
@@ -87,6 +90,17 @@ class StudioLights(private val engine: Engine, private val scene: Scene, shadows
             .intensity(GLINT)
             .direction(0.1f, -0.9f, 0.42f)
             .build(engine, glint)
+        // The lamp: high up behind the platter and a little left, the mirror of the camera off the
+        // back of the record, aimed at the platter's centre with a soft-edged cone.
+        LightManager.Builder(LightManager.Type.FOCUSED_SPOT)
+            .color(1f, 0.96f, 0.9f)
+            .intensityCandela(LAMP)
+            .position(-1.55f, 4.2f, -2.3f)
+            .direction(0.29f, -3.61f, 2.3f)
+            .spotLightCone(0.2f, 0.36f)
+            .falloff(10f)
+            .castShadows(false)
+            .build(engine, lamp)
         ambient = IndirectLight.Builder()
             .irradiance(1, floatArrayOf(1f, 1f, 1f))
             .intensity(AMBIENT)
@@ -95,20 +109,24 @@ class StudioLights(private val engine: Engine, private val scene: Scene, shadows
         scene.addEntity(sun)
         scene.addEntity(fill)
         scene.addEntity(glint)
+        scene.addEntity(lamp)
     }
 
     fun destroy() {
         scene.removeEntity(sun)
         scene.removeEntity(fill)
         scene.removeEntity(glint)
+        scene.removeEntity(lamp)
         scene.indirectLight = null
         engine.destroyEntity(sun)
         engine.destroyEntity(fill)
         engine.destroyEntity(glint)
+        engine.destroyEntity(lamp)
         engine.destroyIndirectLight(ambient)
         EntityManager.get().destroy(sun)
         EntityManager.get().destroy(fill)
         EntityManager.get().destroy(glint)
+        EntityManager.get().destroy(lamp)
     }
 
     private companion object {
@@ -116,5 +134,6 @@ class StudioLights(private val engine: Engine, private val scene: Scene, shadows
         const val FILL = 0.41f
         const val GLINT = 0.35f
         const val AMBIENT = 0.47f
+        const val LAMP = 12f
     }
 }

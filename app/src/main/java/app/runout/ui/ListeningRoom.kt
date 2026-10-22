@@ -1235,14 +1235,13 @@ private fun Lamp(color: Color?) {
     Box(Modifier.size(8.dp).then(if (color != null) Modifier.background(color) else Modifier.border(1.dp, Room.Ink)))
 }
 
-/** The deck's band: the RG-1 at 412 × 240, and under it "rg-1 · side a · 01:12" and "33⅓ rpm". */
+/** The deck's band: the RG-1 at 412 × 240, and under it "33⅓ rpm" (the LED already shows the side and time). */
 @Composable
 private fun DeckBand(state: RoomState, empty: Boolean, help: @Composable (Modifier) -> Unit, deck: @Composable (Modifier) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(bottom = if (empty) 0.dp else 16.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(412f / 240f).alpha(if (empty) 0.5f else 1f)) { deck(Modifier.fillMaxSize()) }
         Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(bandCaption(state, landscape = false), style = Room.LabelQuiet, maxLines = 1)
-            help(Modifier.padding(start = 8.dp))
+            help(Modifier)
             Spacer(Modifier.weight(1f))
             if (!empty) BasicText("33⅓ rpm", style = Room.LabelQuiet)
         }

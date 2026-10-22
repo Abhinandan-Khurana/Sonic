@@ -32,9 +32,9 @@ object RecordMaps {
     private const val PITCH_PX = 3.2f
     private const val TILT = 0.35f
 
-    private const val ROUGH_GROOVES = 0.42f
-    private const val ROUGH_SMOOTH = 0.28f
-    private const val ROUGH_GAP = 0.16f
+    private const val ROUGH_GROOVES = 0.3f
+    private const val ROUGH_SMOOTH = 0.22f
+    private const val ROUGH_GAP = 0.12f
     private const val ROUGH_LABEL = 0.7f
 
     private val flat = Color.rgb(128, 128, 255)
