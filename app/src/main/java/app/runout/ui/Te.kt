@@ -402,11 +402,14 @@ fun DotVinyl(
     }
 }
 
-/** [DotVinyl] turning, its rings inking round and round: the waiting animation (Dig's search). */
+/**
+ * [DotVinyl] turning, its rings inking round and round: the waiting animation (Dig's search, and
+ * anything else the room waits on). [description] says what it waits for, to a screen reader.
+ */
 @Composable
-fun DotVinylSpinner(modifier: Modifier = Modifier) {
+fun DotVinylSpinner(modifier: Modifier = Modifier, description: String = "Searching") {
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "dot-vinyl")
     val spin by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1800, easing = androidx.compose.animation.core.LinearEasing)), label = "spin")
     val ink by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1200, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "ink")
-    DotVinyl(modifier.semantics { contentDescription = "Searching" }, phase = spin, lit = 0.15f + 0.85f * ink)
+    DotVinyl(modifier.semantics { contentDescription = description }, phase = spin, lit = 0.15f + 0.85f * ink)
 }

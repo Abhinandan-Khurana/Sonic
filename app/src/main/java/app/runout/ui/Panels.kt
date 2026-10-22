@@ -473,6 +473,7 @@ fun DropsPanel(
     actions: RoomActions,
     signedIn: Boolean = false,
     onAccount: () -> Unit = {},
+    preview: PreviewState? = null,
 ) {
     // Every time Drops opens: this week's ten come from the phone once seen, and a new Friday
     // while the app stayed open brings the new week instead of last week's.
@@ -484,7 +485,7 @@ fun DropsPanel(
         val ready = drops as? DropState.Ready
         val item = ready?.week?.items?.firstOrNull { it.identifier == open }
         if (item != null) {
-            DropPreview(ready.week.items.indexOf(item) + 1, item, isClaimed =item.identifier in claimed, progress = claiming[item.identifier], left = left, canClaim = left > 0 && signedIn, actions = actions) { open = null }
+            DropPreview(ready.week.items.indexOf(item) + 1, item, isClaimed =item.identifier in claimed, progress = claiming[item.identifier], left = left, canClaim = left > 0 && signedIn, actions = actions, preview = preview) { open = null }
             return@Column
         }
         if (!signedIn) {
@@ -497,7 +498,7 @@ fun DropsPanel(
             }
         }
         when (drops) {
-            DropState.Idle, DropState.Loading -> BasicText("digging through the archive…", style = Room.LabelQuiet)
+            DropState.Idle, DropState.Loading -> WaitingMark("digging through the archive…", "Loading drops")
             is DropState.Failed -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 BasicText(drops.reason.lowercase(), style = Room.Label.copy(color = Room.Danger, lineHeight = 15.sp))
                 TeButton("try again", actions::refreshDrops, kind = KeyKind.OUTLINE)
@@ -532,6 +533,18 @@ fun DropsPanel(
         }
     }
     TeHelpSheet(help) { help = null }
+}
+
+/**
+ * Something on its way from the network: the 132 dp dotted vinyl spinning over one quiet line, the
+ * same mark Dig shows while it searches. [description] names the wait for a screen reader.
+ */
+@Composable
+internal fun WaitingMark(text: String, description: String, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        DotVinylSpinner(Modifier.size(132.dp), description = description)
+        BasicText(text, style = Room.LabelQuiet, modifier = Modifier.fillMaxWidth())
+    }
 }
 
 /**
@@ -605,7 +618,7 @@ private fun DropSleeve(number: Int, item: DropItem, isClaimed: Boolean, progress
  * listen, under #E5E5E5 hairlines; then the note that listening uses no claim.
  */
 @Composable
-private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progress: Float?, left: Int, canClaim: Boolean, actions: RoomActions, onBack: () -> Unit) {
+private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progress: Float?, left: Int, canClaim: Boolean, actions: RoomActions, preview: PreviewState?, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler { actions.listen(null); onBack() }
     PageStep { actions.listen(null); onBack() }
     DisposableEffect(item.identifier) { onDispose { actions.listen(null) } }
@@ -614,9 +627,6 @@ private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progres
     var loaded by remember(item.identifier) { mutableStateOf(false) }
     val tracks by produceState<List<app.runout.drops.DropTrack>?>(null, item.identifier) { value = actions.dropTracks(item); loaded = true }
     val noFlac = loaded && tracks?.isEmpty() == true
-    var playing by remember { mutableStateOf<String?>(null) }
-    // The listen stops by itself after thirty seconds; mirror that here.
-    LaunchedEffect(playing) { if (playing != null) { kotlinx.coroutines.delay(30_000); playing = null } }
     Column(Modifier.fillMaxWidth().testTag("drop-preview"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         PageBackLink("← all drops", "drops-back") { actions.listen(null); onBack() }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -650,22 +660,31 @@ private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progres
         BasicText("tracks · tap to hear 30 s", style = Room.LabelQuiet)
         val list = tracks
         when {
-            list == null && !loaded -> BasicText("listing the tracks…", style = Room.LabelQuiet)
+            list == null && !loaded -> WaitingMark("listing the tracks…", "Loading tracks")
             list == null -> BasicText("couldn't reach the archive for the track list. you can still claim it.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
             list.isEmpty() -> BasicText("this album has no flac files, so it can't be claimed. it uses no allowance.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
             else -> Column(Modifier.fillMaxWidth()) {
                 list.forEachIndexed { i, t ->
-                    val on = playing == t.url
+                    // What the player says, not what was tapped: it clears itself when the listen
+                    // ends for any reason, so the stop square never outlives the sound.
+                    val phase = preview?.takeIf { it.url == t.url }?.phase
+                    val on = phase != null
                     val tick = rememberTick()
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .hairlineTop(Room.HairlineSoft)
                             .testTag("listen:$i")
-                            .semantics(mergeDescendants = true) { contentDescription = if (on) "Stop listening" else "Listen to ${t.title}" }
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = when (phase) {
+                                    PreviewPhase.BUFFERING -> "Loading ${t.title}. Tap to stop"
+                                    PreviewPhase.PLAYING -> "Stop listening"
+                                    null -> "Listen to ${t.title}"
+                                }
+                            }
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) {
                                 tick()
-                                if (on) { actions.listen(null); playing = null } else { actions.listen(t.url); playing = t.url }
+                                actions.listen(if (on) null else t.url)
                             }
                             .padding(vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -673,8 +692,10 @@ private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progres
                     ) {
                         BasicText((i + 1).toString().padStart(2, '0'), style = Room.LabelQuiet)
                         BasicText(t.title.lowercase(), style = Room.Label.copy(color = if (on) Room.Signal else Room.Ink), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        // Lucide play, or an orange stop square while it plays.
-                        Canvas(Modifier.size(12.dp)) {
+                        // Lucide play; the dotted vinyl turning while the start of the track loads;
+                        // an orange stop square once it plays.
+                        if (phase == PreviewPhase.BUFFERING) DotVinylSpinner(Modifier.size(18.dp), description = "Loading preview")
+                        else Canvas(Modifier.size(12.dp)) {
                             val w = size.width
                             val line = 1.dp.toPx()
                             if (on) drawRect(Room.Signal, Offset(line / 2, line / 2), Size(w - line, w - line), style = Stroke(line))

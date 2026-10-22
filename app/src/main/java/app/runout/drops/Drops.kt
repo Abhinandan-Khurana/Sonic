@@ -119,15 +119,18 @@ class DropsRepository(
 
     /**
      * What's on a drop before you spend a claim: its FLAC tracks, each with a streaming address so a
-     * few seconds can be heard. Reads the archive's metadata only; nothing is downloaded.
+     * few seconds can be heard. The address is the archive's own MP3 of the track when it made one,
+     * a fraction of the FLAC's size, so a listen starts quickly; the claim still takes the FLAC.
+     * Reads the archive's metadata only; nothing is downloaded.
      */
     suspend fun preview(item: DropItem): Result<List<DropTrack>> = withContext(Dispatchers.IO) {
         runCatching {
             require(item.identifier.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid Internet Archive identifier" }
             val meta = http.get("https://archive.org/metadata/${item.identifier}")?.toString(Charsets.UTF_8)
                 ?: error("Couldn't load the album from Internet Archive")
-            planDownload(JSONObject(meta)).tracks.map { f ->
-                DropTrack(f.title ?: f.name.substringAfterLast('/').substringBeforeLast('.'), fileUrl(item.identifier, f.name), f.lengthMs)
+            val json = JSONObject(meta)
+            planDownload(json).tracks.map { f ->
+                DropTrack(f.title ?: f.name.substringAfterLast('/').substringBeforeLast('.'), fileUrl(item.identifier, listenName(json, f.name)), f.lengthMs)
             }
         }.onFailure { if (it is CancellationException) throw it }
     }
@@ -354,6 +357,17 @@ class DropsRepository(
                 }
             }
             return Plan("NONE", emptyList(), null, null)
+        }
+
+        /**
+         * The file to stream for a listen to the FLAC [flac]: the MP3 the archive derived from it
+         * ("VBR MP3", its `original` naming the FLAC) when there is one, else the FLAC itself.
+         */
+        fun listenName(meta: JSONObject, flac: String): String {
+            val files = meta.optJSONArray("files") ?: return flac
+            return (0 until files.length()).map { files.getJSONObject(it) }.firstOrNull { f ->
+                "MP3" in f.optString("format").uppercase() && f.optString("original") == flac && f.optString("name").isNotBlank()
+            }?.optString("name") ?: flac
         }
 
         fun trackNo(s: String?): Int? = s?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull()
