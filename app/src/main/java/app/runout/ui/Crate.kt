@@ -71,7 +71,8 @@ data class CrateGeometry(val sleeveOfWidth: Float, val sleeveOfHeight: Float, va
     companion object {
         // The owner asked for bigger sleeves sitting a little lower than the board's 151 at 97.
         val Portrait = CrateGeometry(0.42f, 0.56f, 0.30f)
-        val Landscape = CrateGeometry(130f / 412.5f, 130f / 168f, 10f / 168f)
+        // Sideways there are no tabs under the crate: the sleeves can be larger.
+        val Landscape = CrateGeometry(170f / 412.5f, 0.74f, 0.14f)
     }
 }
 

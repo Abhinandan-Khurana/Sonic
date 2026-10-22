@@ -190,6 +190,13 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `sideways with an empty platter the crate takes the tabs' room`() {
+        still("01c_landscape_empty", state(), crateIndex = 1)
+        val sleeve = compose.onNodeWithTag("sleeve:Night Drive").getBoundsInRoot()
+        assertTrue("a big sleeve: ${sleeve.right - sleeve.left}", (sleeve.right - sleeve.left).value > 150f)
+    }
+
+    @Test
     fun `landscape room, playing and pulled, renders`() {
         still("01_landscape_playing", state(deck = playing()), crateIndex = 3)
         // Sideways the room is for listening: the places wait for the phone to be upright.

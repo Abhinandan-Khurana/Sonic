@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.key
@@ -628,10 +630,13 @@ fun RoomScreen(
                         if (state.albums.isEmpty()) {
                             EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
                         } else {
-                            crate(Modifier.fillMaxWidth().weight(168f), CrateGeometry.Landscape)
+                            // No tabs sideways, and no wheel until a record is on the platter: the crate
+                            // takes the room, and gives the wheel its share back as a record goes on.
+                            val wheelShare by animateFloatAsState(if (state.deck.album != null) 80f else 0.01f, tween(360), label = "wheel")
+                            crate(Modifier.fillMaxWidth().weight(200f), CrateGeometry.Landscape)
                             front?.let { AlbumCaption(it, portrait = false) }
-                            Box(Modifier.fillMaxWidth().weight(80f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
-                                TrackWheel(state, actions, rows = 3)
+                            Box(Modifier.fillMaxWidth().weight(wheelShare).padding(horizontal = 22.dp).clipToBounds(), contentAlignment = Alignment.Center) {
+                                if (wheelShare > 40f) TrackWheel(state, actions, rows = 3)
                             }
                         }
                     }
