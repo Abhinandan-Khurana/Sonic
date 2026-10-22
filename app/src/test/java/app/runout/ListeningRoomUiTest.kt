@@ -197,6 +197,13 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `a paused record with the needle down reads as stopped, not spinning`() {
+        still("01b_stopped", state(deck = playing().copy(isPlaying = false)))
+        compose.onNodeWithText("stopped — side a", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("now spinning", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `pulling a record, then a long press offers to send it with audio`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }

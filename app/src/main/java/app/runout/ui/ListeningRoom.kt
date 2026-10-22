@@ -1230,6 +1230,8 @@ private fun nowLine(state: RoomState, pulled: Boolean, overPlatter: Boolean): Pa
         pulled && deck.album == null -> "drag the record onto the platter" to true
         deck.album == null -> "nothing on the platter" to false
         deck.sideFinished -> "side $side finished — tap the record to flip it" to true
+        // Stopped with the needle down: the start key, a call or unplugged headphones paused it.
+        deck.needleDown && !deck.isPlaying -> "stopped — side $side · ${(deck.currentTrackTitle ?: deck.album.title).lowercase()} · press start" to false
         deck.needleDown -> "now spinning — side $side · ${(deck.currentTrackTitle ?: deck.album.title).lowercase()}" to true
         else -> "${deck.album.title.lowercase()} · side $side cued — lower the tonearm" to true
     }
