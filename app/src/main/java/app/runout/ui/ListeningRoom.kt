@@ -192,6 +192,8 @@ data class RoomState(
     val soulseekUploadSlots: Int = app.runout.soulseek.SoulseekPreferences.DEFAULT_UPLOAD_SLOTS,
     /** Sharing is on but held back: Wi-Fi only, and the phone is on mobile data. */
     val soulseekWaitingForWifi: Boolean = false,
+    /** A drop's 30 s listen: which track, and whether it is still loading or playing. */
+    val preview: PreviewState? = null,
 
 )
 
@@ -895,7 +897,7 @@ fun RoomScreen(
                         actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); goTo(Panel.FRIENDS)
                     } else DiscoveryScreen(state, actions, onAccount = openAccount, onCue = { panel = null })
                 }
-                Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount)
+                Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount, preview = state.preview)
                 Panel.FRIENDS -> {
                     if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
                     SoulseekMessagesPanel(state, actions, onAccount = openAccount, onDig = { goTo(Panel.DIG) })

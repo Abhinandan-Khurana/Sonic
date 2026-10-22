@@ -136,6 +136,27 @@ class FridayDropsTest {
     }
 
     @Test
+    fun `a listen streams the archive's MP3 of a track and falls back to its FLAC`() = runBlocking {
+        val meta = JSONObject().apply {
+            put("metadata", JSONObject().put("identifier", "x"))
+            put("files", JSONArray().apply {
+                put(JSONObject().put("name", "01 Opening.flac").put("format", "Flac").put("source", "original").put("track", "1").put("title", "Opening"))
+                put(JSONObject().put("name", "02 Lowlight.flac").put("format", "Flac").put("source", "original").put("track", "2").put("title", "Lowlight"))
+                put(JSONObject().put("name", "01 Opening.mp3").put("format", "VBR MP3").put("source", "derivative").put("original", "01 Opening.flac"))
+                // An MP3 made from something else isn't a stand-in for track two.
+                put(JSONObject().put("name", "02 Other.mp3").put("format", "VBR MP3").put("source", "derivative").put("original", "02 Other.flac"))
+            })
+        }.toString().toByteArray()
+        val r = repo(FakeHttp(mapOf("/metadata/" to { meta })))
+        val tracks = r.preview(DropItem("x", "X", "Y", null, null)).getOrThrow()
+        assertEquals(listOf("Opening", "Lowlight"), tracks.map { it.title })
+        assertEquals("https://archive.org/download/x/01%20Opening.mp3", tracks[0].url)
+        assertEquals("https://archive.org/download/x/02%20Lowlight.flac", tracks[1].url)
+        // The claim still plans the FLACs only.
+        assertEquals(listOf("01 Opening.flac", "02 Lowlight.flac"), DropsRepository.planDownload(JSONObject(String(meta))).tracks.map { it.name })
+    }
+
+    @Test
     fun `both sign in and FLAC availability are enforced before a claim is spent`() = runBlocking {
         val deniedHttp = http()
         val denied = DropsRepository(context, deniedHttp, clock = { at("2026-10-16") }, zone = utc)

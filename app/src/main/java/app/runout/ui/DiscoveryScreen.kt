@@ -592,7 +592,7 @@ internal fun FolderPreview(preview: SoulseekFolderPreview, state: RoomState, act
                 }
             }
         }
-        if (preview.loading) BasicText("getting the full track list…", style = Room.LabelQuiet)
+        if (preview.loading) WaitingMark("getting the full track list…", "Loading folder")
         preview.error?.let { BasicText(it, style = Room.Label.copy(color = Room.Danger)) }
         if (preview.files.isNotEmpty()) LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth()) {
             itemsIndexed(preview.files, key = { _, f -> f.id }) { i, file ->

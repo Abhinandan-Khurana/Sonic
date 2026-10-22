@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
             val drops by graph.drops.state.collectAsStateWithLifecycle()
             val claimed by graph.drops.claimed.collectAsStateWithLifecycle()
             val newDrop by graph.drops.newDrop.collectAsStateWithLifecycle()
+            val listening by previewState.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
             val note by message.collectAsStateWithLifecycle()
             val session by graph.soulseek.session.collectAsStateWithLifecycle()
@@ -315,6 +316,7 @@ class MainActivity : ComponentActivity() {
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,
                     soulseekWaitingForWifi = waitingForWifi,
+                    preview = listening,
                 ),
                 actions = actions,
             )
@@ -468,9 +470,12 @@ class MainActivity : ComponentActivity() {
     }
 
     // A short listen to a Friday Drop before claiming it. It streams from archive.org and stops on
-    // its own after thirty seconds; it never touches the deck. It takes audio focus for its
-    // moment, so a spinning record pauses and comes back after, and it stops when headphones go,
-    // rather than carrying on out of the speaker.
+    // its own thirty seconds after the sound starts; it never touches the deck. It takes audio
+    // focus for its moment, so a spinning record pauses and comes back after, and it stops when
+    // headphones go, rather than carrying on out of the speaker. [previewState] is what the track
+    // rows show; every way the listen ends goes through listenTo(null), which clears it and gives
+    // the focus back.
+    private val previewState = MutableStateFlow<app.runout.ui.PreviewState?>(null)
     private var preview: android.media.MediaPlayer? = null
     private var previewStop: kotlinx.coroutines.Job? = null
     private var previewFocus: android.media.AudioFocusRequest? = null
@@ -487,8 +492,10 @@ class MainActivity : ComponentActivity() {
 
     private fun listenTo(url: String?) {
         previewStop?.cancel()
+        previewStop = null
         preview?.let { runCatching { it.stop() }; it.release() }
         preview = null
+        previewState.value = null
         val audio = getSystemService(android.media.AudioManager::class.java)
         previewFocus?.let { runCatching { audio?.abandonAudioFocusRequest(it) } }
         previewFocus = null
@@ -510,15 +517,41 @@ class MainActivity : ComponentActivity() {
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         previewNoisyRegistered = true
-        preview = android.media.MediaPlayer().apply {
-            setAudioAttributes(previewAttributes)
-            setOnPreparedListener { it.start() }
-            // Done early: give the focus back, so the record comes back too.
-            setOnCompletionListener { done -> window.decorView.post { if (preview === done) listenTo(null) } }
-            setOnErrorListener { _, _, _ -> message.value = "Couldn't play a preview of that track."; true }
-            runCatching { setDataSource(url); prepareAsync() }.onFailure { message.value = "Couldn't play a preview of that track." }
+        previewState.value = app.runout.ui.PreviewState(url, app.runout.ui.PreviewPhase.BUFFERING)
+        val player = android.media.MediaPlayer()
+        preview = player
+        player.setAudioAttributes(previewAttributes)
+        player.setOnPreparedListener { p ->
+            if (preview !== p) return@setOnPreparedListener
+            p.start()
+            previewState.value = app.runout.ui.PreviewState(url, app.runout.ui.PreviewPhase.PLAYING)
+            // The thirty seconds count from the first sound, not from the tap.
+            previewStop?.cancel()
+            previewStop = graph.scope.launch { kotlinx.coroutines.delay(PREVIEW_MS); if (preview === p) listenTo(null) }
         }
-        previewStop = graph.scope.launch { kotlinx.coroutines.delay(30_000); listenTo(null) }
+        // Done early: give the focus back, so the record comes back too. Posted, so the player
+        // isn't released from inside its own callback.
+        player.setOnCompletionListener { done -> window.decorView.post { if (preview === done) listenTo(null) } }
+        player.setOnErrorListener { failed, _, _ ->
+            window.decorView.post {
+                if (preview === failed) { message.value = "Couldn't play a preview of that track."; listenTo(null) }
+            }
+            true
+        }
+        val started = runCatching { player.setDataSource(url); player.prepareAsync() }
+        if (started.isFailure) {
+            message.value = "Couldn't play a preview of that track."
+            listenTo(null)
+            return
+        }
+        // A slow archive: give up rather than hold the focus (and the paused record) in silence.
+        previewStop = graph.scope.launch {
+            kotlinx.coroutines.delay(PREVIEW_BUFFER_MS)
+            if (preview === player && previewState.value?.phase == app.runout.ui.PreviewPhase.BUFFERING) {
+                message.value = "Couldn't load a preview right now."
+                listenTo(null)
+            }
+        }
     }
 
     private fun importAutoEq(uri: Uri) {
@@ -532,6 +565,11 @@ class MainActivity : ComponentActivity() {
 
     private fun now(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
 }
+
+/** A drop listen plays this long from its first sound. */
+private const val PREVIEW_MS = 30_000L
+/** How long a drop listen may take to start before it gives up. */
+private const val PREVIEW_BUFFER_MS = 15_000L
 
 /**
  * After the music folder moves from [old] to [new]: ask whether the Soulseek shared folder should
