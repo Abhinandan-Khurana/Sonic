@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.add
@@ -399,6 +404,16 @@ fun RoomScreen(
     }
     // The room's entrance after onboarding, around the deck (which never moves): 1 is fully in.
     val entry = remember { Animatable(1f) }
+    // Once, as the room first comes in after onboarding: the deck turns with two fingers.
+    val roomPrefs = remember { appContext.getSharedPreferences("room", android.content.Context.MODE_PRIVATE) }
+    var tiltHint by remember { mutableStateOf(false) }
+    val doneTiltHint = { tiltHint = false; roomPrefs.edit().putBoolean(TILT_HINT_KEY, true).apply() }
+    // Turning the deck is the answer: the hint goes as soon as the view changes.
+    DisposableEffect(roomPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key == "deck_flat" && tiltHint) doneTiltHint() }
+        roomPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { roomPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     // How high the disc is held (its scale), and how far it has turned since it left the sleeve.
     val lift = remember { Animatable(1f) }
     val spin = remember { Animatable(0f) }
@@ -1065,12 +1080,26 @@ fun RoomScreen(
                         scope.launch {
                             entry.snapTo(0f)
                             entry.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 200f))
+                            if (!roomPrefs.getBoolean(TILT_HINT_KEY, false)) tiltHint = true
                         }
                     },
                     intro = firstRun && setupStart == 0,
                     onClose = if (firstRun) null else ({ setupOpen = false }),
                 )
             }
+        }
+
+        // The two-finger hint, at the foot of the deck. It takes no touches but its own "got it", so
+        // the deck under it still turns.
+        val hintAt = deckSpot.rect
+        if (tiltHint && !setupOpen && panel == null && hintAt != null) {
+            TiltHint(
+                Modifier
+                    .zIndex(10.5f)
+                    .offset { IntOffset(hintAt.left.roundToInt(), hintAt.top.roundToInt()) }
+                    .size(with(density) { hintAt.width.toDp() }, with(density) { hintAt.height.toDp() }),
+                onDone = doneTiltHint,
+            )
         }
 
         state.albums.firstOrNull { it.id == removeId }?.let { record ->
@@ -1347,6 +1376,42 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
 internal fun pageBottom(navRoom: Boolean = true): WindowInsets =
     WindowInsets.ime.union(WindowInsets.navigationBars.add(WindowInsets(bottom = if (navRoom) NAV_HEIGHT else 0.dp)))
         .only(WindowInsetsSides.Bottom)
+
+/** Set once the two-finger hint over the deck has been seen. */
+private const val TILT_HINT_KEY = "tilt_hint_seen"
+
+/**
+ * The deck's two-finger hint: a small ink card at the foot of the deck, its fingertips sliding
+ * down and back, "two fingers: swipe down to see the deck from above, up to tilt it back."
+ */
+@Composable
+private fun TiltHint(modifier: Modifier, onDone: () -> Unit) {
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, tween(320)) }
+    val demo by rememberInfiniteTransition(label = "tilt-hint").animateFloat(
+        0f, 1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "fingers",
+    )
+    Box(modifier, contentAlignment = Alignment.BottomCenter) {
+        Row(
+            Modifier
+                .padding(bottom = 16.dp, start = 22.dp, end = 22.dp)
+                .graphicsLayer { alpha = shown.value; translationY = (1f - shown.value) * 12.dp.toPx() }
+                .background(Room.Ink)
+                .padding(horizontal = 16.dp, vertical = 11.dp)
+                .testTag("tilt-hint"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            Canvas(Modifier.size(28.dp)) { drawTwoFingerSwipe(Color.White, demo) }
+            BasicText(
+                "two fingers: swipe down to see the deck from above, up to tilt it back.",
+                style = Room.Label.copy(color = Color.White, lineHeight = 14.sp),
+                modifier = Modifier.weight(1f, fill = false).widthIn(max = 220.dp),
+            )
+            TeLink("got it", onDone, tag = "tilt-hint-done", arrow = "", color = Room.Signal)
+        }
+    }
+}
 
 /** How long Dig keeps a search after you leave it. */
 internal const val DIG_FORGET_MS = 10_000L

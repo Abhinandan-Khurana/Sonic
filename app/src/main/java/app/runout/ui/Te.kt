@@ -221,6 +221,23 @@ fun UprightNote(modifier: Modifier = Modifier, large: Boolean = false) {
     }
 }
 
+/**
+ * Two fingertips side by side on a short track, with an arrowhead above and below: swipe two
+ * fingers down or up. [lift] (0 to 1) slides the fingertips down the track, for a gentle demo.
+ */
+internal fun DrawScope.drawTwoFingerSwipe(color: Color, lift: Float = 0f) {
+    val k = size.width / 24f
+    val s = Stroke(width = 1.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val dy = 4f * k * lift
+    drawRoundRect(color, Offset(5f * k, 6f * k + dy), Size(5.5f * k, 8f * k), CornerRadius(2.75f * k), style = s)
+    drawRoundRect(color, Offset(13.5f * k, 6f * k + dy), Size(5.5f * k, 8f * k), CornerRadius(2.75f * k), style = s)
+    // Up and down, the two ways the deck turns.
+    drawLine(color, Offset(9.5f * k, 2.5f * k), Offset(12f * k, 0.8f * k), s.width, StrokeCap.Round)
+    drawLine(color, Offset(14.5f * k, 2.5f * k), Offset(12f * k, 0.8f * k), s.width, StrokeCap.Round)
+    drawLine(color, Offset(9.5f * k, 21.5f * k), Offset(12f * k, 23.2f * k), s.width, StrokeCap.Round)
+    drawLine(color, Offset(14.5f * k, 21.5f * k), Offset(12f * k, 23.2f * k), s.width, StrokeCap.Round)
+}
+
 /** A phone standing upright with a curved arrow turning round it, on the nav icons' 24-unit grid. */
 internal fun DrawScope.drawTurnUpright(color: Color) {
     val k = size.width / 24f

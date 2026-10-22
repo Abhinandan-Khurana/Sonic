@@ -68,6 +68,24 @@ class OnboardingHandoffTest {
     @Config(qualifiers = "w892dp-h412dp-xhdpi")
     @Test fun `the welcome's deck is the room's deck, in landscape`() = welcomeOverRoom("41_handoff_landscape")
 
+    @Test fun `the room's first look shows the two-finger hint over the deck, once`() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(atWelcome, RecordingActions()) }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("setup-welcome").performClick()
+        compose.mainClock.advanceTimeBy(2500)
+        compose.onNodeWithTag("tilt-hint").assertExists()
+        val deck = compose.onNodeWithTag("turntable").getBoundsInRoot()
+        val hint = compose.onNodeWithTag("tilt-hint").getBoundsInRoot()
+        assertTrue("the hint sits on the deck: $hint in $deck", hint.top >= deck.top && hint.bottom <= deck.bottom)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/43_tilt_hint.png")
+        compose.onNodeWithTag("tilt-hint-done").performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("tilt-hint").assertDoesNotExist()
+        val prefs = Fixtures.context.getSharedPreferences("room", android.content.Context.MODE_PRIVATE)
+        assertTrue("seen once, never again", prefs.getBoolean("tilt_hint_seen", false))
+    }
+
     @Test fun `the intro draws its deck where the room's will be`() {
         compose.mainClock.autoAdvance = false
         compose.setContent { RoomScreen(atWelcome.copy(onboardingStep = 0), RecordingActions()) }
