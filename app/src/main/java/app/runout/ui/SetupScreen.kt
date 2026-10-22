@@ -101,10 +101,11 @@ internal fun SetupScreen(
     // On the first run, Back on the sign-in leaves the app without finishing onboarding.
     BackHandler(enabled = step !in setOf(Step.INTRO, Step.LOGIN, Step.WELCOME) || onClose != null) { back() }
 
+    val deckSpot = LocalDeckSpot.current
     Box(
         Modifier
             .fillMaxSize()
-            .background(Room.Background)
+            .drawBehind { drawPaper(deckSpot) }
             .testTag("screen:setup"),
     ) {
         AnimatedContent(
@@ -631,15 +632,33 @@ private fun RhythmCard(title: String, detail: String, selected: Boolean, enabled
  * The last screen (TE · Onboarding · Welcome): the RG-1 above an orange square and the greeting
  * in 44/700, "WELCOME IN, <Soulseek ID>." or "WELCOME IN, LISTENER." offline. The greeting pops
  * in, holds for about two seconds (a tap skips it), and the room takes over from the deck.
+ *
+ * Over the room the RG-1 is the room's own live deck, seen through a window in the page at
+ * exactly its place (beside it in landscape, the greeting in the room's column); on its own the
+ * page draws the render instead.
  */
 @Composable
 private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
     val pop = remember { Animatable(0f) }
     val hold = remember { Animatable(0f) }
     val onFinished by rememberUpdatedState(onFinish)
-    // A tap skips the hold; either way the room is opened once.
+    val spot = LocalDeckSpot.current
+    // A tap skips the hold; either way the room is opened once, after the greeting has stepped off
+    // the deck, so it never crosses the room's own words coming in under it.
     var done by remember { mutableStateOf(false) }
-    val finish = { if (!done) { done = true; onFinished() } }
+    val finish = { done = true }
+    val leave = remember { Animatable(1f) }
+    LaunchedEffect(done) {
+        if (!done) return@LaunchedEffect
+        leave.animateTo(0f, tween(GREETING_LEAVE_MS))
+        onFinished()
+    }
+    // The window onto the room's deck opens as the step fades in, and closes again once the page
+    // is gone (it fades out whole, window and all, as the room comes in).
+    if (spot != null) {
+        LaunchedEffect(spot) { androidx.compose.animation.core.animate(spot.window, 1f, animationSpec = tween(WINDOW_OPEN_MS)) { v, _ -> spot.window = v } }
+        DisposableEffect(spot) { onDispose { spot.window = 0f } }
+    }
     LaunchedEffect(Unit) {
         // The pop settles in about half a second; the hold makes it about two on screen.
         pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 260f))
@@ -647,40 +666,67 @@ private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
         hold.animateTo(1f, tween(WELCOME_HOLD_MS))
         finish()
     }
-    Column(
+    val deck = spot?.rect
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = "Skip") { finish() }
-            .testTag("setup-welcome")
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 66.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
+            .testTag("setup-welcome"),
     ) {
-        Image(
-            painterResource(R.drawable.onboarding_deck_empty),
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().height(212.dp),
-        )
+        // Landscape puts the deck on the left band: the greeting goes in the room's column beside it.
+        val beside = deck != null && maxWidth > maxHeight
+        if (deck != null) {
+            // Where the window is, for the tests (it draws nothing).
+            with(density) {
+                Box(Modifier.offset(deck.left.toDp(), deck.top.toDp()).size(deck.width.toDp(), deck.height.toDp()).testTag("welcome-deck"))
+            }
+        }
         Column(
-            Modifier.graphicsLayer {
-                val s = 0.82f + 0.18f * pop.value
-                scaleX = s; scaleY = s
-                transformOrigin = TransformOrigin(0f, 1f)
-                alpha = pop.value.coerceIn(0f, 1f)
-            },
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(if (beside) WindowInsetsSides.Vertical + WindowInsetsSides.End else WindowInsetsSides.Vertical + WindowInsetsSides.Horizontal))
+                .padding(
+                    start = 22.dp + if (beside) with(density) { deck!!.right.toDp() } else 0.dp,
+                    end = 22.dp,
+                    top = 33.dp,
+                    bottom = 66.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
         ) {
-            Box(Modifier.size(22.dp).background(Room.Signal))
-            BasicText(
-                "WELCOME IN, ${(name ?: "listener").uppercase()}.",
-                style = Room.Display.copy(lineHeight = 46.sp),
-                modifier = Modifier.fillMaxWidth().semantics { heading() },
-            )
-            BasicText("make yourself at home.", style = Room.Text.copy(color = Room.Body))
+            if (deck == null) {
+                Image(
+                    painterResource(R.drawable.onboarding_deck_empty),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().height(212.dp),
+                )
+            }
+            Column(
+                Modifier.graphicsLayer {
+                    val s = 0.82f + 0.18f * pop.value
+                    scaleX = s; scaleY = s
+                    transformOrigin = TransformOrigin(0f, 1f)
+                    alpha = pop.value.coerceIn(0f, 1f) * leave.value
+                    translationY = (1f - leave.value) * 12.dp.toPx()
+                },
+                verticalArrangement = Arrangement.spacedBy(22.dp),
+            ) {
+                Box(Modifier.size(22.dp).background(Room.Signal))
+                BasicText(
+                    "WELCOME IN, ${(name ?: "listener").uppercase()}.",
+                    style = Room.Display.copy(lineHeight = 46.sp),
+                    modifier = Modifier.fillMaxWidth().semantics { heading() },
+                )
+                BasicText("make yourself at home.", style = Room.Text.copy(color = Room.Body))
+            }
         }
     }
 }
 
 /** How long the greeting stays after it pops in, before the room comes in. */
 private const val WELCOME_HOLD_MS = 1450
+/** How long the greeting takes to fade off the deck once it's done, before the room comes in. */
+private const val GREETING_LEAVE_MS = 180
+/** How long the window onto the room's deck takes to open, with the step's own fade in. */
+private const val WINDOW_OPEN_MS = 360

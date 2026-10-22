@@ -391,7 +391,11 @@ fun RoomScreen(
     val disc = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     // The deck's camera and position, so a pulled record can be the 3D record in your hand.
     val deckLink = remember { DeckLink() }
-    // The room's entrance after onboarding: 1 is fully in.
+    // The same view, in the room's own coordinates: onboarding over the room puts its deck there.
+    val deckSpot = remember {
+        DeckSpot { deckLink.camera?.let { androidx.compose.ui.geometry.Rect(deckLink.origin - rootOrigin, androidx.compose.ui.geometry.Size(it.width, it.height)) } }
+    }
+    // The room's entrance after onboarding, around the deck (which never moves): 1 is fully in.
     val entry = remember { Animatable(1f) }
     // How high the disc is held (its scale), and how far it has turned since it left the sleeve.
     val lift = remember { Animatable(1f) }
@@ -514,15 +518,23 @@ fun RoomScreen(
             disc.animateTo(start + pullOut(s), spring(dampingRatio = 0.58f, stiffness = 260f))
         }
 
+        // After onboarding the room comes in around the deck: everything but the deck rises into
+        // place and fades up as the greeting goes, while the deck the greeting showed stays put.
+        val rise = Modifier.graphicsLayer {
+            val e = entry.value
+            alpha = e.coerceIn(0f, 1f)
+            translationY = (1f - e) * 20.dp.toPx()
+        }
+        // An empty deck sits back at half strength; under onboarding it's shown whole, and it eases
+        // back as the room comes in rather than changing under the greeting.
+        val deckAlpha by androidx.compose.animation.core.animateFloatAsState(
+            if (state.albums.isEmpty() && !setupOpen) 0.5f else 1f,
+            tween(480, delayMillis = 120),
+            label = "deck-dim",
+        )
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    val e = entry.value
-                    val sc = 0.92f + 0.08f * e
-                    scaleX = sc; scaleY = sc
-                    alpha = e.coerceIn(0f, 1f)
-                }
                 .layerBackdrop(roomBackdrop)
                 // Under a page the room is out of sight: keep TalkBack out of it too.
                 .then(if (panel?.fullPage == true) Modifier.clearAndSetSemantics { } else Modifier),
@@ -590,21 +602,24 @@ fun RoomScreen(
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(bottom = NAV_HEIGHT),
                 ) {
-                    TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount)
-                    DeckBand(state, empty = state.albums.isEmpty(), help = { help(HELP_LED, it) }) { turntable(it, Alignment.Center) }
-                    if (state.albums.isEmpty()) {
-                        EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
-                    } else {
-                        Box(Modifier.fillMaxWidth().weight(301f)) {
-                            crate(Modifier.fillMaxSize(), CrateGeometry.Portrait)
-                            if (roomHelps) Row(Modifier.align(Alignment.TopEnd).padding(top = 11.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                BasicText("how the crate works", style = Room.LabelQuiet)
-                                HelpKey(HELP_CRATE.title, Modifier) { roomHelp = HELP_CRATE }
+                    Box(rise) { TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount) }
+                    DeckBand(state, empty = state.albums.isEmpty(), deckAlpha = { deckAlpha }, chrome = rise, help = { help(HELP_LED, it) }) { turntable(it, Alignment.Center) }
+                    // Everything under the deck in one column (the weights share its height as before), so it can rise in as one.
+                    Column(Modifier.fillMaxWidth().weight(1f).then(rise)) {
+                        if (state.albums.isEmpty()) {
+                            EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
+                        } else {
+                            Box(Modifier.fillMaxWidth().weight(301f)) {
+                                crate(Modifier.fillMaxSize(), CrateGeometry.Portrait)
+                                if (roomHelps) Row(Modifier.align(Alignment.TopEnd).padding(top = 11.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    BasicText("how the crate works", style = Room.LabelQuiet)
+                                    HelpKey(HELP_CRATE.title, Modifier) { roomHelp = HELP_CRATE }
+                                }
                             }
-                        }
-                        front?.let { AlbumCaption(it, portrait = true) }
-                        Box(Modifier.fillMaxWidth().weight(105f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
-                            TrackWheel(state, actions, rows = 4, help = { help(HELP_WHEEL, it) })
+                            front?.let { AlbumCaption(it, portrait = true) }
+                            Box(Modifier.fillMaxWidth().weight(105f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+                                TrackWheel(state, actions, rows = 4, help = { help(HELP_WHEEL, it) })
+                            }
                         }
                     }
                 }
@@ -618,14 +633,14 @@ fun RoomScreen(
                         },
                         verticalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        BasicText("rg-1 · white / teal", style = Room.LabelQuiet, modifier = Modifier.align(Alignment.End).padding(start = 22.dp, end = 22.dp, top = 22.dp))
+                        BasicText("rg-1 · white / teal", style = Room.LabelQuiet, modifier = Modifier.align(Alignment.End).then(rise).padding(start = 22.dp, end = 22.dp, top = 22.dp))
                         turntable(Modifier.fillMaxWidth().weight(1f), Alignment.Center)
-                        Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
+                        Row(Modifier.fillMaxWidth().then(rise).padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
                             BasicText(bandCaption(state, landscape = true), style = Room.LabelQuiet, modifier = Modifier.weight(1f), maxLines = 1)
                             if (state.deck.album != null) BasicText("33⅓ rpm", style = Room.LabelQuiet)
                         }
                     }
-                    Column(Modifier.weight(LANDSCAPE_ROOM).fillMaxHeight().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = NAV_HEIGHT)) {
+                    Column(Modifier.weight(LANDSCAPE_ROOM).fillMaxHeight().then(rise).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = NAV_HEIGHT)) {
                         TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount)
                         if (state.albums.isEmpty()) {
                             EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
@@ -1000,7 +1015,7 @@ fun RoomScreen(
         // One nav bar for the room and every page, the open page's cell in black.
         // In landscape it sits at the foot of the room's column, beside the deck.
         // The same side insets as the room's column, so the bar lines up with it.
-        if (!setupOpen) Box(Modifier.fillMaxSize().zIndex(11.5f).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+        if (!setupOpen) Box(Modifier.fillMaxSize().zIndex(11.5f).then(rise).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
             TeNavBar(
                 active = page,
                 badges = navBadges(state),
@@ -1033,22 +1048,26 @@ fun RoomScreen(
         if (page != null) Box(Modifier.fillMaxSize().zIndex(11.7f)) { PageSheetLayer(pageSheets) }
 
         // Onboarding: its own full screen, on first launch or when Soulseek setup is asked for again.
-        // Finishing drops you into the room, which pops in behind the fading greeting.
+        // Its deck sits where the room's does, and the welcome looks through to the room's live deck,
+        // so finishing never moves the deck: the greeting fades off it while the rest of the room
+        // rises in around it.
         val firstRun = !state.onboardingComplete
         AnimatedVisibility(setupOpen, enter = fadeIn(tween(200)), exit = fadeOut(tween(320)), modifier = Modifier.zIndex(12f)) {
-            SetupScreen(
-                state, actions, setupStart,
-                onFinish = {
-                    actions.finishOnboarding()
-                    setupOpen = false
-                    scope.launch {
-                        entry.snapTo(0f)
-                        entry.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 220f))
-                    }
-                },
-                intro = firstRun && setupStart == 0,
-                onClose = if (firstRun) null else ({ setupOpen = false }),
-            )
+            CompositionLocalProvider(LocalDeckSpot provides deckSpot) {
+                SetupScreen(
+                    state, actions, setupStart,
+                    onFinish = {
+                        actions.finishOnboarding()
+                        setupOpen = false
+                        scope.launch {
+                            entry.snapTo(0f)
+                            entry.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 200f))
+                        }
+                    },
+                    intro = firstRun && setupStart == 0,
+                    onClose = if (firstRun) null else ({ setupOpen = false }),
+                )
+            }
         }
 
         state.albums.firstOrNull { it.id == removeId }?.let { record ->
@@ -1436,12 +1455,23 @@ private fun Lamp(color: Color?) {
     Box(Modifier.size(8.dp).then(if (color != null) Modifier.background(color) else Modifier.border(1.dp, Room.Ink)))
 }
 
-/** The deck's band: the RG-1 at 412 × 240, and under it "33⅓ rpm" (the LED already shows the side and time). */
+/**
+ * The deck's band: the RG-1 at 412 × 240, and under it "33⅓ rpm" (the LED already shows the side and
+ * time). The deck is drawn at [deckAlpha] (read at draw time, so easing it doesn't recompose the
+ * room); the row under it takes [chrome].
+ */
 @Composable
-private fun DeckBand(state: RoomState, empty: Boolean, help: @Composable (Modifier) -> Unit, deck: @Composable (Modifier) -> Unit) {
+private fun DeckBand(
+    state: RoomState,
+    empty: Boolean,
+    deckAlpha: () -> Float,
+    chrome: Modifier,
+    help: @Composable (Modifier) -> Unit,
+    deck: @Composable (Modifier) -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(bottom = if (empty) 0.dp else 16.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(412f / 240f).alpha(if (empty) 0.5f else 1f)) { deck(Modifier.fillMaxSize()) }
-        Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.fillMaxWidth().aspectRatio(412f / 240f).graphicsLayer { alpha = deckAlpha() }) { deck(Modifier.fillMaxSize()) }
+        Row(Modifier.fillMaxWidth().then(chrome).padding(start = 22.dp, end = 22.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             help(Modifier)
             Spacer(Modifier.weight(1f))
             if (!empty) BasicText("33⅓ rpm", style = Room.LabelQuiet)
