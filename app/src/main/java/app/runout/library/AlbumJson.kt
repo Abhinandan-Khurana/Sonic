@@ -28,6 +28,8 @@ object AlbumJson {
         a.labelColor?.let { put("labelColor", it) }
         a.notes?.let { put("notes", it) }
         a.from?.let { put("from", it) }
+        // Where on the peer's share it came from; it stays on this phone like the other paths.
+        if (includeLocalPaths) a.remoteFolder?.let { put("remoteFolder", it) }
         put("quality", JSONObject().apply {
             put("codec", a.quality.codec)
             a.quality.bitsPerSample?.let { put("bits", it) }
@@ -68,6 +70,7 @@ object AlbumJson {
             labelColor = if (o.has("labelColor")) o.getInt("labelColor") else null,
             notes = o.optString("notes").takeIf { it.isNotBlank() },
             from = o.optString("from").takeIf { it.isNotBlank() },
+            remoteFolder = o.optString("remoteFolder").takeIf { it.isNotBlank() },
             quality = AudioQuality(
                 codec = q.getString("codec"),
                 bitsPerSample = if (q.has("bits")) q.getInt("bits") else null,

@@ -279,6 +279,8 @@ interface RoomActions : DeckActions {
     fun clearSoulseekError() {}
     fun reconnectSoulseek() {}
     fun previewSoulseekFolder(result: SoulseekSearchResult) { downloadSoulseekFolder(result) }
+    /** Lists one folder on a peer's share by name, as a record card sent in a chat names it. */
+    fun openSoulseekFolder(username: String, directory: String) {}
     fun confirmSoulseekFolder() {}
     fun closeSoulseekFolder() {}
     fun setSearchQuery(value: String) {}

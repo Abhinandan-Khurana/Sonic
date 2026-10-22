@@ -83,7 +83,8 @@ class SoulseekRepository(
     private val generation get() = connection.generation
     private val activeTransfers = ConcurrentHashMap.newKeySet<String>()
     private val publicationJobs = ConcurrentHashMap<String, Job>()
-    private val pendingBrowse = ConcurrentHashMap<String, SoulseekSearchResult>()
+    private data class BrowseRequest(val username: String, val directory: String)
+    private val pendingBrowse = ConcurrentHashMap<String, BrowseRequest>()
     private val shares = ConcurrentHashMap<String, SharedFile>()
     private val shareRevision = java.util.concurrent.atomic.AtomicLong()
     private var searchId: String? = null
@@ -159,6 +160,11 @@ class SoulseekRepository(
     fun canDownload(): Boolean = session.value.signedIn
     fun requireSignedIn() { check(canDownload()) { "Sign in with your Soulseek account to download and keep music." } }
     fun clearError() { _error.value = null }
+    /**
+     * Drops a "sign in" or "offline" error once the session is back, so the prompt doesn't stay up
+     * after you've signed in. Any other error is still news and stays.
+     */
+    private fun clearSessionError() { _error.update { if (it != null && isSessionError(it)) null else it } }
 
     fun signIn(username: String, password: String, remember: Boolean): Job = work {
         require(SoulseekPolicy.validUsername(username)) { "Use a Soulseek username of 1–30 printable ASCII characters, without surrounding spaces." }
@@ -173,8 +179,9 @@ class SoulseekRepository(
     }
     fun signInSaved(): Job = work {
         accountMutex.withLock { connection.disconnect(SoulseekDisconnectReason.MANUAL); clearSessionWork("Account changed", true); connection.signInSaved() }
+        clearSessionError()
     }
-    fun reconnect(): Job = work { connection.reconnect() }
+    fun reconnect(): Job = work { connection.reconnect(); clearSessionError() }
     private fun observeOwner(username: String) {
         if (observedOwner == username) return
         observedOwner = username
@@ -246,11 +253,13 @@ class SoulseekRepository(
         files.forEach { enqueue(it, albumId) }
     }
     fun downloadFolder(result: SoulseekSearchResult): Job = previewFolder(result)
-    fun previewFolder(result: SoulseekSearchResult): Job = work {
+    fun previewFolder(result: SoulseekSearchResult): Job = previewFolder(result.username, result.directory)
+    /** Lists [directory] on [username]'s share (`/` separators), as the folder a record card names. */
+    fun previewFolder(username: String, directory: String): Job = work {
         requireSignedIn()
-        val id = UUID.randomUUID().toString(); pendingBrowse.clear(); pendingBrowse[id] = result
-        _folderPreview.value = SoulseekFolderPreview(id, result.username, result.directory)
-        command("browse") { put("id", id); put("username", result.username); put("directory", result.directory) }
+        val id = UUID.randomUUID().toString(); pendingBrowse.clear(); pendingBrowse[id] = BrowseRequest(username, directory)
+        _folderPreview.value = SoulseekFolderPreview(id, username, directory)
+        command("browse") { put("id", id); put("username", username); put("directory", directory) }
     }
     fun closeFolderPreview() { pendingBrowse.clear(); _folderPreview.value = null }
     fun confirmFolderDownload(): Job = work {
@@ -607,6 +616,8 @@ class SoulseekRepository(
         when (event.optString("type")) {
             "session" -> when (event.optString("state")) {
                 "connected" -> {
+                    // First, so an error this branch raises below survives.
+                    clearSessionError()
                     observeOwner(owner)
                     _sharedFolder.value = preferences.sharedFolder(owner)?.let(Uri::parse)
                     if (backgroundConsented()) {
@@ -770,7 +781,11 @@ class SoulseekRepository(
         val cover = info.picture?.let { bytes -> File(context.filesDir, "soulseek-art/$albumId.jpg").apply { parentFile?.mkdirs(); writeBytes(bytes) }.absolutePath } ?: existing?.coverPath
         val album = rememberCover(Album(albumId, albumTitle, info.albumArtist ?: info.artist ?: existing?.artist ?: "Unknown artist", info.year ?: existing?.year, folder.uri.toString(),
             (existing?.tracks.orEmpty().filterNot { it.id == track.id } + track).sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.fileName })), quality, coverPath = cover,
-            source = Source.SOULSEEK, albumGainDb = info.albumGainDb, owned = false, from = initial.username))
+            source = Source.SOULSEEK, albumGainDb = info.albumGainDb, owned = false,
+            // The first source names the record's peer and folder, kept as a pair, even when a
+            // missing track later comes from someone else: a shared record card opens that folder.
+            from = existing?.takeIf { it.remoteFolder != null }?.from ?: initial.username,
+            remoteFolder = existing?.remoteFolder ?: remoteDirectory))
         db.withTransaction { dao.putAlbum(DownloadAlbumRow(albumId, AlbumJson.toJson(album).toString())); dao.putTransfer(row.copy(state = "COMPLETED", bytes = row.size, speed = 0.0, error = null, failure = null, recovery = null, retryAt = null)) }
         writeDownloadRecord(folder, album, listOf("slsk://${initial.username}/${initial.path}"))
         stage.delete()
@@ -992,6 +1007,10 @@ class SoulseekRepository(
             if (row == null || row.state == "CANCELLED" || row.state == "COMPLETED") dir.deleteRecursively()
         }
     }
+
+    /** The errors that only say the session was missing: signed out, or offline. */
+    private fun isSessionError(message: String) =
+        message.startsWith("Sign in with your Soulseek account") || message.startsWith("Soulseek is offline")
 
     private fun friendly(e: Throwable): String = when (e) {
         is SecurityException -> "Folder access was lost. Choose the folder again and retry."
