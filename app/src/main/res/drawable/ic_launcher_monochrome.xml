@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icons (Android 13+): the sleeve's disc and the arm's line across it, in one tone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M54,23.3a30.7,30.7 0,1 1,0 61.4a30.7,30.7 0,1 1,0 -61.4z M23.3,53.4 L62.2,53.4 L62.2,54.6 L23.3,54.6z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M17,53.4 L23.4,53.4 L23.4,54.6 L17,54.6z" />
+</vector>
