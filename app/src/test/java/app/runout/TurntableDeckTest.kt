@@ -246,6 +246,70 @@ class TurntableDeckTest {
         } finally { p.release() }
     }
 
+    @Test fun `with auto-play on, a record put on the platter starts, cued songs too`() {
+        deck.setAutoPlay(true)
+        deck.load(album())
+        settle()
+        assertTrue(s.needleDown)
+        assertTrue(player.playWhenReady)
+        deck.cueTrack(album().copy(id = "again"), "t4")
+        settle()
+        assertTrue(s.needleDown)
+        assertEquals("B2", s.trackCode)
+        assertEquals("t4", player.currentMediaItem?.mediaId)
+        deck.setAutoPlay(false)
+        deck.load(album().copy(id = "quiet"))
+        settle()
+        assertFalse("off again: the needle waits", s.needleDown)
+    }
+
+    @Test fun `with auto-flip on, side A running out turns the record and plays side B`() {
+        val (d, p) = runningDeck()
+        try {
+            d.setAutoFlip(true)
+            d.load(album())
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_ENDED)
+            settle(50)
+            assertTrue(d.state.value.sideFinished)
+            assertEquals(0, d.state.value.sideIndex)
+            settle(3_000) // the runout groove, then the turn
+            assertEquals(1, d.state.value.sideIndex)
+            assertTrue("side B plays", d.state.value.needleDown)
+            assertEquals("t3", p.currentMediaItem?.mediaId)
+            // The last side rests when it runs out.
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_ENDED)
+            settle(3_000)
+            assertEquals(1, d.state.value.sideIndex)
+            assertFalse(d.state.value.needleDown)
+        } finally { p.release() }
+    }
+
+    @Test fun `the sleep timer fades the music out and lifts the needle, and can be called off`() {
+        deck.load(album())
+        deck.startStop()
+        settle()
+        deck.setSleepTimer(15)
+        assertTrue(deck.sleepAt.value != null)
+        settle(14 * 60_000L)
+        assertTrue("still playing at 14 minutes", s.needleDown)
+        settle(2 * 60_000L)
+        assertFalse("asleep after 15 minutes and the fade", s.needleDown)
+        assertEquals(null, deck.sleepAt.value)
+        assertEquals("the next record plays at full volume", 1f, player.volume)
+        deck.startStop()
+        settle()
+        deck.setSleepTimer(20)
+        deck.setSleepTimer(null)
+        settle(25 * 60_000L)
+        assertTrue("off: the music plays on", s.needleDown)
+        deck.setSleepMode(true)
+        deck.setSleepTimer(30)
+        deck.setSleepMode(false)
+        assertEquals("sleep mode off calls the timer off too", null, deck.sleepAt.value)
+    }
+
     @Test
     fun `a track that can't be played lifts the needle and says why`() {
         val (d, p) = runningDeck()

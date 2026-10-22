@@ -88,6 +88,8 @@ class MainActivity : ComponentActivity() {
             val drops by graph.drops.state.collectAsStateWithLifecycle()
             val claimed by graph.drops.claimed.collectAsStateWithLifecycle()
             val newDrop by graph.drops.newDrop.collectAsStateWithLifecycle()
+            val deckFlags by graph.deck.flags.collectAsStateWithLifecycle()
+            val sleepAt by graph.deck.sleepAt.collectAsStateWithLifecycle()
             val listening by previewState.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
             val note by message.collectAsStateWithLifecycle()
@@ -210,6 +212,10 @@ class MainActivity : ComponentActivity() {
                     override fun searchSoulseek(query: String) { graph.soulseek.search(query) }
                     override fun stopSoulseekSearch() { graph.soulseek.stopSearch() }
                     override fun clearSearch() { graph.soulseek.clearSearch(); graph.discovery.clear() }
+                    override fun setAutoFlip(on: Boolean) = graph.deck.setAutoFlip(on)
+                    override fun setAutoPlay(on: Boolean) = graph.deck.setAutoPlay(on)
+                    override fun setSleepMode(on: Boolean) = graph.deck.setSleepMode(on)
+                    override fun setSleepTimer(minutes: Int?) = graph.deck.setSleepTimer(minutes)
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {
                             pendingDownload = result; graph.soulseek.onExternalFlow(true); downloadPicker.launch(null)
@@ -321,6 +327,8 @@ class MainActivity : ComponentActivity() {
                     coverLookupNoticePending = coverLookupNoticePending,
                     turtleMode = turtleMode,
                     newDrop = newDrop,
+                    deckFlags = deckFlags,
+                    sleepAt = sleepAt,
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,
                     soulseekWaitingForWifi = waitingForWifi,

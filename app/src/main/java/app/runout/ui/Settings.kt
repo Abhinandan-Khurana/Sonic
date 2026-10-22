@@ -97,6 +97,7 @@ fun SettingsPanel(
                 TeButton("downloads", onDownloads, Modifier.testTag("settings-downloads"), kind = KeyKind.OUTLINE)
             }
             SettingsSection.LIBRARY -> LibraryPage(state, actions)
+            SettingsSection.FLAGS -> FlagsPage(state, actions)
             SettingsSection.ABOUT -> AboutPage()
         }
     }
@@ -114,6 +115,9 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
     SettingsSection.ACCOUNT ->
         if (state.soulseekSession.hasAccount) "${state.soulseekSession.username} · ${connectionLabel(state.soulseekSession)}".lowercase() else "not signed in"
     SettingsSection.LIBRARY -> "${recordCount(state.albums.size)} · ${if (state.hasFolder) "1 folder" else "no folder"}"
+    SettingsSection.FLAGS -> listOfNotNull(
+        "auto-flip".takeIf { state.deckFlags.autoFlip }, "auto-play".takeIf { state.deckFlags.autoPlay }, "sleep".takeIf { state.deckFlags.sleepMode },
+    ).joinToString(" · ").ifEmpty { "all off" }
     SettingsSection.ABOUT -> "sonic $VERSION · rg-1"
 }
 

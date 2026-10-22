@@ -201,6 +201,9 @@ class ListeningRoomUiTest {
         still("01_landscape_playing", state(deck = playing()), crateIndex = 3)
         // Sideways the room is for listening: the places wait for the phone to be upright.
         compose.onNodeWithTag("landscape-note").assertIsDisplayed()
+        // And nothing printed round the deck: no model label, no speed.
+        compose.onNodeWithText("rg-1 · white / teal").assertDoesNotExist()
+        compose.onNodeWithText("33⅓ rpm").assertDoesNotExist()
         compose.onNodeWithTag("nav:DROPS").assertDoesNotExist()
     }
 
@@ -351,6 +354,55 @@ class ListeningRoomUiTest {
         compose.waitForIdle()
         compose.onNodeWithTag("field:Private message").assertDoesNotExist()
         compose.onNodeWithTag("new-chat").assertExists()
+    }
+
+    @Test
+    fun `settings has flags for auto-flip, auto-play and sleep mode`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setAutoFlip(on: Boolean) { calls += "flip:$on" }
+            override fun setAutoPlay(on: Boolean) { calls += "play:$on" }
+            override fun setSleepMode(on: Boolean) { calls += "sleep:$on" }
+        }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.SETTINGS) }
+        compose.onNodeWithTag("settings:FLAGS").performScrollTo().performClick()
+        compose.onNodeWithTag("panel:flags").assertExists()
+        listOf("Auto-flip", "Auto-play", "Sleep mode").forEach { compose.onNodeWithTag("toggle:$it").performClick() }
+        assertEquals(listOf("flip:true", "play:true", "sleep:true"), calls)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_flags.png")
+    }
+
+    @Test
+    fun `sleep mode puts a moon in the top bar that sets the sleep timer`() {
+        portrait()
+        val set = mutableListOf<Int?>()
+        val actions = object : RecordingActions() { override fun setSleepTimer(minutes: Int?) { set += minutes } }
+        var s by mutableStateOf(state())
+        compose.setContent { RoomScreen(s, actions) }
+        compose.onNodeWithTag("sleep-moon").assertDoesNotExist()
+        s = s.copy(deckFlags = app.runout.playback.DeckFlags(sleepMode = true))
+        compose.onNodeWithTag("sleep-moon").performClick()
+        compose.onNodeWithTag("sleep-timer").assertExists()
+        compose.onNodeWithTag("sleep:40").performClick()
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/sleep_timer.png")
+        compose.onNodeWithTag("sleep-start").performClick()
+        assertEquals(listOf<Int?>(40), set)
+        // Running: the moon turns orange with the minutes left, and the card can turn it off. The
+        // countdown keeps a quarter-minute tick, so the clock only moves when told to from here.
+        compose.mainClock.autoAdvance = false
+        s = s.copy(sleepAt = System.currentTimeMillis() + 23 * 60_000L)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(200)
+        compose.onNodeWithContentDescription("minutes left", substring = true).assertExists()
+        compose.onNodeWithTag("sleep-moon").performClick()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("sleep-off").performClick()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals(listOf<Int?>(40, null), set)
     }
 
     @Test

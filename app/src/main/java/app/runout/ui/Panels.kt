@@ -100,7 +100,33 @@ enum class Panel(val title: String, val nav: String, val index: String, val inSt
 }
 
 /** The sections of the Settings sheet. */
-enum class SettingsSection(val label: String) { SOUND("Sound"), ACCOUNT("Soulseek"), LIBRARY("Library"), ABOUT("About") }
+enum class SettingsSection(val label: String) { SOUND("Sound"), ACCOUNT("Soulseek"), LIBRARY("Library"), FLAGS("Flags"), ABOUT("About") }
+
+private val HelpAutoFlip = TeHelp("help · flags", "auto-flip", listOf(
+    "when a side runs out, the record turns over and the next side plays from its first song.",
+    "after the last side it rests, the way a real deck would.",
+))
+private val HelpAutoPlay = TeHelp("help · flags", "auto-play", listOf(
+    "putting a record on the platter lowers the needle by itself.",
+    "turn it off to put records on first and start them from the deck.",
+))
+private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
+    "puts a moon in the room's top bar. tap it to stop the music in 15 to 50 minutes.",
+    "when the time is up the music fades out over a few seconds and the needle lifts.",
+))
+
+/** Settings › Flags: the deck's habits, each a switch. */
+@Composable
+internal fun FlagsPage(state: RoomState, actions: RoomActions) {
+    var help by remember { mutableStateOf<TeHelp?>(null) }
+    val f = state.deckFlags
+    Column(Modifier.fillMaxWidth().testTag("panel:flags")) {
+        HelpToggleRow("Auto-flip", "Side A over, side B plays.", f.autoFlip, actions::setAutoFlip) { help = HelpAutoFlip }
+        HelpToggleRow("Auto-play", "A record on the platter starts playing.", f.autoPlay, actions::setAutoPlay) { help = HelpAutoPlay }
+        HelpToggleRow("Sleep mode", "A moon in the room for the sleep timer.", f.sleepMode, actions::setSleepMode) { help = HelpSleep }
+    }
+    TeHelpSheet(help) { help = null }
+}
 
 // ---------------------------------------------------------------------------------------------
 // Page parts shared by Settings and Drops

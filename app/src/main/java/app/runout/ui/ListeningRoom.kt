@@ -196,6 +196,10 @@ data class RoomState(
     val turtleMode: Boolean = false,
     /** This week's Friday Drop hasn't been opened yet. */
     val newDrop: Boolean = false,
+    /** Settings › Flags. */
+    val deckFlags: app.runout.playback.DeckFlags = app.runout.playback.DeckFlags(),
+    /** When the sleep timer stops the music; null when it isn't running. */
+    val sleepAt: Long? = null,
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -261,6 +265,11 @@ interface RoomActions : DeckActions {
     fun stopSoulseekSearch() {}
     /** Ends Dig's search and empties it: Dig opens on its own page next time. */
     fun clearSearch() {}
+    fun setAutoFlip(on: Boolean) {}
+    fun setAutoPlay(on: Boolean) {}
+    fun setSleepMode(on: Boolean) {}
+    /** Stops the music in so many minutes; null turns the timer off. */
+    fun setSleepTimer(minutes: Int?) {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}
     fun downloadSoulseekFolder(result: SoulseekSearchResult) {}
     fun pauseSoulseekTransfer(id: String) {}
@@ -361,6 +370,8 @@ fun RoomScreen(
     val pageSteps = remember { PageSteps() }
     // A place's page is drawn fresh when this changes: tapping the open place again takes it home.
     var home by remember { mutableIntStateOf(0) }
+    // The sleep timer card, opened from the moon in the top bar.
+    var sleepOpen by remember { mutableStateOf(false) }
     // The chat open when the Friends tab was tapped: Friends opens on the chats, not back in it.
     var ignoreChat by remember { mutableStateOf<String?>(null) }
     fun closePanel() {
@@ -618,7 +629,7 @@ fun RoomScreen(
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(bottom = NAV_HEIGHT),
                 ) {
-                    Box(rise) { TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount) }
+                    Box(rise) { TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount, onSleep = { sleepOpen = true }) }
                     DeckBand(state, empty = state.albums.isEmpty(), deckAlpha = { deckAlpha }, chrome = rise, help = { help(HELP_LED, it) }) { turntable(it, Alignment.Center) }
                     // Everything under the deck in one column (the weights share its height as before), so it can rise in as one.
                     Column(Modifier.fillMaxWidth().weight(1f).then(rise)) {
@@ -640,24 +651,19 @@ fun RoomScreen(
                     }
                 }
             } else {
-                // Landscape: the deck's band on the left, ruled off; the room's column on the right
-                // with the nav at its foot.
+                // Landscape: the deck on the left, nothing printed around it; the room's column on the right.
                 Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))) {
                     Column(
-                        Modifier.weight(1f - LANDSCAPE_ROOM).fillMaxHeight().drawBehind {
-                            drawLine(Room.Hairline, Offset(size.width - 0.5.dp.toPx(), 0f), Offset(size.width - 0.5.dp.toPx(), size.height), 1.dp.toPx())
-                        },
+                        Modifier.weight(1f - LANDSCAPE_ROOM).fillMaxHeight(),
                         verticalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        BasicText("rg-1 · white / teal", style = Room.LabelQuiet, modifier = Modifier.align(Alignment.End).then(rise).padding(start = 22.dp, end = 22.dp, top = 22.dp))
                         turntable(Modifier.fillMaxWidth().weight(1f), Alignment.Center)
                         Row(Modifier.fillMaxWidth().then(rise).padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
                             BasicText(bandCaption(state, landscape = true), style = Room.LabelQuiet, modifier = Modifier.weight(1f), maxLines = 1)
-                            if (state.deck.album != null) BasicText("33⅓ rpm", style = Room.LabelQuiet)
                         }
                     }
                     Column(Modifier.weight(LANDSCAPE_ROOM).fillMaxHeight().then(rise).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = NAV_HEIGHT)) {
-                        TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount)
+                        TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount, onSleep = { sleepOpen = true })
                         if (state.albums.isEmpty()) {
                             EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
                         } else {
@@ -1113,6 +1119,8 @@ fun RoomScreen(
             )
         }
 
+        if (sleepOpen) SleepTimerCard(state.sleepAt, actions::setSleepTimer) { sleepOpen = false }
+
         state.albums.firstOrNull { it.id == removeId }?.let { record ->
             GlassConfirm(
                 "remove record?",
@@ -1447,7 +1455,7 @@ private fun RoomBackground(modifier: Modifier, @Suppress("UNUSED_PARAMETER") por
 
 /** TE · Home's top bar: the side that's up (or the empty platter) on the left; the line out, downloads and the shelf on the right. */
 @Composable
-private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> Unit) {
+private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> Unit, onSleep: () -> Unit = {}) {
     val deck = state.deck
     val side = deck.side
     // Downloads still in the queue or waiting for attention; finished and cancelled ones don't count.
@@ -1476,6 +1484,8 @@ private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> U
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (scanText != null) BasicText(scanText, style = Room.LabelQuiet, maxLines = 1)
+            // Sleep mode: the moon, just before the connection's square.
+            if (state.deckFlags.sleepMode) SleepMoon(minutesLeft(state.sleepAt), onSleep)
             val c = connectionColor(state.soulseekSession)
             Box(
                 Modifier

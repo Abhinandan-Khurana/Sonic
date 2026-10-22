@@ -69,6 +69,13 @@ data class DeckState(
 }
 
 /**
+ * Settings › Flags: the deck's habits. [autoFlip] turns the record over when a side runs out and plays
+ * on; [autoPlay] lowers the needle as soon as a record is on the platter; [sleepMode] puts the moon
+ * in the room's top bar for the sleep timer.
+ */
+data class DeckFlags(val autoFlip: Boolean = false, val autoPlay: Boolean = false, val sleepMode: Boolean = false)
+
+/**
  * The turntable's mechanics. Owns the side that's on the platter and translates turntable
  * gestures (needle drop, lift, hold the platter, flip, start/stop) into player commands. Records
  * always turn at the speed they were recorded at.
@@ -78,6 +85,7 @@ class Deck(
     private val sfx: VinylSfx,
     private val scope: CoroutineScope,
     private val sound: app.runout.sound.SoundEngine? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
     /** How the deck reaches a player: the playback service by default; tests hand it one directly. */
     private val connectPlayer: (onReady: (Player?) -> Unit) -> Unit = { ready -> connectToService(context, ready) },
 ) {
@@ -89,6 +97,47 @@ class Deck(
     private val prefs = context.getSharedPreferences("deck", Context.MODE_PRIVATE)
     private val _crackleOn = MutableStateFlow(prefs.getBoolean("crackle", true))
     val crackleOn: StateFlow<Boolean> = _crackleOn.asStateFlow()
+
+    private val _flags = MutableStateFlow(DeckFlags(prefs.getBoolean("auto_flip", false), prefs.getBoolean("auto_play", false), prefs.getBoolean("sleep_mode", false)))
+    val flags: StateFlow<DeckFlags> = _flags.asStateFlow()
+    private fun saveFlags(next: DeckFlags) {
+        _flags.value = next
+        prefs.edit().putBoolean("auto_flip", next.autoFlip).putBoolean("auto_play", next.autoPlay).putBoolean("sleep_mode", next.sleepMode).apply()
+    }
+    fun setAutoFlip(on: Boolean) = saveFlags(_flags.value.copy(autoFlip = on))
+    fun setAutoPlay(on: Boolean) = saveFlags(_flags.value.copy(autoPlay = on))
+    fun setSleepMode(on: Boolean) {
+        saveFlags(_flags.value.copy(sleepMode = on))
+        if (!on) setSleepTimer(null)
+    }
+
+    /** When the sleep timer stops the music, in epoch milliseconds; null when it isn't set. */
+    private val _sleepAt = MutableStateFlow<Long?>(null)
+    val sleepAt: StateFlow<Long?> = _sleepAt.asStateFlow()
+    private var sleepJob: Job? = null
+
+    /**
+     * Stops the music in [minutes]: it fades out over a few seconds and the needle lifts, like
+     * someone turning the volume down before they leave. Null turns the timer off.
+     */
+    fun setSleepTimer(minutes: Int?) {
+        sleepJob?.cancel()
+        if (minutes == null) { _sleepAt.value = null; return }
+        val at = clock() + minutes * 60_000L
+        _sleepAt.value = at
+        sleepJob = scope.launch {
+            delay((at - clock()).coerceAtLeast(0))
+            if (_state.value.needleDown) {
+                rampJob?.cancel()
+                for (step in 1..SLEEP_FADE_STEPS) {
+                    withController { c -> c.volume = 1f - step.toFloat() / SLEEP_FADE_STEPS }
+                    delay(SLEEP_FADE_MS / SLEEP_FADE_STEPS)
+                }
+                liftNeedle()
+            }
+            _sleepAt.value = null
+        }
+    }
 
     private var controller: Player? = null
     private val pending = mutableListOf<(Player) -> Unit>()
@@ -133,6 +182,7 @@ class Deck(
                 sfx.stopCrackle()
                 if (!pure) sfx.runout()
                 _state.update { it.copy(needleDown = false, isPlaying = false, sideFinished = true, positionMs = it.side?.durationMs ?: 0) }
+                autoFlip()
             }
         }
     }
@@ -212,8 +262,13 @@ class Deck(
         if (!pure) sfx.platterDrop()
     }
 
-    /** A record has been dropped on the platter. Nothing plays until the needle goes down. */
+    /** A record has been dropped on the platter. It plays at once with auto-play on; else it waits for the needle. */
     fun load(album: Album) {
+        put(album)
+        autoStart(0)
+    }
+
+    private fun put(album: Album) {
         val verified = FlacPolicy.filterAlbum(context, album, refreshMetadata = false) ?: return
         val sides = SideSplitter.split(verified.tracks)
         rampJob?.cancel()
@@ -227,7 +282,7 @@ class Deck(
      * song. Nothing plays: the listener lowers the tonearm or presses START on the deck.
      */
     fun cueTrack(album: Album, trackId: String?) {
-        load(album)
+        put(album)
         val loaded = _state.value
         val record = loaded.album ?: return
         if (record.id != album.id) return
@@ -236,8 +291,31 @@ class Deck(
         val side = loaded.sides[sideIndex]
         val trackIndex = side.tracks.indexOfFirst { trackId == null || it.id == trackId }.coerceAtLeast(0)
         _state.update { it.copy(sideIndex = sideIndex, positionMs = side.positionOf(trackIndex, 0), needleDown = false, sideFinished = false) }
-        if (sideIndex != 0) cueSide(record, side) // load() has already cued side A
+        if (sideIndex != 0) cueSide(record, side) // put() has already cued side A
         withController { c -> c.seekTo(trackIndex, 0) }
+        autoStart(trackIndex)
+    }
+
+    /** Auto-play: the needle goes down by itself on the record just put on. */
+    private fun autoStart(trackIndex: Int) {
+        if (_flags.value.autoPlay && _state.value.album != null) dropAt(trackIndex, 0)
+    }
+
+    /**
+     * Auto-flip: the runout groove turns a moment, then the record is turned over and the next side
+     * plays from its first song. After the last side the record rests, as it would on a real deck.
+     */
+    private fun autoFlip() {
+        val ended = _state.value
+        if (!_flags.value.autoFlip || ended.sideIndex >= ended.sides.lastIndex) return
+        scope.launch {
+            delay(AUTO_FLIP_PAUSE_MS)
+            val now = _state.value
+            // Still the same record, side and silence: nobody has stepped in meanwhile.
+            if (now.album?.id != ended.album?.id || now.sideIndex != ended.sideIndex || !now.sideFinished || now.needleDown) return@launch
+            flip()
+            dropAt(0, 0)
+        }
     }
 
     private fun cueSide(album: Album, side: Side?) {
@@ -489,3 +567,9 @@ class Deck(
         }
     }
 }
+
+/** Runout groove, then the turn: how long a finished side spins before auto-flip turns it over. */
+private const val AUTO_FLIP_PAUSE_MS = 2_500L
+/** The sleep timer's fade-out before the needle lifts. */
+private const val SLEEP_FADE_MS = 8_000L
+private const val SLEEP_FADE_STEPS = 32
