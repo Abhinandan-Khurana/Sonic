@@ -118,6 +118,7 @@ class Deck(
                 _state.update { it.copy(isPlaying = false, held = it.held || (it.needleDown && pausedOutside)) }
             }
             if (isPlaying && !pure) sfx.startCrackle() else if (!isPlaying) sfx.stopCrackle()
+            followPosition(isPlaying)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -150,29 +151,50 @@ class Deck(
             if (c == null) return@connectPlayer
             controller = c
             c.addListener(listener)
+            if (c.isPlaying) followPosition(true)
             pending.toList().forEach { it(c) }
             pending.clear()
         }
     }
 
+    private var ticker: Job? = null
+
+    /** Whether the needle's place is being followed; only while the record plays. */
+    internal val ticking: Boolean get() = ticker?.isActive == true
+
+    /**
+     * Follows the needle five times a second while the record plays, and not at all otherwise:
+     * the deck lives as long as the app, so a ticker that never stops would wake it for nothing.
+     * Stopping reads the place once more, so the deck shows where it stopped.
+     */
+    private fun followPosition(playing: Boolean) {
+        if (playing) {
+            if (ticker?.isActive == true) return
+            ticker = scope.launch {
+                while (isActive) {
+                    if (controller?.isPlaying == true) updatePosition()
+                    delay(200)
+                }
+            }
+        } else {
+            ticker?.cancel()
+            ticker = null
+            updatePosition()
+        }
+    }
+
+    private fun updatePosition() {
+        val c = controller ?: return
+        val s = _state.value
+        if (!s.needleDown) return
+        val side = s.side ?: return
+        val pos = side.positionOf(c.currentMediaItemIndex, c.currentPosition)
+        _state.update { it.copy(positionMs = pos) }
+    }
+
     init {
         sfx.crackleEnabled = _crackleOn.value
         sound?.setCrackle(_crackleOn.value)
-
-        scope.launch {
-            while (isActive) {
-                val c = controller
-                val s = _state.value
-                if (c != null && s.needleDown && c.isPlaying) {
-                    val side = s.side
-                    if (side != null) {
-                        val pos = side.positionOf(c.currentMediaItemIndex, c.currentPosition)
-                        _state.update { it.copy(positionMs = pos) }
-                    }
-                }
-                delay(200)
-            }
-        }
     }
 
     private fun withController(block: (Player) -> Unit) {

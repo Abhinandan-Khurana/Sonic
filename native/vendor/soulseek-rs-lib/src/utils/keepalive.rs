@@ -1,13 +1,26 @@
 //! TCP keepalive for the server connection.
 //!
 //! A NAT that drops an idle mapping leaves the socket looking connected while
-//! the server can no longer reach us, and nothing ever errors. Probes every
-//! ten seconds keep the mapping alive and turn a dead path into a read error
-//! within about half a minute, which is what Nicotine+ does. The server
-//! stopped answering ServerPing (code 32) long ago, so that is no substitute.
+//! the server can no longer reach us, and nothing ever errors. A probe after a
+//! minute of silence keeps the mapping alive (carrier NATs hold TCP for
+//! minutes) and turns a dead path into a read error within two minutes. Runout
+//! (an Android phone): probing every few seconds kept the cellular radio
+//! awake around the clock for a session that stays online in the background,
+//! so the idle time and spacing are long. The server stopped answering
+//! ServerPing (code 32) long ago, so that is no substitute.
 
 use std::io;
 use std::net::TcpStream;
+
+/// Seconds of silence before the first probe.
+#[cfg(unix)]
+pub const IDLE_SECONDS: libc::c_int = 60;
+/// Seconds between unanswered probes.
+#[cfg(unix)]
+pub const INTERVAL_SECONDS: libc::c_int = 10;
+/// Unanswered probes before the connection counts as dead.
+#[cfg(unix)]
+pub const PROBES: libc::c_int = 6;
 
 #[cfg(unix)]
 pub fn set_keepalive(stream: &TcpStream) -> io::Result<()> {
@@ -22,9 +35,9 @@ pub fn set_keepalive(stream: &TcpStream) -> io::Result<()> {
         target_os = "netbsd"
     ))]
     {
-        set_option(fd, libc::IPPROTO_TCP, IDLE_SECONDS_OPTION, 10)?;
-        set_option(fd, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL, 2)?;
-        set_option(fd, libc::IPPROTO_TCP, libc::TCP_KEEPCNT, 10)?;
+        set_option(fd, libc::IPPROTO_TCP, IDLE_SECONDS_OPTION, IDLE_SECONDS)?;
+        set_option(fd, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL, INTERVAL_SECONDS)?;
+        set_option(fd, libc::IPPROTO_TCP, libc::TCP_KEEPCNT, PROBES)?;
     }
     Ok(())
 }
@@ -72,6 +85,15 @@ pub fn set_keepalive(_stream: &TcpStream) -> io::Result<()> {
 
 #[cfg(all(test, unix))]
 pub fn keepalive_enabled(stream: &TcpStream) -> bool {
+    option(stream, libc::SOL_SOCKET, libc::SO_KEEPALIVE).is_some_and(|v| v != 0)
+}
+
+#[cfg(all(test, unix))]
+fn option(
+    stream: &TcpStream,
+    level: libc::c_int,
+    name: libc::c_int,
+) -> Option<libc::c_int> {
     use std::os::unix::io::AsRawFd;
     let mut value: libc::c_int = 0;
     let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
@@ -79,13 +101,13 @@ pub fn keepalive_enabled(stream: &TcpStream) -> bool {
     let rc = unsafe {
         libc::getsockopt(
             stream.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_KEEPALIVE,
+            level,
+            name,
             (&raw mut value).cast(),
             &raw mut len,
         )
     };
-    rc == 0 && value != 0
+    (rc == 0).then_some(value)
 }
 
 #[cfg(all(test, unix))]
@@ -96,4 +118,24 @@ fn keepalive_is_off_until_asked_for() {
     assert!(!keepalive_enabled(&stream));
     set_keepalive(&stream).unwrap();
     assert!(keepalive_enabled(&stream));
+}
+
+#[cfg(all(
+    test,
+    any(
+        target_vendor = "apple",
+        target_os = "linux",
+        target_os = "android",
+        target_os = "freebsd",
+        target_os = "netbsd"
+    )
+))]
+#[test]
+fn probes_wait_a_minute_and_give_up_after_two() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+    set_keepalive(&stream).unwrap();
+    assert_eq!(option(&stream, libc::IPPROTO_TCP, IDLE_SECONDS_OPTION), Some(60));
+    assert_eq!(option(&stream, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL), Some(10));
+    assert_eq!(option(&stream, libc::IPPROTO_TCP, libc::TCP_KEEPCNT), Some(6));
 }

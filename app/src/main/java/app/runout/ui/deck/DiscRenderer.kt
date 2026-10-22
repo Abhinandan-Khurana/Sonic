@@ -26,7 +26,7 @@ import com.google.android.filament.gltfio.FilamentAsset
  * drawn into a full-screen transparent [TextureView] above the room while a record is out of its
  * sleeve. Its camera is the deck's camera stretched to the whole screen (an off-centre frustum), so
  * a disc posed over the platter covers exactly the deck's pixels, and the hand-over on landing
- * shows nothing. Main thread only.
+ * shows nothing. Frames are only asked for while something changed (see [doFrame]). Main thread only.
  */
 class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.FrameCallback {
     private val engine = FilamentShared.engine
@@ -51,6 +51,8 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
     private var dirty = true
     private var settle = 0
     private var running = false
+    /** A frame callback is posted and not yet run. */
+    private var scheduled = false
     private var drawn = 0
 
     /** Called once the disc is on screen, so the 2D stand-in can step aside. */
@@ -77,6 +79,7 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
                 swapChain = engine.createSwapChain(surface, uiHelper.swapChainFlags)
                 displayHelper.attach(renderer, textureView.display)
                 settle = WARM_UP_FRAMES
+                requestFrame()
             }
 
             override fun onDetachedFromSurface() {
@@ -94,6 +97,7 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
                 view.viewport = Viewport(0, 0, width, height)
                 updateProjection()
                 settle = WARM_UP_FRAMES
+                requestFrame()
             }
         }
         uiHelper.attachTo(textureView)
@@ -123,7 +127,7 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
             cam.target.x.toDouble(), cam.target.y.toDouble(), cam.target.z.toDouble(),
             cam.viewUp.x.toDouble(), cam.viewUp.y.toDouble(), cam.viewUp.z.toDouble(),
         )
-        dirty = true
+        invalidate()
     }
 
     /** The record's face and surface maps, the same bitmaps the deck uses. */
@@ -139,31 +143,47 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
         }
         textures.forEach { engine.destroyTexture(it) }
         textures = listOfNotNull(f, n, r)
-        dirty = true
+        invalidate()
     }
 
     /** Where the record is: a column-major model transform (see DeckModel.heldDiscTransform). */
     fun setTransform(m: FloatArray) {
         if (transform?.contentEquals(m) == true) return
         transform = m
+        invalidate()
+    }
+
+    /** Something changed: draw it on the next frame. */
+    private fun invalidate() {
         dirty = true
+        requestFrame()
+    }
+
+    private fun requestFrame() {
+        if (!running || scheduled) return
+        scheduled = true
+        Choreographer.getInstance().postFrameCallback(this)
     }
 
     fun resume() {
-        if (!running) { running = true; dirty = true; Choreographer.getInstance().postFrameCallback(this) }
+        if (!running) { running = true; invalidate() }
     }
 
     fun pause() {
         running = false
+        scheduled = false
         Choreographer.getInstance().removeFrameCallback(this)
     }
 
     override fun doFrame(frameTimeNanos: Long) {
+        scheduled = false
         if (!running) return
-        Choreographer.getInstance().postFrameCallback(this)
+        // No surface yet: onNativeWindowChanged asks for frames again when one arrives.
         val chain = swapChain ?: return
         if (dirty) { settle = maxOf(settle, SETTLE_FRAMES); dirty = false }
-        if (settle <= 0 || !uiHelper.isReadyToRender) return
+        // Nothing to draw: the callback stays off until a setter asks again.
+        if (settle <= 0) return
+        if (!uiHelper.isReadyToRender) { requestFrame(); return }
         transform?.let { engine.transformManager.setTransform(engine.transformManager.getInstance(record.root), it) }
         if (renderer.beginFrame(chain, frameTimeNanos)) {
             renderer.render(view)
@@ -171,6 +191,7 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
             settle--
             if (++drawn == READY_FRAMES) onReady?.invoke()
         }
+        if (settle > 0) requestFrame()
     }
 
     fun destroy() {

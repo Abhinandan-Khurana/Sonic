@@ -56,6 +56,10 @@ private const val SEEK_TIMEOUT_MS = 20_000L
 private const val SEEK_ATTEMPTS = 3
 /** Said of a failed download once no one else turned out to share the identical file. */
 private const val NO_COPY = " No one else shares this exact file right now."
+/** A download's byte count reaches the database at most this often; its state changes at once. */
+private const val PROGRESS_WRITE_MS = 1_000L
+private val PROGRESS_STATES = setOf("QUEUED", "DOWNLOADING")
+private fun nowMs() = System.nanoTime() / 1_000_000
 
 class SoulseekRepository(
     private val context: Context,
@@ -79,7 +83,7 @@ class SoulseekRepository(
     private var ownerJob: Job? = null
     private var observedOwner: String? = null
     private val connection = SoulseekConnectionManager(context, scope, { transportFactory(::openSharedFile) },
-        { backgroundConsented() || hasActiveTransfers() }, ::handleEvent, { _error.value = it })
+        { backgroundConsented() || hasActiveTransfers() }, ::handleEvent, { _error.value = it }, busy = ::nativeBusy)
     private val generation get() = connection.generation
     private val activeTransfers = ConcurrentHashMap.newKeySet<String>()
     private val publicationJobs = ConcurrentHashMap<String, Job>()
@@ -97,6 +101,11 @@ class SoulseekRepository(
     private val repairSearches = ConcurrentHashMap<String, RepairSearch>()
     private val seekMutex = Mutex()
     private val seekJobs = ConcurrentHashMap<String, Job>()
+    /** One waiting retry per download: coming back to the app or signing in again doesn't stack them. */
+    private val retryJobs = ConcurrentHashMap<String, Job>()
+    /** When each download's progress was last written, and the newest progress still held back. */
+    private val progressWritten = ConcurrentHashMap<String, Long>()
+    private val heldProgress = ConcurrentHashMap<String, TransferRow>()
     val session = connection.session
     private val _searchResults = MutableStateFlow<List<SoulseekSearchResult>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
@@ -595,12 +604,16 @@ class SoulseekRepository(
         runCatching { resumeOne(id) }.onFailure { if (it is CancellationException) throw it }
     }
     fun onExternalFlow(active: Boolean) { connection.externalFlow(active) }
-    fun onNetworkChanged(available: Boolean, wifi: Boolean = onWifi): Job = work {
+    /** [newNetwork] is false when the same network only reported new capabilities. */
+    fun onNetworkChanged(available: Boolean, wifi: Boolean = onWifi, newNetwork: Boolean = true): Job = work {
         val changed = wifi != onWifi
         onWifi = wifi
-        connection.networkChanged(available)
+        connection.networkChanged(available, newNetwork)
         if (changed) applyWifiRule()
     }
+    /** Something waits on the native client's events: they are polled quickly while it does. */
+    private fun nativeBusy(): Boolean = _searching.value || repairSearches.isNotEmpty() || pendingBrowse.isNotEmpty() ||
+        activeTransfers.isNotEmpty() || _uploads.value.any { it.state == "uploading" || it.state == "queued" }
     private fun hasActiveTransfers() = archiveJobs.isNotEmpty() || transfers.value.any { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) } || uploads.value.any { it.state == "uploading" || it.state == "queued" }
     private fun startService(type: Class<*>) { ContextCompat.startForegroundService(context, Intent(context, type)) }
     private fun stopService(type: Class<*>) { context.stopService(Intent(context, type)) }
@@ -690,10 +703,19 @@ class SoulseekRepository(
                     queuePosition = if (event.has("queuePosition") && !event.isNull("queuePosition")) event.optLong("queuePosition") else null,
                     speed = event.optDouble("speed", 0.0), stagePath = event.optString("path").ifBlank { row.stagePath }, error = if (interrupted) interruptionReason() else nativeError)
                 if (runCatching { SoulseekTransferState.valueOf(updated.state) }.isFailure) return
+                // Only the byte count, speed or queue place moved: written at most once a second
+                // (the newest value follows), since every write re-runs the transfers query and
+                // redraws the notification. A change of state is written at once.
+                if (updated.state in PROGRESS_STATES && updated == row.copy(bytes = updated.bytes, speed = updated.speed, queuePosition = updated.queuePosition)) {
+                    val last = progressWritten[id]
+                    if (last != null && nowMs() - last < PROGRESS_WRITE_MS) { holdProgress(updated, last); return }
+                }
                 // A real failure: decide at once whether to ask again later or look elsewhere.
                 val failed = state == "FAILED"
                 val next = if (failed) recovered(updated, SoulseekPolicy.failureKind(nativeError)) else updated
+                heldProgress.remove(id)
                 dao.putTransfer(next)
+                if (next.state in PROGRESS_STATES) progressWritten[id] = nowMs() else progressWritten.remove(id)
                 if (state == "COMPLETED") { activeTransfers.remove(id); publishAsync(updated) }
                 if (state == "FAILED" || state == "CANCELLED" || state == "PAUSED") activeTransfers.remove(id)
                 if (state == "COMPLETED" || state == "FAILED" || state == "CANCELLED" || state == "PAUSED") pumpQueue()
@@ -714,15 +736,20 @@ class SoulseekRepository(
             "message_sent" -> dao.messageState(event.getString("clientId"), "SENT")
             "upload" -> {
                 val upload = SoulseekUpload(event.getString("username"), event.getString("path"), event.optLong("bytes"), event.optLong("total"), event.optString("state"))
+                val previous = _uploads.value.firstOrNull { it.username == upload.username && it.path == upload.path }?.state
                 _uploads.update { list -> (list.filterNot { it.username == upload.username && it.path == upload.path } + upload).takeLast(100) }
-                if (upload.state == "uploading" || upload.state == "queued") {
-                    try { startService(SoulseekTransferService::class.java) }
+                val serving = setOf("uploading", "queued")
+                when {
+                    upload.state !in serving -> updateServices()
+                    // Already being served: its progress only moves the notification.
+                    previous in serving -> Unit
+                    else -> try { startService(SoulseekTransferService::class.java) }
                     catch (e: RuntimeException) {
                         _sharing.value = false; shares.clear(); _uploads.value = emptyList()
                         command("shares") { put("files", JSONArray()) }
                         _error.value = "Android paused background sharing. Open Runout to enable sharing again."
                     }
-                } else updateServices()
+                }
             }
             "presence" -> dao.presence(owner, event.getString("username"), event.optBoolean("online"))
             "error" -> {
@@ -835,7 +862,25 @@ class SoulseekRepository(
         }
     }
     private fun scheduleRetry(id: String, at: Long) {
-        scope.launch(Dispatchers.IO) { delay((at - System.currentTimeMillis()).coerceAtLeast(0)); retryDue(id) }
+        val job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            delay((at - System.currentTimeMillis()).coerceAtLeast(0))
+            // Off the list before resuming, so a retry scheduled by the resume's own failure stands.
+            retryJobs.remove(id, coroutineContext.job)
+            retryDue(id)
+        }
+        retryJobs.put(id, job)?.cancel()
+        job.start()
+    }
+    /** Retries waiting to run; tests read it. */
+    internal val pendingRetries: Int get() = retryJobs.size
+    /** Writes [row]'s held-back progress once a second has passed since [last], unless its state moved on. */
+    private fun holdProgress(row: TransferRow, last: Long) {
+        if (heldProgress.put(row.id, row) != null) return // a write is already on its way
+        scope.launch(Dispatchers.IO) {
+            delay((last + PROGRESS_WRITE_MS - nowMs()).coerceAtLeast(0))
+            val held = heldProgress.remove(row.id) ?: return@launch
+            if (dao.progress(held.id, held.state, held.bytes, held.speed, held.queuePosition) > 0) progressWritten[held.id] = nowMs()
+        }
     }
     private suspend fun retryDue(id: String) {
         val row = dao.transfer(id) ?: return
@@ -959,10 +1004,13 @@ class SoulseekRepository(
             archiveJobs[id] = job
             val row = TransferRow(id, owner, "Internet Archive", title, 1_000_000L, state = "DOWNLOADING", provider = "Internet Archive")
             dao.putTransfer(row)
+            // Progress reaches the database at most once a second; the last write marks it done.
+            val written = java.util.concurrent.atomic.AtomicLong(nowMs() - PROGRESS_WRITE_MS)
             try {
                 startService(SoulseekTransferService::class.java)
                 val result = block { bytes, total ->
-                    if (total > 0 && !job.isCancelled) scope.launch(Dispatchers.IO) {
+                    val now = nowMs(); val last = written.get()
+                    if (total > 0 && !job.isCancelled && now - last >= PROGRESS_WRITE_MS && written.compareAndSet(last, now)) scope.launch(Dispatchers.IO) {
                         val existing = dao.transfer(id)
                         if (existing != null && existing.state == "DOWNLOADING" && archiveJobs[id] === job) {
                             dao.putTransfer(existing.copy(bytes = bytes.coerceIn(0, total), size = total))

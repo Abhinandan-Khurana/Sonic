@@ -582,6 +582,39 @@ class SoulseekRepositoryTest {
         assertEquals("your results are untouched", SearchPhase.COMPLETE, repo.searchStatus.value.phase)
     }
 
+    @Test fun `download progress is written at most once a second, a change of state at once`() = runBlocking {
+        login(); destination()
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01.flac", 10_000)).join()
+        await("started") { downloads().size == 1 }
+        val id = downloads().single().getString("id")
+        fun progress(state: String, bytes: Long) = JSONObject().put("type", "transfer").put("id", id).put("state", state)
+            .put("bytes", bytes).put("speed", 100.0).put("queuePosition", JSONObject.NULL).put("error", JSONObject.NULL)
+        fun row() = runBlocking { db.soulseek().transfer(id)!! }
+        transport.emit(progress("downloading", 100))
+        await("a new state is written at once") { row().state == "DOWNLOADING" && row().bytes == 100L }
+        listOf(200L, 300L, 400L).forEach { transport.emit(progress("downloading", it)) }
+        Thread.sleep(300)
+        assertEquals("progress within the second is held back", 100L, row().bytes)
+        await("then the newest progress follows") { row().bytes == 400L }
+        val written = System.nanoTime()
+        transport.emit(progress("downloading", 500))
+        transport.emit(progress("queued", 500))
+        await("a change of state does not wait") { row().state == "QUEUED" }
+        assertTrue("written within the second", System.nanoTime() - written < 900_000_000L)
+        Thread.sleep(1_200)
+        assertEquals("held progress never overwrites a newer state", "QUEUED", row().state)
+    }
+
+    @Test fun `a download waiting to retry has one timer however often you come back`() = runBlocking {
+        login()
+        db.soulseek().putTransfer(TransferRow("runout-test:wait", "runout-test", "maya", "Music\\Night Drive\\01.flac", 1000,
+            state = "PAUSED", failure = FailureKind.PEER_AWAY.name, recovery = Recovery.RETRY.name, retryAt = System.currentTimeMillis() + 60_000, retries = 1))
+        repeat(3) { repo.onForegroundChanged(false).join(); repo.onForegroundChanged(true).join() }
+        await("timer scheduled") { repo.pendingRetries == 1 }
+        Thread.sleep(200)
+        assertEquals(1, repo.pendingRetries)
+    }
+
     private class FakeTransport : SoulseekTransport {
         val commands = CopyOnWriteArrayList<JSONObject>()
         private val events = ConcurrentLinkedQueue<JSONObject>()

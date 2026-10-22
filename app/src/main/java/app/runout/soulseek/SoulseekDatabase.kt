@@ -77,6 +77,9 @@ interface SoulseekDao {
     @Query("SELECT * FROM soulseek_transfers WHERE id = :id") suspend fun transfer(id: String): TransferRow?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTransfer(row: TransferRow)
     @Query("DELETE FROM soulseek_transfers WHERE id = :id") suspend fun deleteTransfer(id: String)
+    /** A download's progress, only while it is still in [state]: a pause or failure written meanwhile stands. */
+    @Query("UPDATE soulseek_transfers SET bytes = :bytes, speed = :speed, queuePosition = :queuePosition WHERE id = :id AND state = :state")
+    suspend fun progress(id: String, state: String, bytes: Long, speed: Double, queuePosition: Long?): Int
     @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner AND recovery IS NOT NULL") suspend fun recovering(owner: String): List<TransferRow>
     @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner AND state = 'FAILED'") suspend fun failed(owner: String): List<TransferRow>
     @Query("UPDATE soulseek_transfers SET state = 'PAUSED', speed = 0, error = :reason WHERE state IN ('QUEUED','DOWNLOADING','VALIDATING','PUBLISHING')") suspend fun pauseInterrupted(reason: String)
