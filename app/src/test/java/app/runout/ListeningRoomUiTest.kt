@@ -249,6 +249,49 @@ class ListeningRoomUiTest {
         compose.onAllNodesWithText("cc by 4.0", substring = true).onFirst().assertExists()
     }
 
+    private fun broken(id: String, user: String, name: String, state: SoulseekTransferState, error: String, kind: FailureKind, recovery: Recovery? = null, retryAt: Long? = null) =
+        SoulseekTransfer(id, user, "Music/Vela Park - Night Drive (2023)/$name", 1_000, state = state, error = error, albumId = albums.first { it.title == "Night Drive" }.id, failure = kind, recovery = recovery, retryAt = retryAt)
+
+    @Test
+    fun `failed downloads say what runout is doing about them, and a lost one digs for its album`() {
+        portrait()
+        val transfers = listOf(
+            broken("r", "maya", "01 Opening.flac", SoulseekTransferState.PAUSED, "The user went offline", FailureKind.PEER_AWAY, Recovery.RETRY, System.currentTimeMillis() + 4 * 60_000),
+            broken("s", "kai", "02 Lowlight.flac", SoulseekTransferState.PAUSED, "The upload failed on the other side", FailureKind.REFUSED, Recovery.SEEK),
+            broken("f", "lee", "03 Afterglow.flac", SoulseekTransferState.FAILED, "The upload failed on the other side. No one else shares this exact file right now.", FailureKind.REFUSED),
+        )
+        val actions = RecordingActions()
+        compose.setContent { RoomScreen(state().copy(soulseekTransfers = transfers), actions, initialPanel = Panel.DOWNLOADS) }
+        // In the queue: one waiting to ask maya again, one looking elsewhere, both naming their album.
+        compose.onNodeWithText("maya · retrying in 4 min", substring = true).assertExists()
+        compose.onNodeWithText("kai · looking for another copy", substring = true).assertExists()
+        compose.onNodeWithTag("transfer-album:r").assertTextContains("from night drive")
+        compose.onNodeWithTag("retry-now:r").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/downloads_recovering.png")
+        compose.onNodeWithTag("downloads-tab:failed").performClick()
+        compose.onNodeWithText("no one else shares this exact file", substring = true).assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/downloads_failed.png")
+        compose.onNodeWithTag("find-copy:f").performClick()
+        assertTrue(actions.log.toString(), "soulseekSearch:Vela Park Night Drive" in actions.log)
+        compose.onNodeWithTag("panel:transfers").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a record missing a track says so on its sleeve, and its menu fetches it`() {
+        portrait()
+        val transfers = listOf(broken("f", "lee", "02 Lowlight.flac", SoulseekTransferState.FAILED, "The user went offline", FailureKind.PEER_AWAY))
+        val fetched = mutableListOf<String>()
+        val actions = object : RecordingActions() { override fun fetchMissingTracks(albumId: String) { fetched += albumId } }
+        compose.setContent { RoomScreen(state().copy(soulseekTransfers = transfers), actions, initialCrateIndex = 1) }
+        compose.onNodeWithTag("missing-tag", useUnmergedTree = true).assertExists().assertTextEquals("1 MISSING")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/sleeve_missing.png")
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/menu_fetch_missing.png")
+        compose.onNodeWithTag("menu:Fetch missing track").performClick()
+        assertEquals(listOf(albums.first { it.title == "Night Drive" }.id), fetched)
+        compose.onNodeWithTag("panel:transfers").assertExists()
+    }
+
     // ---------------------------------------------------------------------------------------
     // README screenshots: realistic (but made-up) data, rendered to build/outputs/roborazzi/readme/.
 

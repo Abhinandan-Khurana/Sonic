@@ -40,7 +40,8 @@ class SoulseekRepositoryTest {
     @Before fun setup() {
         db = Room.inMemoryDatabaseBuilder(Fixtures.context, SoulseekDatabase::class.java).allowMainThreadQueries().build()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        repo = SoulseekRepository(Fixtures.context, scope, { opens++; FakeTransport().also { transports += it } }, db)
+        repo = SoulseekRepository(Fixtures.context, scope, { opens++; FakeTransport().also { transports += it } }, db,
+            retryDelaysMs = listOf(150L, 150L, 150L), seekTimeoutMs = 3_000L)
     }
     @After fun teardown() = runBlocking {
         repo.logout().join()
@@ -206,7 +207,10 @@ class SoulseekRepositoryTest {
             }
         }
         repo.download(SoulseekSearchResult("maya", "Album\\renamed.flac", mp3.size.toLong())).join()
-        await("invalid download failed") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.FAILED }
+        // A broken copy is never published: Runout drops it and looks for the file from someone else.
+        await("invalid download set aside") { repo.transfers.value.singleOrNull()?.failure == FailureKind.BROKEN }
+        await("looking elsewhere") { repairSearches().isNotEmpty() }
+        assertNull("not the broken copy again", SoulseekPolicy.pickCopy(listOf(SoulseekSearchResult("maya", "Album\\renamed.flac", mp3.size.toLong())), "Album\\renamed.flac", mp3.size.toLong(), runBlocking { db.soulseek().transfer(repo.transfers.value.single().id)!!.skipped() }))
         assertTrue(repo.downloadAlbums.value.isEmpty())
         assertTrue(folder.walkTopDown().none { it.isFile })
     }
@@ -370,6 +374,109 @@ class SoulseekRepositoryTest {
         await("listed") { repo.transfers.value.size == 3 }
         repo.removeFailed().join()
         await("failures cleared") { repo.transfers.value.map { it.id } == listOf("done") }
+    }
+
+    private fun transferEvent(id: String, state: String, error: String? = null) = JSONObject().put("type", "transfer").put("id", id)
+        .put("state", state).put("bytes", 10).put("queuePosition", JSONObject.NULL).put("error", error ?: JSONObject.NULL)
+    private fun downloads(id: String? = null) = transport.commands.filter { it.optString("op") == "download" && (id == null || it.optString("id") == id) }
+    private fun repairSearches() = transport.commands.filter { it.optString("op") == "search" && it.optString("id").startsWith("repair-") }
+    private fun answer(search: JSONObject, vararg files: SoulseekSearchResult) {
+        val batch = JSONArray()
+        files.forEach { batch.put(JSONObject().put("username", it.username).put("path", it.path).put("size", it.size).put("freeSlots", 1)) }
+        transport.emit(JSONObject().put("type", "search_batch").put("id", search.getString("id")).put("files", batch))
+        transport.emit(JSONObject().put("type", "search_done").put("id", search.getString("id")).put("cancelled", false))
+    }
+
+    @Test fun `a peer who went away is asked again later, resuming the same partial file`() = runBlocking {
+        login(); destination()
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01.flac", 1000)).join()
+        await("started") { downloads().size == 1 }
+        val id = downloads().single().getString("id")
+        transport.emit(transferEvent(id, "failed", "The user went offline"))
+        await("waiting to retry") { repo.transfers.value.singleOrNull()?.recovery == Recovery.RETRY }
+        val waiting = repo.transfers.value.single()
+        assertEquals(SoulseekTransferState.PAUSED, waiting.state)
+        assertEquals(FailureKind.PEER_AWAY, waiting.failure)
+        assertNotNull(waiting.retryAt)
+        await("asked again by itself") { downloads(id).size == 2 }
+        assertEquals("the same staging folder, so the part file resumes", downloads(id)[0].getString("localDirectory"), downloads(id)[1].getString("localDirectory"))
+        assertNull(repo.transfers.value.single().recovery)
+        // Three times away in a row: then it looks for the file elsewhere.
+        repeat(3) { n ->
+            await("retry ${n + 2} running") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.QUEUED }
+            transport.emit(transferEvent(id, "failed", "The user went offline"))
+            if (n < 2) await("asked again ${n + 2}") { downloads(id).size == n + 3 }
+        }
+        await("looking elsewhere") { repairSearches().isNotEmpty() }
+        assertEquals(Recovery.SEEK, repo.transfers.value.single().recovery)
+    }
+
+    @Test fun `a refused file comes from someone sharing the identical copy, into the same album`() = runBlocking {
+        login(); val folder = destination(); completeDownloads()
+        val opening = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
+        val lowlight = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/02 Lowlight.flac")
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01 Opening.flac", opening.size.toLong())).join()
+        await("first track on the shelf") { repo.downloadAlbums.value.singleOrNull()?.tracks?.size == 1 }
+        val album = repo.downloadAlbums.value.single()
+        // maya refuses the second track.
+        val refuse = transport.onCommand
+        transport.onCommand = { command ->
+            if (command.optString("op") == "download" && command.getString("username") == "maya") transport.emit(transferEvent(command.getString("id"), "failed", "The upload failed on the other side"))
+            else refuse(command)
+        }
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\02 Lowlight.flac", lowlight.size.toLong())).join()
+        await("searching for another copy") { repairSearches().isNotEmpty() }
+        val search = repairSearches().first()
+        assertTrue(search.getString("query"), search.getString("query").startsWith("lowlight"))
+        answer(search,
+            SoulseekSearchResult("maya", "Music\\Night Drive\\02 Lowlight.flac", lowlight.size.toLong()),
+            SoulseekSearchResult("kai", "Rips/Night Drive/02 Lowlight.flac", lowlight.size.toLong() + 1),
+            SoulseekSearchResult("zoe", "Shares/Vela Park/Night Drive (flac)/02 Lowlight.flac", lowlight.size.toLong()),
+        )
+        await("the copy joined the album") { repo.downloadAlbums.value.singleOrNull()?.tracks?.size == 2 }
+        assertEquals(album.id, repo.downloadAlbums.value.single().id)
+        val fixed = repo.transfers.value.single { it.username == "zoe" }
+        assertEquals("maya", fixed.replaced)
+        assertEquals(album.id, fixed.albumId)
+        assertTrue("the failed row made way for it", repo.transfers.value.none { it.username == "maya" && it.fileName.startsWith("02") })
+        assertTrue("kai's copy is a different file", downloads().none { it.getString("username") == "kai" })
+        assertEquals(1, folder.walkTopDown().filter { it.isFile && it.name.endsWith(".flac") }.map { it.parentFile }.distinct().count())
+    }
+
+    @Test fun `when no one else shares the file it stays failed, and fetch missing looks again`() = runBlocking {
+        login(); destination()
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\03 Afterglow.flac", 1000)).join()
+        await("started") { downloads().size == 1 && repo.transfers.value.size == 1 }
+        val transfer = repo.transfers.value.single()
+        transport.emit(transferEvent(transfer.id, "failed", "The upload failed on the other side"))
+        await("searched") { repairSearches().size == 1 }
+        answer(repairSearches()[0])
+        await("second query") { repairSearches().size == 2 }
+        answer(repairSearches()[1])
+        await("failed") { repo.transfers.value.single().state == SoulseekTransferState.FAILED }
+        val failed = repo.transfers.value.single()
+        assertEquals(FailureKind.REFUSED, failed.failure)
+        assertNull(failed.recovery)
+        assertTrue(failed.error!!, failed.error!!.contains("No one else shares this exact file"))
+        repo.fetchMissing(failed.albumId!!).join()
+        await("looked again") { repairSearches().size == 3 }
+        assertEquals(Recovery.SEEK, repo.transfers.value.single().recovery)
+    }
+
+    @Test fun `the search for another copy waits for yours`() = runBlocking {
+        login(); destination()
+        repo.search("Vela Park").join()
+        await("your search runs") { repo.searching.value }
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\04 Tail Lights.flac", 1000)).join()
+        await("started") { downloads().size == 1 && repo.transfers.value.size == 1 }
+        transport.emit(transferEvent(repo.transfers.value.single().id, "failed", "The upload failed on the other side"))
+        await("looking") { repo.transfers.value.single().recovery == Recovery.SEEK }
+        Thread.sleep(300)
+        assertTrue("not over your search", repairSearches().isEmpty())
+        val yours = transport.commands.last { it.optString("op") == "search" }.getString("id")
+        transport.emit(JSONObject().put("type", "search_done").put("id", yours).put("cancelled", false))
+        await("then it searches") { repairSearches().isNotEmpty() }
+        assertEquals("your results are untouched", SearchPhase.COMPLETE, repo.searchStatus.value.phase)
     }
 
     private class FakeTransport : SoulseekTransport {

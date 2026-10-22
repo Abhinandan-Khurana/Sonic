@@ -94,12 +94,16 @@ internal fun RecordMenu(
     onRemove: () -> Unit,
     onDetails: () -> Unit,
     onDismiss: () -> Unit,
+    /** Tracks of this record whose download failed. */
+    missing: Int = 0,
+    onFetchMissing: () -> Unit = {},
 ) {
     TeCard("record-menu", onDismiss) {
         CardRecord(record, record.artist)
         Column(Modifier.fillMaxWidth()) {
             val rows = buildList {
                 if (pulled) add(Triple("Put back", onPutBack, Room.Ink))
+                if (missing > 0) add(Triple(if (missing == 1) "Fetch missing track" else "Fetch $missing missing tracks", onFetchMissing, Room.Danger))
                 add(Triple(if (record.audioShareable) "Send with audio" else "Send as a card", onSend, Room.Ink))
                 add(Triple("Details", onDetails, Room.Ink))
                 if (record.source != Source.FOLDER) add(Triple("Remove", onRemove, Room.Danger))

@@ -100,6 +100,8 @@ fun Crate(
     scrollTo: String? = null,
     /** Put the pulled record back in its sleeve before digging to another one. */
     putBack: suspend () -> Unit = {},
+    /** How many of a record's tracks failed to download and are still missing. */
+    missing: (Album) -> Int = { 0 },
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -214,7 +216,7 @@ fun Crate(
                             },
                     ) {
                         // Stickers and the label tab only on the sleeve facing you, as on the board.
-                        SleeveArt(album, Modifier.fillMaxSize(), showSticker = adx < 0.5f, label = if (adx < 0.5f) label(album) else null)
+                        SleeveArt(album, Modifier.fillMaxSize(), showSticker = adx < 0.5f, label = if (adx < 0.5f) label(album) else null, missing = missing(album))
                     }
                 }
             }

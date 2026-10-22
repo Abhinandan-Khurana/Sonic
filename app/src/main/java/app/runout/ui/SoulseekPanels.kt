@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.runout.soulseek.FailureKind
+import app.runout.soulseek.Recovery
 import app.runout.soulseek.SoulseekConnection
 import app.runout.soulseek.SoulseekMessage
 import app.runout.soulseek.SoulseekMessageState
@@ -393,8 +396,13 @@ internal fun downloadGroup(state: SoulseekTransferState): DownloadGroup = when (
  * sits above the segments.
  */
 @Composable
-fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
+fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions, onDig: () -> Unit = {}) {
     val restricted = rememberBackgroundRestricted()
+    // The minutes until a retry, kept current only while something is waiting to retry.
+    val retrying = state.soulseekTransfers.any { it.recovery == Recovery.RETRY }
+    val now by produceState(System.currentTimeMillis(), retrying) {
+        while (retrying) { value = System.currentTimeMillis(); kotlinx.coroutines.delay(10_000) }
+    }
     var help by remember { mutableStateOf<TeHelp?>(null) }
     val signedIn = state.soulseekSession.signedIn
     Column(Modifier.fillMaxWidth().testTag("panel:transfers"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -410,7 +418,7 @@ fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
             state.soulseekTransfers.isEmpty() -> BasicText("nothing downloading.", style = Room.LabelQuiet, modifier = Modifier.testTag("downloads-empty"))
             shown.isEmpty() -> BasicText(group.empty, style = Room.LabelQuiet, modifier = Modifier.testTag("downloads-group-empty"))
             else -> Column(Modifier.fillMaxWidth()) {
-                shown.forEachIndexed { i, transfer -> TransferRow(i + 1, transfer, signedIn, restricted, actions) }
+                shown.forEachIndexed { i, transfer -> TransferRow(i + 1, transfer, state, now, restricted, actions, onDig) }
                 if (group == DownloadGroup.FAILED) Row(Modifier.fillMaxWidth().hairlineTop().padding(top = 16.dp)) {
                     ArrowLink("remove all failed", actions::removeFailedDownloads, tag = "downloads-remove-failed")
                 }
@@ -450,18 +458,38 @@ fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
     TeHelpSheet(help) { help = null }
 }
 
-/** One download under a hairline, as on the Downloads board. */
+/** The minutes until [at], at least one: "4 min". */
+internal fun minutesUntil(at: Long?, now: Long): String = "${(((at ?: now) - now + 59_999) / 60_000).coerceAtLeast(1)} min"
+
+/**
+ * One download under a hairline, as on the Downloads board: its file and the album it belongs to,
+ * who it comes from and what it's doing (or what Runout is doing about a failure), its keys.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun TransferRow(index: Int, transfer: SoulseekTransfer, signedIn: Boolean, restricted: Boolean, actions: RoomActions) {
+private fun TransferRow(index: Int, transfer: SoulseekTransfer, state: RoomState, now: Long, restricted: Boolean, actions: RoomActions, onDig: () -> Unit) {
+    val signedIn = state.soulseekSession.signedIn
     val archive = transfer.provider == "Internet Archive"
+    val shelf = transfer.albumId?.let { id -> state.albums.firstOrNull { it.id == id } }
+    val (folderArtist, folderTitle) = app.runout.discovery.folderNames(transfer.directory)
+    val albumTitle = shelf?.title ?: folderTitle
+    val reason = transfer.error?.trimEnd('.')?.lowercase()
     Column(Modifier.fillMaxWidth().hairlineTop().padding(vertical = 16.dp).testTag("transfer:${transfer.id}"), verticalArrangement = Arrangement.spacedBy(11.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
             BasicText("%02d".format(index), style = Room.LabelQuiet)
-            BasicText(transfer.fileName, style = Room.Label.copy(lineHeight = 15.sp), modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BasicText(transfer.fileName, style = Room.Label.copy(lineHeight = 15.sp))
+                if (!archive) BasicText("from ${albumTitle.lowercase()}", style = Room.LabelQuiet, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("transfer-album:${transfer.id}"))
+            }
+        }
+        val doing = when (transfer.recovery) {
+            Recovery.RETRY -> "retrying in ${minutesUntil(transfer.retryAt, now)}"
+            Recovery.SEEK -> "looking for another copy"
+            null -> transfer.state.name.lowercase()
         }
         Row(Modifier.fillMaxWidth().padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
             TeStatus(
-                "${transfer.username} · ${transfer.state.name.lowercase()}" + (transfer.queuePosition?.let { " · place $it in their queue" } ?: ""),
+                "${transfer.username} · $doing" + (transfer.queuePosition?.let { " · place $it in their queue" } ?: ""),
                 stateColor(transfer.state),
                 Modifier.weight(1f),
             )
@@ -471,22 +499,48 @@ private fun TransferRow(index: Int, transfer: SoulseekTransfer, signedIn: Boolea
             )
         }
         ProgressLine(transfer.progress, colour = stateColor(transfer.state))
-        when (transfer.state) {
-            SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        when {
+            transfer.recovery == Recovery.RETRY -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                ArrowLink("retry now", { actions.resumeSoulseekTransfer(transfer.id) }, enabled = signedIn, tag = "retry-now:${transfer.id}")
+                ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
+            }
+            transfer.recovery == Recovery.SEEK -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                ArrowLink("stop", { actions.pauseSoulseekTransfer(transfer.id) }, tag = "pause:${transfer.id}")
+                ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
+            }
+            transfer.state == SoulseekTransferState.QUEUED || transfer.state == SoulseekTransferState.DOWNLOADING -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 ArrowLink("pause", { actions.pauseSoulseekTransfer(transfer.id) }, tag = "pause:${transfer.id}")
                 ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
             }
-            SoulseekTransferState.PAUSED -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            transfer.state == SoulseekTransferState.PAUSED -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 ArrowLink("resume", { actions.resumeSoulseekTransfer(transfer.id) }, enabled = signedIn, tag = "resume:${transfer.id}")
                 ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
             }
-            SoulseekTransferState.FAILED, SoulseekTransferState.CANCELLED -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            transfer.state == SoulseekTransferState.FAILED || transfer.state == SoulseekTransferState.CANCELLED -> androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(22.dp), verticalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                if (transfer.failure == FailureKind.FOLDER) ArrowLink("choose folder", actions::pickDownloadFolder, tag = "choose-folder:${transfer.id}")
                 ArrowLink("retry", { actions.retrySoulseekTransfer(transfer.id) }, enabled = signedIn, tag = "retry:${transfer.id}")
+                // Dig for the album: the folder page shows this track with a red key, ready to join the record.
+                if (!archive && transfer.failure != FailureKind.FOLDER) ArrowLink("find another copy", {
+                    val artist = (shelf?.artist ?: folderArtist)?.takeIf { it.isNotBlank() && !it.equals("Unknown artist", ignoreCase = true) }
+                    val query = listOfNotNull(artist, albumTitle).joinToString(" ")
+                    actions.setSearchOptions(state.discovery.options.copy(source = app.runout.discovery.SearchSource.SOULSEEK))
+                    actions.setSearchQuery(query)
+                    actions.searchSoulseek(query)
+                    onDig()
+                }, enabled = signedIn, tag = "find-copy:${transfer.id}")
                 ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
             }
             else -> Unit
         }
         val why = when {
+            transfer.recovery == Recovery.RETRY -> "${reason ?: "the peer went away"}. runout asks again by itself and keeps what's downloaded."
+            transfer.recovery == Recovery.SEEK -> "${reason ?: "this copy failed"}. looking for the identical file from someone else."
+            transfer.replaced != null && transfer.state != SoulseekTransferState.FAILED -> "now from ${transfer.username}: ${transfer.replaced}'s copy failed."
+            transfer.state == SoulseekTransferState.FAILED && transfer.failure == FailureKind.FOLDER -> "runout couldn't save it to your music folder. choose the folder again, then retry."
+            transfer.state == SoulseekTransferState.FAILED && transfer.failure == FailureKind.BROKEN -> "the file arrived broken, so it wasn't saved."
+
             restricted && transfer.state == SoulseekTransferState.PAUSED && (transfer.error == null || SoulseekPolicy.isInterruption(transfer.error)) ->
                 "android paused this download: background usage is off for runout. it continues when you're back."
             // Paused while signed out, and signed back in since: the note's first half no longer applies.

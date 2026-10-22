@@ -4,6 +4,7 @@ import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.Source
 import app.runout.model.Track
+import app.runout.soulseek.FailureKind
 import app.runout.soulseek.SoulseekFolderPreview
 import app.runout.soulseek.SoulseekPolicy
 import app.runout.soulseek.SoulseekSearchResult
@@ -68,6 +69,31 @@ class DownloadsLogicTest {
         assertEquals(FileState.BROKEN, fileState(broken, shelf, transfers).first)
         assertEquals(FileState.GETTING, fileState(getting, shelf, transfers).first)
         assertEquals(FileState.MISSING, fileState(missing, shelf, transfers).first)
+    }
+
+    @Test fun `a failure says whether to ask again or look elsewhere`() {
+        assertEquals(FailureKind.PEER_AWAY, SoulseekPolicy.failureKind("The user went offline"))
+        assertEquals(FailureKind.PEER_AWAY, SoulseekPolicy.failureKind("Could not connect to the user"))
+        assertEquals(FailureKind.PEER_AWAY, SoulseekPolicy.failureKind("Connection reset by peer (os error 104)"))
+        assertEquals(FailureKind.REFUSED, SoulseekPolicy.failureKind("The upload failed on the other side"))
+        assertEquals(FailureKind.REFUSED, SoulseekPolicy.failureKind("The user declined the download"))
+    }
+
+    @Test fun `another copy is the same track at the same size from someone new, the quickest first`() {
+        val path = "Music/Air/Moon Safari/02 - Sexy Boy.flac"
+        assertEquals(SoulseekPolicy.fileKey(path), SoulseekPolicy.fileKey("1a2b3c4d5e 02 Sexy Boy.flac"))
+        assertEquals("1999", SoulseekPolicy.fileKey("1999.flac"))
+        val results = listOf(
+            SoulseekSearchResult("maya", path, 100, freeSlots = 1),
+            SoulseekSearchResult("kai", "x/Sexy Boy.flac", 101, freeSlots = 1),
+            SoulseekSearchResult("lee", "x/03 Sexy Girl.flac", 100, freeSlots = 1),
+            SoulseekSearchResult("ola", "Air - Moon Safari/02 Sexy Boy.flac", 100, freeSlots = 0, queueLength = 4),
+            SoulseekSearchResult("zoe", "Rips/02. Sexy Boy.flac", 100, freeSlots = 2),
+        )
+        assertEquals("zoe", SoulseekPolicy.pickCopy(results, path, 100, setOf("maya"))?.username)
+        assertEquals("ola", SoulseekPolicy.pickCopy(results, path, 100, setOf("maya", "zoe"))?.username)
+        assertNull(SoulseekPolicy.pickCopy(results, path, 100, setOf("maya", "zoe", "ola")))
+        assertEquals(listOf("sexy boy moon safari", "sexy boy"), SoulseekPolicy.seekQueries(path, "Moon Safari"))
     }
 
     @Test fun `downloads fall into failed, completed and in queue`() {

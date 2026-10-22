@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.model.Album
@@ -268,13 +269,14 @@ fun DrawScope.drawRecord(
  * artist and [label] (on the platter, pull up · drag, sleeve · empty) are spoken, not printed.
  */
 @Composable
-fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true, label: String? = null) {
+fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true, label: String? = null, missing: Int = 0) {
     val cover by rememberCover(album)
+    val gap = if (missing > 0) "$missing ${if (missing == 1) "track" else "tracks"} missing" else null
     BoxWithConstraints(
         modifier
             .clipToBounds()
             .background(fallbackColor(album))
-            .semantics { if (album != null) contentDescription = listOfNotNull(album.title, album.artist, label).joinToString(" / ") },
+            .semantics { if (album != null) contentDescription = listOfNotNull(album.title, album.artist, label, gap).joinToString(" / ") },
     ) {
         val k = maxWidth / BOARD_SLEEVE
         val bitmap = cover
@@ -297,7 +299,22 @@ fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean
         if (k >= 0.55f && showSticker && album?.quality?.isHiRes == true) {
             HiResSticker(album.quality.shortLabel, k, Modifier.align(Alignment.TopEnd).padding(top = 6.dp * k, end = 4.dp * k))
         }
+        if (k >= 0.55f && showSticker && missing > 0) {
+            MissingTag(missing, k, Modifier.align(Alignment.BottomStart).padding(start = 6.dp * k, bottom = 6.dp * k))
+        }
     }
+}
+
+/** A download of this record failed and wasn't fixed: a red tab, "1 MISSING", set a hair off true. */
+@Composable
+fun MissingTag(count: Int, k: Float = 1f, modifier: Modifier = Modifier) {
+    val d = LocalDensity.current
+    fun sp(v: Double) = with(d) { (v.dp * k).toSp() }
+    BasicText(
+        "$count MISSING",
+        style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(6.5), lineHeight = sp(7.0), letterSpacing = sp(0.6)),
+        modifier = modifier.rotate(-2f).background(Room.Danger).padding(horizontal = 5.dp * k, vertical = 3.dp * k).testTag("missing-tag"),
+    )
 }
 
 /** The board's front sleeve, which the stickers are sized against. */

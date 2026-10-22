@@ -1,6 +1,7 @@
 package app.runout.soulseek
 
 import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -30,8 +31,26 @@ data class TransferRow(
     val provider: String = "Soulseek",
     /** The album on the shelf this file joins, in its folder; null for the peer's own folder's album. */
     val albumId: String? = null,
+    /** A [FailureKind] name: why it last failed. */
+    val failure: String? = null,
+    /** A [Recovery] name while Runout is fixing it by itself. */
+    val recovery: String? = null,
+    val retryAt: Long? = null,
+    /** How many times Runout asked the same peer again. */
+    @ColumnInfo(defaultValue = "0") val retries: Int = 0,
+    /** Peers not to take this file from again, one per line. */
+    val skip: String? = null,
+    /** The peer whose copy failed before this one was found. */
+    val replaced: String? = null,
 ) {
-    fun model() = SoulseekTransfer(id, username, path, size, bytes, SoulseekTransferState.valueOf(state), queuePosition, speed, error, provider)
+    fun model() = SoulseekTransfer(
+        id, username, path, size, bytes, SoulseekTransferState.valueOf(state), queuePosition, speed, error, provider,
+        effectiveAlbumId(), failure?.let { runCatching { FailureKind.valueOf(it) }.getOrNull() },
+        recovery?.let { runCatching { Recovery.valueOf(it) }.getOrNull() }, retryAt, replaced,
+    )
+    /** The album this file joins: the one it was aimed at, else its peer's folder's own. */
+    fun effectiveAlbumId(): String? = albumId ?: if (provider == "Soulseek") SoulseekPolicy.albumId(username, path.replace('\\', '/').substringBeforeLast('/', "")) else null
+    fun skipped(): Set<String> = skip.orEmpty().lines().filterTo(HashSet()) { it.isNotBlank() }
 }
 @Entity(tableName = "soulseek_contacts", primaryKeys = ["owner", "username"])
 data class ContactRow(val owner: String, val username: String, val online: Boolean = false)
@@ -58,6 +77,8 @@ interface SoulseekDao {
     @Query("SELECT * FROM soulseek_transfers WHERE id = :id") suspend fun transfer(id: String): TransferRow?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTransfer(row: TransferRow)
     @Query("DELETE FROM soulseek_transfers WHERE id = :id") suspend fun deleteTransfer(id: String)
+    @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner AND recovery IS NOT NULL") suspend fun recovering(owner: String): List<TransferRow>
+    @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner AND state = 'FAILED'") suspend fun failed(owner: String): List<TransferRow>
     @Query("UPDATE soulseek_transfers SET state = 'PAUSED', speed = 0, error = :reason WHERE state IN ('QUEUED','DOWNLOADING','VALIDATING','PUBLISHING')") suspend fun pauseInterrupted(reason: String)
     @Query("UPDATE soulseek_transfers SET state = 'PAUSED', speed = 0, error = :reason WHERE owner = :owner AND state IN ('QUEUED','DOWNLOADING','VALIDATING','PUBLISHING')") suspend fun pauseOwner(owner: String, reason: String)
     @Query("SELECT * FROM soulseek_contacts WHERE owner = :owner ORDER BY username COLLATE NOCASE") fun contacts(owner: String): Flow<List<ContactRow>>
@@ -79,9 +100,10 @@ interface SoulseekDao {
 
 @Database(
     entities = [TransferRow::class, ContactRow::class, MessageRow::class, DownloadAlbumRow::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
     // 2: a download can be aimed at an album already on the shelf (TransferRow.albumId).
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    // 3: failed downloads recover by themselves (failure, recovery, retryAt, retries, skip, replaced).
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class SoulseekDatabase : RoomDatabase() { abstract fun soulseek(): SoulseekDao }

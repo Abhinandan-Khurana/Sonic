@@ -251,6 +251,8 @@ interface RoomActions : DeckActions {
     fun removeFailedDownloads() {}
     /** Just these files of the open folder, joining [albumId] on the shelf when it's an album Runout downloaded. */
     fun downloadSoulseekTracks(files: List<SoulseekSearchResult>, albumId: String?) {}
+    /** Looks again for a record's failed tracks, from anyone sharing the identical files. */
+    fun fetchMissingTracks(albumId: String) {}
     fun pickDownloadFolder() {}
     fun pickSharedFolder() {}
     /** The answer to [RoomState.offerShareSwap]: true picks a new shared folder (its own permission). */
@@ -313,6 +315,10 @@ fun RoomScreen(
     var dragging by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf(initialPanel) }
     var settings by remember { mutableStateOf(initialSettings) }
+    // Each record's tracks that failed to download and weren't fixed: a red tab on its sleeve.
+    val missingBy = remember(state.soulseekTransfers) {
+        state.soulseekTransfers.filter { it.state == SoulseekTransferState.FAILED }.mapNotNull { it.albumId }.groupingBy { it }.eachCount()
+    }
     // First launch opens onboarding over the room; Soulseek setup can be opened again later.
     var setupOpen by rememberSaveable { mutableStateOf(!state.onboardingComplete) }
     var setupStart by rememberSaveable { mutableIntStateOf(state.onboardingStep) }
@@ -504,6 +510,7 @@ fun RoomScreen(
                     onFront = { frontId = it?.id },
                     initialIndex = initialCrateIndex,
                     scrollTo = crateTarget,
+                    missing = { missingBy[it.id] ?: 0 },
                     putBack = {
                         val s = slot
                         if (s != null && pulledId != null && ejecting == null) {
@@ -844,6 +851,9 @@ fun RoomScreen(
                 onRemove = { removeId = record.id; menuFor = null },
                 onDetails = { detailsFor = record.id; menuFor = null },
                 onDismiss = { menuFor = null },
+                missing = missingBy[record.id] ?: 0,
+                // Off to Downloads, where its rows say what Runout is doing.
+                onFetchMissing = { actions.fetchMissingTracks(record.id); menuFor = null; panel = Panel.DOWNLOADS },
             )
         }
         state.albums.firstOrNull { it.id == detailsFor }?.let { record ->
@@ -869,7 +879,7 @@ fun RoomScreen(
                     state, actions, settings, { settings = it },
                     onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
                 )
-                Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions)
+                Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions, onDig = { panel = Panel.DIG })
                 Panel.SIGNAL -> SignalPanel(state, actions, onSoundSettings = { settings = SettingsSection.SOUND; panel = Panel.SETTINGS })
             }
         }
@@ -1016,7 +1026,9 @@ fun RoomScreen(
         LaunchedEffect(Unit) { frameDelay(2_000); watching = true }
         LaunchedEffect(state.soulseekTransfers) {
             val now = state.soulseekTransfers.associate { it.id to downloadGroup(it.state) }
-            val fresh = now.count { (id, g) -> g == DownloadGroup.QUEUE && lastGroups[id] != DownloadGroup.QUEUE }
+            // A copy Runout found by itself to replace a failed one isn't news: you didn't add it.
+            val replacements = state.soulseekTransfers.filter { it.replaced != null }.mapTo(HashSet()) { it.id }
+            val fresh = now.count { (id, g) -> g == DownloadGroup.QUEUE && lastGroups[id] != DownloadGroup.QUEUE && id !in replacements }
             if (watching && fresh > 0) {
                 val stamp = System.currentTimeMillis()
                 added = if (stamp - addedAt < 3_000) added + fresh else fresh
