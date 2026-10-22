@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
@@ -16,8 +17,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
@@ -123,15 +122,10 @@ internal fun SetupScreen(
     }
 }
 
-/** The same soft light as the room, so onboarding feels like the room before the furniture arrives. */
+/** Plain white paper, like the room. */
 @Composable
 private fun OnboardingBackground() {
-    Canvas(Modifier.fillMaxSize()) {
-        val a = Offset(size.width * 0.3f, size.height * 0.18f)
-        val b = Offset(size.width * 0.8f, size.height * 0.5f)
-        drawCircle(Brush.radialGradient(listOf(Color(0xFFE6E2FF), Color.Transparent), center = a, radius = size.width * 0.9f), size.width * 0.9f, a)
-        drawCircle(Brush.radialGradient(listOf(Color(0xFFDDEEFF), Color.Transparent), center = b, radius = size.width * 0.7f), size.width * 0.7f, b)
-    }
+    Box(Modifier.fillMaxSize().background(Room.Background))
 }
 
 /** A step's frame: a small top row (Back, progress), and the content gathered at the bottom. */
@@ -144,6 +138,12 @@ private fun StepFrame(
 ) {
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).windowInsetsPadding(WindowInsets.ime)) {
         top()
+        // The step as a poster number, set huge in the corner like a TE manual's chapter.
+        if (progress != null) BasicText(
+            "0${progress + 1}",
+            style = Room.Display.copy(fontSize = 112.sp, lineHeight = 112.sp),
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 20.dp, top = 52.dp).semantics { contentDescription = "" },
+        )
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) TextAction("Back", onBack, tag = "setup-back", color = Room.Ink)
             Spacer(Modifier.weight(1f))
@@ -170,7 +170,7 @@ private fun ProgressDots(current: Int, of: Int) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         repeat(of) { i ->
-            Box(Modifier.size(width = if (i == current) 18.dp else 6.dp, height = 6.dp).background(if (i <= current) Room.Ink else Room.Faint, RoundedCornerShape(50)))
+            Box(Modifier.size(8.dp).then(if (i <= current) Modifier.background(Room.Ink) else Modifier.border(1.dp, Room.Ink)))
         }
     }
 }
@@ -191,8 +191,8 @@ private fun BigButton(text: String, onClick: () -> Unit, tag: String, enabled: B
             .fillMaxWidth()
             .height(52.dp)
             .alpha(if (enabled) 1f else 0.45f)
-            .background(if (filled) Room.Accent else Color.White.copy(alpha = 0.7f), RoundedCornerShape(50))
-            .border(1.dp, if (filled) Color.Transparent else Room.Ink.copy(alpha = 0.18f), RoundedCornerShape(50))
+            .background(if (filled) Room.Ink else Room.Background, RectangleShape)
+            .border(1.dp, Room.Ink, RectangleShape)
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
             .testTag(tag)
             .padding(horizontal = 20.dp),
@@ -295,7 +295,7 @@ private fun InfoButton(onClick: () -> Unit) {
             .size(44.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(20.dp).border(1.2.dp, Room.Quiet, CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(20.dp).border(1.2.dp, Room.Quiet, RectangleShape), contentAlignment = Alignment.Center) {
             BasicText("i", style = Room.Label.copy(fontWeight = FontWeight.SemiBold, color = Room.Quiet))
         }
     }
@@ -317,7 +317,7 @@ private fun SoulseekIdInfo(onDismiss: () -> Unit) {
                 .padding(12.dp)
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
-                .background(Color.White, RoundedCornerShape(24.dp))
+                .background(Color.White, RectangleShape)
                 .padding(22.dp)
                 .testTag("soulseek-id-help"),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -468,15 +468,15 @@ private fun RhythmCard(title: String, detail: String, selected: Boolean, enabled
         Modifier
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.5f)
-            .background(if (selected) Room.Accent.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) Room.Accent else Room.Ink.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+            .background(if (selected) Room.Surface else Room.Background, RectangleShape)
+            .border(if (selected) 2.dp else 1.dp, if (selected) Room.Ink else Room.Hairline, RectangleShape)
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.RadioButton) { tick(); onPick() }
             .semantics { if (selected) contentDescription = "$title, selected" }
             .testTag(tag)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        BasicText(title, style = Room.Title.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (selected) Room.Accent else Room.Ink))
+        BasicText(title, style = Room.Title.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
         BasicText(detail, style = Room.LabelQuiet.copy(fontSize = 12.5.sp, lineHeight = 17.sp))
     }
 }
@@ -504,8 +504,9 @@ private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             AppMark()
-            BasicText(if (name != null) "Welcome in, $name." else "Welcome in.", style = Room.Title.copy(fontSize = 26.sp, fontWeight = FontWeight.SemiBold))
-            BasicText("Make yourself at home.", style = Room.LabelQuiet.copy(fontSize = 14.sp))
+            BasicText("WELCOME IN,", style = Room.Display.copy(fontSize = 34.sp, lineHeight = 36.sp))
+            BasicText("${(name ?: "listener").uppercase()}.", style = Room.Display.copy(fontSize = 34.sp, lineHeight = 36.sp, color = Room.Signal), maxLines = 1)
+            BasicText("make yourself at home.", style = Room.LabelQuiet.copy(fontSize = 13.sp))
         }
     }
 }

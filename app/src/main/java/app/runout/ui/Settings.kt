@@ -1,5 +1,8 @@
 package app.runout.ui
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,9 +42,16 @@ fun SettingsPanel(
 ) {
     Column(Modifier.fillMaxWidth().testTag("panel:settings")) {
         if (section == null) {
-            SettingsSection.entries.forEach { s ->
-                SettingsRow(s.label, summary(s, state), Modifier.testTag("settings:${s.name}")) { onSection(s) }
+            // Numbered rows, then the wordmark set huge and faint underneath, like a manual's back page.
+            SettingsSection.entries.forEachIndexed { i, s ->
+                SettingsRow("%02d".format(i + 1), s.label, summary(s, state), Modifier.testTag("settings:${s.name}")) { onSection(s) }
             }
+            BasicText(
+                "RUNOUT",
+                style = Room.Display.copy(fontSize = 64.sp, lineHeight = 64.sp, color = Room.HairlineSoft),
+                maxLines = 1,
+                modifier = Modifier.padding(top = 28.dp).semantics { contentDescription = "" },
+            )
             return@Column
         }
         BackHandler { onSection(null) }
@@ -74,14 +84,20 @@ fun SettingsPanel(
                 if (state.hasFolder) RepairLibrary(state, actions)
             }
             SettingsSection.ABOUT -> {
-                BasicText("Runout ${BuildConfig.VERSION_NAME}", style = Room.Title)
                 BasicText(
                     "Your FLAC records play offline, with no account. Soulseek is optional: it finds and downloads FLAC and carries private messages, " +
                         "and its protocol does not encrypt sign-in or messages. Friday Drops come from the Internet Archive under their own licences.",
-                    style = Room.LabelQuiet,
+                    style = Room.Label.copy(color = Room.Body),
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                BasicText("Inter and Silkscreen: SIL Open Font License. Backdrop, Media3, AndroidX and Filament (the 3D turntable): Apache 2.0. Soulseek core: MIT.", style = Room.LabelQuiet)
+                // The facts at the foot of the page.
+                Box(Modifier.fillMaxWidth().padding(top = 18.dp).height(1.dp).background(Room.Ink))
+                BasicText("Runout ${BuildConfig.VERSION_NAME}", style = Room.Title, modifier = Modifier.padding(top = 10.dp))
+                BasicText(
+                    (if (TeType.isArray) "Array by Indian Type Foundry, via Fontshare: ITF Free Font License. " else "") +
+                        "Inter and Silkscreen: SIL Open Font License. Backdrop, Media3, AndroidX and Filament (the 3D turntable): Apache 2.0. Soulseek core: MIT.",
+                    style = Room.LabelQuiet,
+                )
             }
         }
     }
@@ -96,7 +112,7 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
 
 /** One row of the Settings list: a name, its current state in grey, and a chevron. */
 @Composable
-private fun SettingsRow(title: String, summary: String, modifier: Modifier, onClick: () -> Unit) {
+private fun SettingsRow(number: String, title: String, summary: String, modifier: Modifier, onClick: () -> Unit) {
     val tick = rememberTick()
     Row(
         modifier
@@ -106,13 +122,14 @@ private fun SettingsRow(title: String, summary: String, modifier: Modifier, onCl
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        BasicText(number, style = Room.LabelQuiet, modifier = Modifier.width(30.dp))
         Column(Modifier.weight(1f)) {
             BasicText(title, style = Room.Title.copy(fontSize = 15.sp))
             BasicText(summary, style = Room.LabelQuiet, maxLines = 1)
         }
         BasicText("›", style = Room.Title.copy(fontSize = 20.sp, color = Room.Quiet))
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Ink.copy(alpha = 0.08f)))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Hairline))
 }
 
 /**

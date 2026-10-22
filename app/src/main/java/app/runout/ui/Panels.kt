@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Brush
 
 import androidx.compose.ui.semantics.semantics
@@ -8,7 +9,6 @@ import androidx.compose.ui.semantics.contentDescription
 
 import androidx.compose.runtime.DisposableEffect
 
-import androidx.compose.ui.draw.shadow
 
 import androidx.compose.foundation.layout.aspectRatio
 
@@ -34,8 +34,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -272,9 +270,9 @@ private fun DropSleeve(item: DropItem, isClaimed: Boolean, progress: Float?, act
         modifier.testTag("drop:${item.identifier}").clickable(role = androidx.compose.ui.semantics.Role.Button) { tick(); onOpen() },
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(6.dp, RoundedCornerShape(2.dp)).clip(RoundedCornerShape(2.dp)).background(fallbackColorFor(item.title))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RectangleShape).background(fallbackColorFor(item.title))) {
             cover?.let { Image(it, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-            if (isClaimed) BasicText("In your crate", style = Room.Label.copy(color = Color.White, fontSize = 9.sp), modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).background(Room.Ink.copy(alpha = 0.7f), RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 2.dp))
+            if (isClaimed) BasicText("In your crate", style = Room.Label.copy(color = Color.White, fontSize = 9.sp), modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).background(Room.Ink.copy(alpha = 0.7f), RectangleShape).padding(horizontal = 7.dp, vertical = 2.dp))
             if (progress != null) ProgressLine(progress, Modifier.align(Alignment.BottomCenter).padding(6.dp))
         }
         BasicText(item.title, style = Room.Title.copy(fontSize = 13.sp), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -298,7 +296,7 @@ private fun DropPreview(item: DropItem, isClaimed: Boolean, progress: Float?, ca
     Column(Modifier.fillMaxWidth().testTag("drop-preview"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         TextAction("‹ All drops", { actions.listen(null); onBack() }, tag = "drops-back", color = Room.Ink)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(112.dp).shadow(6.dp, RoundedCornerShape(2.dp)).clip(RoundedCornerShape(2.dp)).background(fallbackColorFor(item.title))) {
+            Box(Modifier.size(112.dp).clip(RectangleShape).background(fallbackColorFor(item.title))) {
                 cover?.let { Image(it, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

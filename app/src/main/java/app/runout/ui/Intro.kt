@@ -86,12 +86,6 @@ internal fun DrawScope.drawIntro(t: Float) {
     val platterR = unit * 0.29f
     val recordR = platterR * 0.94f
 
-    // A soft pool of light, so the scene isn't floating on flat white.
-    drawCircle(
-        Brush.radialGradient(listOf(Color(0xFFE6E2FF), Color.Transparent), center = center, radius = unit * 0.85f),
-        radius = unit * 0.85f, center = center,
-    )
-
     // The platter fades up first: a ring of strobe dots around a smoked mat.
     val platterIn = phase(t, 0.0f, 0.18f)
     drawCircle(Color.Black.copy(alpha = 0.08f * platterIn), platterR * 1.06f, center + Offset(0f, unit * 0.02f))

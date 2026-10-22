@@ -1054,7 +1054,15 @@ private fun CornerLabels(
 @Composable
 private fun TrackWheel(state: RoomState, actions: RoomActions, modifier: Modifier = Modifier) {
     val deck = state.deck
-    val album = deck.album ?: return
+    val album = deck.album
+    if (album == null) {
+        // Keeps its room, so the crate doesn't jump as records come and go.
+        Column(modifier) {
+            BasicText("rg-1 · no record", style = Room.LabelQuiet.copy(fontSize = 10.sp), modifier = Modifier.padding(bottom = 4.dp))
+            Spacer(Modifier.height(WHEEL_ROW * 4))
+        }
+        return
+    }
     val rows = remember(album.id, deck.sides) {
         deck.sides.flatMap { side -> side.tracks.mapIndexed { i, t -> Triple(side.index, i, t) } }
     }

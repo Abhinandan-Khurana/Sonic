@@ -110,7 +110,7 @@ class RunoutFlowTest {
         // Albums only: no song/album switch and no "all sources".
         compose.onNodeWithText("Songs").assertDoesNotExist()
         compose.onNodeWithText("All sources").assertDoesNotExist()
-        compose.onNodeWithText("FLAC · 201 TRACKS", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("flac · 201 tracks", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Preview album folder").assertDoesNotExist()
         compose.onNodeWithTag("preview-folder:peer\u0000Artist/Album").performClick()
         assertTrue(actions.log.any {it.startsWith("soulseekFolder:")})

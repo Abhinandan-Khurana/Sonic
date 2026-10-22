@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.graphics.RectangleShape
 import app.runout.soulseek.SoulseekMessage
 import app.runout.soulseek.SoulseekMessageState
 
@@ -17,9 +18,7 @@ import androidx.compose.ui.semantics.contentDescription
 
 import androidx.compose.ui.semantics.Role
 
-import androidx.compose.ui.draw.shadow
 
-import androidx.compose.foundation.shape.CircleShape
 
 import androidx.compose.foundation.clickable
 
@@ -42,7 +41,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -256,7 +254,7 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
                         }
                         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             last?.let { BasicText(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.timestamp)), style = Room.LabelQuiet.copy(fontSize = 10.sp)) }
-                            if (c.unread > 0) Box(Modifier.size(9.dp).background(Room.Signal, CircleShape).semantics { contentDescription = "${c.unread} unread" })
+                            if (c.unread > 0) Box(Modifier.size(9.dp).background(Room.Signal, RectangleShape).semantics { contentDescription = "${c.unread} unread" })
                         }
                     }
                 }
@@ -267,8 +265,8 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
                     .size(56.dp)
-                    .shadow(10.dp, CircleShape)
-                    .background(Room.Accent, CircleShape)
+                    
+                    .background(Room.Ink, RectangleShape)
                     .clickable(enabled = state.soulseekSession.signedIn, role = Role.Button) { newChat = true }
                     .semantics { contentDescription = "New chat" }
                     .testTag("new-chat"),
@@ -291,10 +289,10 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
 private fun Avatar(name: String, online: Boolean, size: androidx.compose.ui.unit.Dp) {
     val hue = ((name.hashCode() and 0x7fffffff) % 360).toFloat()
     Box(Modifier.size(size)) {
-        Box(Modifier.size(size).background(Color.hsl(hue, 0.45f, 0.82f), CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(size).background(Color.hsl(hue, 0.45f, 0.82f), RectangleShape), contentAlignment = Alignment.Center) {
             BasicText(name.take(1).uppercase(), style = Room.Title.copy(fontSize = (size.value * 0.4f).sp, color = Color.hsl(hue, 0.5f, 0.3f)))
         }
-        if (online) Box(Modifier.align(Alignment.BottomEnd).size(size * 0.28f).background(Color.White, CircleShape).padding(2.dp).background(Room.Online, CircleShape))
+        if (online) Box(Modifier.align(Alignment.BottomEnd).size(size * 0.28f).background(Color.White, RectangleShape).padding(2.dp).background(Room.Online, RectangleShape))
     }
 }
 
@@ -341,7 +339,7 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, onBack: (
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                         .padding(start = if (message.outgoing) 40.dp else 0.dp, end = if (message.outgoing) 0.dp else 40.dp)
-                        .background(if (message.outgoing) Room.Accent.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+                        .background(if (message.outgoing) Room.Surface else Room.Background, RectangleShape)
                         .padding(10.dp),
                 ) {
                     if (card != null) RecordCardView(card, state, mine = message.outgoing) {
@@ -400,7 +398,7 @@ private fun RecordPicker(albums: List<app.runout.model.Album>, onDismiss: () -> 
     androidx.activity.compose.BackHandler(onBack = onDismiss)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.10f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss))
-        Column(Modifier.fillMaxWidth().heightIn(max = 460.dp).background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(20.dp).testTag("record-picker")) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 460.dp).background(Color.White, RectangleShape).padding(20.dp).testTag("record-picker")) {
             BasicText("Send a record", style = Room.Title.copy(fontSize = 17.sp), modifier = Modifier.padding(bottom = 8.dp))
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 albums.forEach { a ->
@@ -458,7 +456,7 @@ private fun BackgroundUseNote() {
         Modifier
             .fillMaxWidth()
             .padding(bottom = 10.dp)
-            .background(Room.Signal.copy(alpha = 0.1f), RoundedCornerShape(14.dp))
+            .background(Room.Signal.copy(alpha = 0.1f), RectangleShape)
             .padding(12.dp)
             .testTag("background-restricted"),
         verticalArrangement = Arrangement.spacedBy(6.dp),

@@ -1,10 +1,11 @@
 package app.runout.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.*
@@ -90,8 +91,8 @@ private fun LocalAlbumCard(hit: LocalMatch, actions: RoomActions, onCue: () -> U
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-            .padding(10.dp),
+            .hairlineTop(Room.HairlineSoft)
+            .padding(vertical = 9.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -116,22 +117,25 @@ private fun RemoteAlbumCard(group: RemoteAlbum, enabled: Boolean, onPreview: () 
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .hairlineTop(Room.HairlineSoft)
             .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button) { tick(); onPreview() }
             .testTag("preview-folder:${group.id}")
-            .padding(10.dp),
+            .padding(vertical = 9.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        GeneratedSleeve(group.album, group.parent, Modifier.size(64.dp))
+        // Two lines, no art: the album and its folder, then the spec and the peer's state.
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            BasicText(group.album, style = Room.Title.copy(fontSize = 15.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            group.parent?.let { BasicText(it, style = Room.LabelQuiet, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                SpecTag(listOfNotNull("FLAC", qualityShort(group.bits, group.rate), plural(group.tracks.size, "track")).joinToString(" · "))
+                BasicText(group.album, style = Room.Title.copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                group.parent?.let { BasicText(it, style = Room.LabelQuiet, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicText(listOfNotNull("flac", qualityShort(group.bits, group.rate), plural(group.tracks.size, "track")).joinToString(" · "), style = Room.Label.copy(color = Room.Body))
                 PeerMarks(group)
             }
         }
+        BasicText("→", style = Room.Title)
     }
 }
 
@@ -148,7 +152,7 @@ private fun PeerMarks(group: RemoteAlbum) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Canvas(Modifier.size(7.dp)) { drawCircle(if (group.available) Room.Online else Room.Faint) }
+        Canvas(Modifier.size(7.dp)) { drawRect(if (group.available) Room.Online else Room.Faint) }
         group.queue?.takeIf { it > 0 }?.let { BasicText("≡$it", style = Room.LabelQuiet.copy(fontSize = 10.sp)) }
         if (group.speed > 0) BasicText("↯" + sizeLabel(group.speed), style = Room.LabelQuiet.copy(fontSize = 10.sp, color = if (group.speed >= 1_048_576) Room.Online else Room.Quiet))
     }
@@ -161,7 +165,7 @@ internal fun GeneratedSleeve(title: String, artist: String?, modifier: Modifier 
     val hue = ((seed and 0x7fffffff) % 360).toFloat()
     val a = Color.hsl(hue, 0.55f, 0.62f)
     val b = Color.hsl((hue + 40f) % 360f, 0.5f, 0.38f)
-    Box(modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(a, b)), androidx.compose.foundation.shape.RoundedCornerShape(3.dp))) {
+    Box(modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(a, b)), RectangleShape)) {
         BasicText(
             title.take(18).uppercase(),
             style = Room.Label.copy(fontSize = 6.5.sp, letterSpacing = 0.6.sp, color = Color.White.copy(alpha = 0.92f), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
@@ -182,7 +186,7 @@ private fun SearchKey(searching: Boolean, enabled: Boolean, onSearch: () -> Unit
     Box(
         Modifier
             .size(48.dp)
-            .background(if (on) Room.Accent else Room.Ink.copy(alpha = 0.1f), androidx.compose.foundation.shape.CircleShape)
+            .background(if (on) Room.Ink else Room.HairlineSoft, RectangleShape)
             .clickable(enabled = on, role = androidx.compose.ui.semantics.Role.Button) { tick(); if (searching) onStop() else onSearch() }
             .semantics { contentDescription = if (searching) "Stop searching" else "Search Soulseek" }
             .testTag(if (searching) "stop-search" else "submit-search"),
@@ -209,8 +213,8 @@ private fun FiltersKey(modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier
             .size(54.dp)
-            .shadow(10.dp, androidx.compose.foundation.shape.CircleShape)
-            .background(Color.White, androidx.compose.foundation.shape.CircleShape)
+            .background(Room.Background)
+            .border(1.dp, Room.Ink)
             .clickable(role = androidx.compose.ui.semantics.Role.Button) { tick(); onClick() }
             .semantics { contentDescription = "Filters and sort" }
             .testTag("search-filters"),

@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -237,12 +237,12 @@ internal fun MiniToggle(label: String, checked: Boolean, onChange: (Boolean) -> 
         Box(
             Modifier
                 .size(26.dp, 15.dp)
-                .background(if (checked) Room.Accent else Room.Ink.copy(alpha = 0.12f), RoundedCornerShape(50))
-                .border(0.8.dp, Room.Ink.copy(alpha = if (checked) 0f else 0.1f), RoundedCornerShape(50))
+                .background(if (checked) Room.Ink else Room.Background, RectangleShape)
+                .border(1.dp, Room.Ink, RectangleShape)
                 .padding(2.dp),
             contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
-            Box(Modifier.size(11.dp).background(Color.White, RoundedCornerShape(50)))
+            Box(Modifier.size(9.dp).background(if (checked) Room.Background else Room.Ink, RectangleShape))
         }
     }
 }
