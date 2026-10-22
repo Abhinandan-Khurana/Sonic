@@ -1,5 +1,8 @@
 package app.runout.ui
 
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
@@ -257,26 +260,24 @@ fun DrawScope.drawRecord(
     drawCircle(Color.Black.copy(alpha = 0.35f), radius * 0.024f, center, style = Stroke(radius * 0.005f))
 }
 
-/** An album sleeve: the cover (or a typographic sleeve if none was found), shrink-wrap sheen, and a Hi-Res sticker. */
+/**
+ * An album sleeve: the cover (or a typographic sleeve if none was found), the shrink-wrap sheen and
+ * its stickers, drawn to the board's 151 dp front sleeve and scaled with the sleeve: a round orange
+ * HI-RES sticker tilted 10° at the top right, and a black label tab tilted −3° at the bottom left
+ * ([label]: ON THE PLATTER, PULL UP · DRAG, SLEEVE · EMPTY).
+ */
 @Composable
-fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true) {
+fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true, label: String? = null) {
     val cover by rememberCover(album)
-    // Square cut and flat: no drop shadow, the reflection on the floor does the grounding.
-    Box(
-        modifier
-            .clipToBounds()
-            .background(fallbackColor(album)),
-    ) {
+    BoxWithConstraints(modifier.clipToBounds().background(fallbackColor(album))) {
+        val k = maxWidth / BOARD_SLEEVE
         val bitmap = cover
         if (bitmap != null) {
             Image(bitmap = bitmap, contentDescription = album?.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else if (album != null) {
-            Column(
-                Modifier.fillMaxSize().padding(12.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                BasicText(album.title, style = Room.Title.copy(fontSize = 15.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold), maxLines = 4)
-                BasicText(album.artist, style = Room.LabelQuiet.copy(color = Room.Ink.copy(alpha = 0.6f)), maxLines = 2)
+            Column(Modifier.fillMaxSize().padding(11.dp * k), verticalArrangement = Arrangement.SpaceBetween) {
+                BasicText(album.title.uppercase(), style = Room.Album.copy(fontSize = (18 * k).sp), maxLines = 4)
+                BasicText(album.artist.lowercase(), style = Room.Label.copy(fontSize = (10 * k).sp, color = Room.Ink.copy(alpha = 0.6f)), maxLines = 2)
             }
         }
         // Shrink-wrap
@@ -291,22 +292,42 @@ fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean
                 ),
             ),
         )
-        if (showSticker && album?.quality?.isHiRes == true) {
-            HiResSticker(album.quality.shortLabel, Modifier.align(Alignment.TopEnd).padding(7.dp))
+        // Stickers only where they'd be legible: the crate's sleeves, not the small thumbnails.
+        if (k >= 0.55f) {
+            if (showSticker && album?.quality?.isHiRes == true) {
+                HiResSticker(album.quality.shortLabel, k, Modifier.align(Alignment.TopEnd).padding(top = 6.dp * k, end = 4.dp * k))
+            }
+            if (label != null) LabelSticker(label, k, Modifier.align(Alignment.BottomStart).padding(start = 6.8.dp * k, bottom = 2.dp * k))
         }
     }
 }
 
-/** A round orange sticker slapped on the shrink-wrap, a little crooked: HI-RES over the spec, in Inter. */
+/** The board's front sleeve, which the stickers are sized against. */
+private val BOARD_SLEEVE = 151.3.dp
+
+/** HI-RES over the spec, Inter 800 in black, on a 41 dp orange round with a white edge, 10° off true. */
 @Composable
-fun HiResSticker(text: String, modifier: Modifier = Modifier) {
+fun HiResSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
+    val d = LocalDensity.current
     Box(
-        modifier.rotate(-10f).size(36.dp).clip(CircleShape).background(Room.Signal),
+        modifier.rotate(10f).size(41.dp * k).clip(CircleShape).background(Room.Signal).border(1.5.dp * k, Color.White, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            BasicText("HI-RES", style = TextStyle(fontFamily = Room.Inter, color = Color.White, fontSize = 7.sp, lineHeight = 8.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp))
-            BasicText(text, style = TextStyle(fontFamily = Room.Inter, color = Color.White, fontSize = 6.sp, lineHeight = 7.sp, fontWeight = FontWeight.Medium))
+            BasicText("HI-RES", style = Room.Sticker.copy(fontSize = with(d) { (6.97.dp * k).toSp() }, letterSpacing = with(d) { (0.4.dp * k).toSp() }))
+            BasicText(text, style = Room.Sticker.copy(fontSize = with(d) { (9.84.dp * k).toSp() }, lineHeight = with(d) { (10.dp * k).toSp() }, letterSpacing = with(d) { (-0.2).dp.times(k).toSp() }))
         }
     }
+}
+
+/** A black label tab, white Inter 700 caps, 4 × 7 inside, stuck on 3° off true. */
+@Composable
+fun LabelSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
+    val d = LocalDensity.current
+    BasicText(
+        text.uppercase(),
+        style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = with(d) { (7.565.dp * k).toSp() }, letterSpacing = with(d) { (0.9.dp * k).toSp() }),
+        maxLines = 1,
+        modifier = modifier.rotate(-3f).background(Room.Ink).padding(horizontal = 7.dp * k, vertical = 4.dp * k),
+    )
 }

@@ -1,34 +1,34 @@
 package app.runout.ui
 
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.BuildConfig
 
+/** "0.6", as the boards write it: the version without a trailing ".0". */
+private val VERSION = BuildConfig.VERSION_NAME.removeSuffix(".0")
+
 /**
- * Settings as a plain list: Sound, Soulseek, Library, About. Each row opens its own page, with a
- * way back to the list. [section] null is the list itself.
+ * Settings, as the TE · Settings boards. [section] null is the list: four numbered rows standing at
+ * the foot of the page, above the faint RUNOUT wordmark and the build line. Each row opens its own
+ * page (the head shows its name), which starts with "← settings".
  */
 @Composable
 fun SettingsPanel(
@@ -40,96 +40,109 @@ fun SettingsPanel(
     onSetup: () -> Unit,
     onOffline: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().testTag("panel:settings")) {
-        if (section == null) {
-            // Numbered rows, then the wordmark set huge and faint underneath, like a manual's back page.
-            SettingsSection.entries.forEachIndexed { i, s ->
-                SettingsRow("%02d".format(i + 1), s.label, summary(s, state), Modifier.testTag("settings:${s.name}")) { onSection(s) }
+    if (section == null) {
+        Column(
+            Modifier.fillMaxWidth().fillPageHeight().testTag("panel:settings"),
+            verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
+        ) {
+            Column(Modifier.fillMaxWidth()) {
+                SettingsSection.entries.forEachIndexed { i, s ->
+                    TeRow("%02d".format(i + 1), s.label.lowercase(), summary(s, state), { onSection(s) }, Modifier.testTag("settings:${s.name}"))
+                }
             }
-            BasicText(
-                "RUNOUT",
-                style = Room.Display.copy(fontSize = 64.sp, lineHeight = 64.sp, color = Room.HairlineSoft),
-                maxLines = 1,
-                modifier = Modifier.padding(top = 28.dp).semantics { contentDescription = "" },
-            )
-            return@Column
+            // The wordmark set huge and faint underneath, like a manual's back page.
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                BasicText("RUNOUT", style = Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), maxLines = 1, modifier = Modifier.clearAndSetSemantics {})
+                BasicText("$VERSION · white / teal · flac only", style = Room.LabelQuiet)
+            }
         }
-        BackHandler { onSection(null) }
-        TextAction("‹ Settings", { onSection(null) }, tag = "settings-back", color = Room.Ink)
-        BasicText(section.label, style = Room.Title.copy(fontSize = 17.sp), modifier = Modifier.padding(vertical = 6.dp))
+        return
+    }
+    BackHandler { onSection(null) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(if (section == SettingsSection.ABOUT) Modifier.fillPageHeight() else Modifier)
+            .testTag("panel:settings"),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        PageBackLink("← settings", "settings-back") { onSection(null) }
         when (section) {
-            SettingsSection.SOUND -> {
-                SoundPanel(state.sound, state.output, actions)
-                // Crackle moved here from the home screen: it's part of how the deck sounds.
-                SectionTitle("05 the deck")
-                ToggleRow("Crackle", "Surface noise under the music.", state.crackleOn, { actions.toggleCrackle() }, more = "Always off in Pure.")
-            }
+            SettingsSection.SOUND -> SoundPanel(state.sound, state.output, state.crackleOn, actions)
             SettingsSection.ACCOUNT -> {
                 ConnectionNotice(state, actions, onSetup)
                 SoulseekAccountPanel(state, actions, onOffline, onSignIn = onSetup)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Pill("Downloads", onDownloads, Modifier.testTag("settings-downloads"))
-                    Pill("Review Soulseek setup", onSetup, Modifier.testTag("settings-setup"))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                    TeButton("downloads", onDownloads, Modifier.testTag("settings-downloads"), kind = KeyKind.OUTLINE)
+                    TeButton("review soulseek setup", onSetup, Modifier.testTag("settings-setup"), kind = KeyKind.OUTLINE)
                 }
             }
-            SettingsSection.LIBRARY -> {
-                SectionTitle("Music folder")
-                BasicText(if (state.hasFolder) "Each album folder is a record in the crate." else "No music folder yet.", style = Room.LabelQuiet)
-                state.report?.let { BasicText(it.summary, style = Room.LabelQuiet, modifier = Modifier.padding(top = 6.dp)) }
-                FlowRow(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Change folder lives here now, not on the home screen.
-                    Pill(if (state.hasFolder) "Change folder" else "Choose folder", actions::pickFolder, Modifier.testTag("settings-change-folder"), active = !state.hasFolder)
-                    if (state.hasFolder) Pill("Rescan", actions::rescan)
-                }
-                if (state.hasFolder) RepairLibrary(state, actions)
-            }
-            SettingsSection.ABOUT -> {
-                BasicText(
-                    "Your FLAC records play offline, with no account. Soulseek is optional: it finds and downloads FLAC and carries private messages, " +
-                        "and its protocol does not encrypt sign-in or messages. Friday Drops come from the Internet Archive under their own licences.",
-                    style = Room.Label.copy(color = Room.Body),
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                // The facts at the foot of the page.
-                Box(Modifier.fillMaxWidth().padding(top = 18.dp).height(1.dp).background(Room.Ink))
-                BasicText("Runout ${BuildConfig.VERSION_NAME}", style = Room.Title, modifier = Modifier.padding(top = 10.dp))
-                BasicText(
-                    (if (TeType.isArray) "Array by Indian Type Foundry, via Fontshare: ITF Free Font License. " else "") +
-                        "Inter and Silkscreen: SIL Open Font License. Backdrop, Media3, AndroidX and Filament (the 3D turntable): Apache 2.0. Soulseek core: MIT.",
-                    style = Room.LabelQuiet,
-                )
-            }
+            SettingsSection.LIBRARY -> LibraryPage(state, actions)
+            SettingsSection.ABOUT -> AboutPage()
         }
     }
 }
 
 private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
-    SettingsSection.SOUND -> if (state.sound.pure) "Pure" else if (state.sound.eqEnabled) "EQ · ${state.sound.presetName}" else "EQ off"
-    SettingsSection.ACCOUNT -> if (state.soulseekSession.hasAccount) "${state.soulseekSession.username} · ${connectionLabel(state.soulseekSession)}" else "Not signed in"
-    SettingsSection.LIBRARY -> recordCount(state.albums.size)
-    SettingsSection.ABOUT -> "Runout ${BuildConfig.VERSION_NAME}"
+    SettingsSection.SOUND -> {
+        val eq = when {
+            !state.sound.eqEnabled -> "eq off"
+            state.sound.useParametric -> "autoeq"
+            else -> "eq ${state.sound.presetName.lowercase()}"
+        }
+        "$eq · pure ${if (state.sound.pure) "on" else "off"}"
+    }
+    SettingsSection.ACCOUNT ->
+        if (state.soulseekSession.hasAccount) "${state.soulseekSession.username} · ${connectionLabel(state.soulseekSession)}".lowercase() else "not signed in"
+    SettingsSection.LIBRARY -> "${recordCount(state.albums.size)} · ${if (state.hasFolder) "1 folder" else "no folder"}"
+    SettingsSection.ABOUT -> "runout $VERSION · rg-1"
 }
 
-/** One row of the Settings list: a name, its current state in grey, and a chevron. */
+/**
+ * Settings › Library: 01 music folder (what a record is, the scan in an ink-ruled stats strip, change
+ * folder and rescan) and 02 repair local albums (the black repair key and, after a repair, the files
+ * that couldn't be read in a red-ruled box, each with its reason).
+ */
 @Composable
-private fun SettingsRow(number: String, title: String, summary: String, modifier: Modifier, onClick: () -> Unit) {
-    val tick = rememberTick()
-    Row(
-        modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clickable(role = Role.Button) { tick(); onClick() }
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BasicText(number, style = Room.LabelQuiet, modifier = Modifier.width(30.dp))
-        Column(Modifier.weight(1f)) {
-            BasicText(title, style = Room.Title.copy(fontSize = 15.sp))
-            BasicText(summary, style = Room.LabelQuiet, maxLines = 1)
+private fun LibraryPage(state: RoomState, actions: RoomActions) {
+    PageSection("01 music folder") {
+        BasicText(
+            if (state.hasFolder) "each album folder is a record in the crate." else "no music folder yet. each album folder in it becomes a record in the crate.",
+            style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
+        )
+        state.report?.let { r ->
+            if (r.error != null) BasicText(r.summary.lowercase(), style = Room.Label.copy(color = Room.Danger, lineHeight = 15.sp))
+            else LibraryStats(r.albums, r.audioFiles, r.folders, r.unreadable)
         }
-        BasicText("›", style = Room.Title.copy(fontSize = 20.sp, color = Room.Quiet))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            // Change folder lives here now, not on the home screen.
+            if (state.hasFolder) {
+                TeButton("change folder", actions::pickFolder, Modifier.weight(1f).testTag("settings-change-folder"), kind = KeyKind.OUTLINE)
+                TeButton("rescan", actions::rescan, Modifier.weight(1f), kind = KeyKind.OUTLINE)
+            } else {
+                TeButton("choose folder", actions::pickFolder, Modifier.testTag("settings-change-folder"))
+            }
+        }
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Hairline))
+    if (state.hasFolder) RepairLibrary(state, actions)
+}
+
+/** The scan as a TE stats strip, ruled in ink above and below; unreadable files count in red. */
+@Composable
+private fun LibraryStats(albums: Int, files: Int, folders: Int, unreadable: Int) {
+    Row(Modifier.fillMaxWidth().hairlineTop(Room.Ink).hairlineBottom(Room.Ink)) {
+        listOf(
+            Triple("$albums", "albums", Room.Ink),
+            Triple("$files", "music files", Room.Ink),
+            Triple("$folders", "folders", Room.Ink),
+            Triple("$unreadable", "unreadable", if (unreadable > 0) Room.Danger else Room.Ink),
+        ).forEach { (value, label, colour) ->
+            Column(Modifier.weight(1f).padding(vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BasicText(value, style = Room.Title.copy(color = colour, lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified))
+                BasicText(label, style = Room.LabelQuiet)
+            }
+        }
+    }
 }
 
 /**
@@ -139,33 +152,70 @@ private fun SettingsRow(number: String, title: String, summary: String, modifier
  */
 @Composable
 private fun RepairLibrary(state: RoomState, actions: RoomActions) {
-    SectionTitle("Repair local albums")
-    BasicText(
-        "Albums missing or vanishing? Rebuild the shelf from your folder. Runout forgets its saved list, reads every album again, " +
-            "and shows each file it couldn't play and why. Your music files are never changed.",
-        style = Room.LabelQuiet,
-    )
-    val scanning = state.scan != null
-    Pill(if (scanning) "Reading your folder…" else "Repair local albums", { if (!scanning) actions.repairLibrary() }, Modifier.padding(vertical = 8.dp).testTag("settings-repair"), active = !scanning)
-    val broken = state.report?.unreadableFiles.orEmpty()
-    if (broken.isEmpty()) return
-    val total = state.report?.unreadable ?: broken.size
-    BasicText("$total ${if (total == 1) "file" else "files"} couldn't be read", style = Room.Title.copy(fontSize = 14.sp), modifier = Modifier.padding(top = 4.dp))
-    Column(Modifier.fillMaxWidth().testTag("repair-report")) {
-        broken.take(SHOWN_BROKEN).forEach { f ->
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                BasicText(f.path, style = Room.Label.copy(color = Room.Ink), maxLines = 2)
-                BasicText(f.reason, style = Room.LabelQuiet)
+    PageSection("02 repair local albums") {
+        BasicText(
+            "albums missing or vanishing? rebuild the shelf from your folder. runout forgets its saved list, reads every album again, " +
+                "and shows each file it couldn't play and why. your music files are never changed.",
+            style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
+        )
+        val scanning = state.scan != null
+        TeButton(
+            if (scanning) "reading your folder…" else "repair local albums",
+            { if (!scanning) actions.repairLibrary() },
+            Modifier.testTag("settings-repair"),
+            kind = if (scanning) KeyKind.OUTLINE else KeyKind.FILLED,
+        )
+        val broken = state.report?.unreadableFiles.orEmpty()
+        if (broken.isEmpty()) return@PageSection
+        val total = state.report?.unreadable ?: broken.size
+        Column(Modifier.fillMaxWidth().border(1.dp, Room.Danger).testTag("repair-report")) {
+            BasicText(
+                "$total ${if (total == 1) "file" else "files"} couldn't be read",
+                style = Room.Label.copy(color = Color.White),
+                modifier = Modifier.fillMaxWidth().background(Room.Danger).padding(11.dp),
+            )
+            broken.take(SHOWN_BROKEN).forEach { f ->
+                Column(Modifier.fillMaxWidth().hairlineTop().padding(11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicText(f.path.lowercase(), style = Room.Label.copy(lineHeight = 15.sp), maxLines = 2)
+                    BasicText(f.reason.lowercase(), style = Room.LabelQuiet.copy(lineHeight = 15.sp))
+                }
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Ink.copy(alpha = 0.06f)))
+            if (total > SHOWN_BROKEN) BasicText("and ${total - SHOWN_BROKEN} more", style = Room.LabelQuiet, modifier = Modifier.fillMaxWidth().hairlineTop().padding(11.dp))
         }
-        if (total > SHOWN_BROKEN) BasicText("and ${total - SHOWN_BROKEN} more", style = Room.LabelQuiet, modifier = Modifier.padding(top = 6.dp))
+        BasicText(
+            "to fix one: re-download or re-rip it as real flac, or check it with flac -t on a computer. then tap repair again.",
+            style = Room.LabelQuiet.copy(lineHeight = 15.sp),
+        )
     }
-    BasicText(
-        "To fix one: re-download or re-rip it as real FLAC, or check it with a tool like flac -t on a computer. Then tap Repair again.",
-        style = Room.LabelQuiet,
-        modifier = Modifier.padding(top = 8.dp),
-    )
 }
 
 private const val SHOWN_BROKEN = 50
+
+/**
+ * Settings › About: the facts at the foot of the page, one per hairline row (an 88 dp grey key and
+ * the 10/400 text), and under an ink rule the version in 33/700 and the build line.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
+    Spacer(Modifier.weight(1f))
+    val fonts = (if (TeType.isArray) "array by indian type foundry, via fontshare: itf free font license. " else "") +
+        "inter and silkscreen: sil open font license."
+    Column(Modifier.fillMaxWidth()) {
+        listOf(
+            "records" to "your flac records play offline, with no account.",
+            "soulseek" to "optional. finds and downloads flac and carries private messages. its protocol does not encrypt sign-in or messages.",
+            "drops" to "friday drops come from the internet archive under their own licences.",
+            "fonts" to fonts,
+            "libraries" to "backdrop, filament, media3, androidx: apache 2.0. soulseek core: mit.",
+        ).forEach { (key, value) ->
+            Row(Modifier.fillMaxWidth().hairlineTop().padding(vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                BasicText(key, style = Room.LabelQuiet, modifier = Modifier.width(88.dp))
+                BasicText(value, style = Room.Label.copy(lineHeight = 15.sp), modifier = Modifier.weight(1f))
+            }
+        }
+    }
+    Column(Modifier.fillMaxWidth().hairlineTop(Room.Ink).padding(top = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        BasicText("RUNOUT $VERSION", style = Room.Display.copy(fontSize = 33.sp), maxLines = 1)
+        BasicText(if (BuildConfig.DEBUG) "development build · rg-1 v3" else "rg-1 v3", style = Room.LabelQuiet)
+    }
+}

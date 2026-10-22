@@ -23,6 +23,8 @@
  */
 package app.runout.ui
 
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.Animatable
@@ -202,6 +204,8 @@ fun Turntable(
     onScreenLongPress: (() -> Unit)? = null,
     /** A different record is already on: the ring turns red and the disc won't land. */
     dropBlocked: Boolean = false,
+    /** Words for the LED title window for a moment (EJECT while a record flies home). */
+    ledOverride: String? = null,
 ) {
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
@@ -252,19 +256,20 @@ fun Turntable(
         snapshotFlow { (dragAngle ?: animAngle) to drop }.collect { (a, d) -> r.setArm(a, d) }
     }
 
-    // Turning the record over: in 3D it lifts, rolls towards you and settles; its face changes to
-    // the new side when it's edge-on. With animations off, or on the flat deck, the side just changes.
+    // Turning the record over (TE · flipping the record, ~0.9 s): in 3D it lifts, rolls towards you
+    // and settles; its face changes to the new side when it's edge-on. The flat deck squashes the
+    // disc to a line and opens it again. With animations off the side just changes.
     var faceSideIndex by remember(deck.album?.id) { mutableIntStateOf(deck.sideIndex) }
     val flipT = remember { Animatable(0f) }
     val thud = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
     LaunchedEffect(deck.album?.id, deck.sideIndex) {
         if (deck.sideIndex == faceSideIndex) return@LaunchedEffect
-        val animate = use3d && renderer != null && android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        val animate = android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
         if (!animate) { faceSideIndex = deck.sideIndex; return@LaunchedEffect }
         flipT.snapTo(0f)
-        flipT.animateTo(0.5f, tween(300, easing = FastOutLinearInEasing))
+        flipT.animateTo(0.5f, tween(400, easing = FastOutLinearInEasing))
         faceSideIndex = deck.sideIndex
-        flipT.animateTo(1f, tween(380, easing = LinearOutSlowInEasing))
+        flipT.animateTo(1f, tween(500, easing = LinearOutSlowInEasing))
         thud()
         flipT.snapTo(0f)
     }
@@ -316,7 +321,15 @@ fun Turntable(
     LaunchedEffect(renderer, playing) { renderer?.setStatusLamp(playing) }
     val stripStep = if (deck.album == null) 0 else (deck.fraction * 64).toInt()
     LaunchedEffect(renderer, stripStep, playing) { renderer?.setStrip(stripStep / 64f, playing) }
-    val leds = ledLines(deck)
+    // While the record turns over the LED reads FLIP (then the new side's code); EJECT while it flies home.
+    val flipping by remember { derivedStateOf { flipT.value > 0f } }
+    val leds = ledLines(deck).let {
+        when {
+            ledOverride != null -> DeckLeds(ledOverride, null, null)
+            flipping -> DeckLeds("FLIP", it.code, null)
+            else -> it
+        }
+    }
     LaunchedEffect(renderer, leds) { renderer?.setScreen(leds.title, leds.code, leds.time) }
     // A frame drawn by Filament shows once the room redraws around it.
     var frames by remember { mutableIntStateOf(0) }
@@ -363,7 +376,7 @@ fun Turntable(
                 }
                 // The JVM tests have no GPU, and a phone takes a moment to get the 3D deck going: a
                 // flat stand-in in the same places.
-                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer)
+                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, flip = { flipT.value })
                 // The drop target over the model. Reading [frames] here redraws the room each time
                 // Filament finishes a frame, so the TextureView's newest picture is what shows.
                 Canvas(Modifier.fillMaxSize()) {
@@ -496,7 +509,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(c
  * touch lands in the same places.
  */
 @Composable
-private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer) {
+private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer, flip: () -> Float = { 0f }) {
     val look = remember(deck.album) { discLookFor(deck.album) }
     val labelFallback = remember(deck.album) { fallbackColor(deck.album) }
     Canvas(Modifier.fillMaxSize()) {
@@ -512,7 +525,11 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
         val ppu = cam.pixelsPerUnit(DeckModel.platterCentre)
         drawCircle(Color(0xFF3F5D5A), ppu * DeckModel.PLATTER_R, c)
         if (deck.album != null) {
-            drawRecord(c, ppu * DeckModel.RECORD_R, rotation, look, cover, labelFallback, boundaries, null, null)
+            // Turning over: squashed to a line on its horizontal axis halfway, then open again.
+            val squash = kotlin.math.abs(kotlin.math.cos(flip() * PI.toFloat())).coerceAtLeast(0.02f)
+            scale(1f, squash, pivot = c) {
+                drawRecord(c, ppu * DeckModel.RECORD_R, rotation, look, cover, labelFallback, boundaries, null, null)
+            }
         }
         val pivot = cam.project(V3(DeckModel.pivot.x, 0.84f, DeckModel.pivot.z))
         val stylus = DeckModel.stylus(armAngle).let { cam.project(V3(it.x, 0.70f, it.z)) }

@@ -81,7 +81,7 @@ class SignalAndSheetsTest {
         compose.onNodeWithTag("signal-chip").assertDoesNotExist()
         compose.onNodeWithTag("deck:screen").performTouchInput { longClick() }
         compose.onNodeWithTag("panel:signal").assertIsDisplayed()
-        compose.onNodeWithTag("signal-verdict").assertTextEquals("Lossless, resampled to 48 kHz")
+        compose.onNodeWithTag("signal-verdict").assertTextEquals("lossless, resampled to 48 khz")
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/30_audio_quality.png")
     }
 
@@ -105,7 +105,7 @@ class SignalAndSheetsTest {
         assertTrue(actions.log.contains("repair"))
         compose.onNodeWithTag("repair-report").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("2 files couldn't be read").assertExists()
-        compose.onNodeWithText("Music/Air/Moon Safari/03 All I Need.flac").assertExists()
+        compose.onNodeWithText("Music/Air/Moon Safari/03 All I Need.flac", ignoreCase = true).assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/31_repair_library.png")
     }
 

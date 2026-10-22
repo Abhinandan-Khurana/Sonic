@@ -1,5 +1,10 @@
 package app.runout.ui
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
 import app.runout.ui.deck.RecordMaps
 import app.runout.ui.deck.DiscRenderer
 import app.runout.ui.deck.DeckRenderer
@@ -323,6 +328,15 @@ fun RoomScreen(
     var occupied by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(state)
     var menuFor by remember { mutableStateOf<String?>(null) }
+    // The record in front of the crate, for the caption under it.
+    var frontId by remember { mutableStateOf<String?>(null) }
+    // First time in the room: the three "?" helps show until a record first lands on the platter.
+    val prefs = remember { appContext.getSharedPreferences("room", android.content.Context.MODE_PRIVATE) }
+    var roomHelps by remember { mutableStateOf(!prefs.getBoolean("helps_done", false) && state.deck.album == null) }
+    LaunchedEffect(state.deck.album != null) {
+        if (state.deck.album != null && roomHelps) { roomHelps = false; prefs.edit().putBoolean("helps_done", true).apply() }
+    }
+    var roomHelp by remember { mutableStateOf<TeHelp?>(null) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
     val pickUp = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate)
     val landed = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
@@ -374,17 +388,31 @@ fun RoomScreen(
             if (pulledId == null) return@LaunchedEffect
             val home = platterCenter
             if (ejecting != null && ejecting == pulledId && home != null) {
-                // Eject: the 3D record takes the deck's place exactly, then the deck lets go of its
-                // own and the record arcs back into its sleeve.
+                // Put back (TE storyboard, ~1.1 s): EJECT on the LED and the arm back to its rest;
+                // the 3D record takes the deck's place exactly and lifts off (1.0 → 1.06); it flies on
+                // a soft arc to the crate, shrinking to sleeve size, slides down into its sleeve, and
+                // seats with a tick.
+                if (current.deck.needleDown) { actions.liftNeedle(); delay(300) }
                 disc.snapTo(home - rootOrigin)
                 lift.snapTo(1f)
                 spin.snapTo(deckLink.platterDegrees)
                 withTimeoutOrNull(900) { snapshotFlow { heldReady }.first { it } }
                 actions.eject()
-                delay(120)
-                launch { lift.animateTo(1.1f, tween(240, easing = FastOutSlowInEasing)); lift.animateTo(1f, tween(300)) }
-                launch { spin.animateTo(spin.value - 140f, tween(540, easing = FastOutSlowInEasing)) }
-                disc.animateTo(s.rect.center - rootOrigin, tween(540, easing = FastOutSlowInEasing))
+                lift.animateTo(1.06f, tween(200, easing = FastOutSlowInEasing))
+                val above = s.rect.center - rootOrigin + pullOut(s)
+                launch { lift.animateTo(1f, tween(300)) }
+                launch { spin.animateTo(spin.value - 90f, tween(500, easing = FastOutSlowInEasing)) }
+                // The arc: a little higher than the straight line, at its middle.
+                val from = disc.value
+                val arc = Animatable(0f)
+                arc.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) {
+                    val t = value
+                    val lineY = from.y + (above.y - from.y) * t
+                    val p = Offset(from.x + (above.x - from.x) * t, lineY - kotlin.math.sin(t * Math.PI.toFloat()) * s.rect.height * 0.25f)
+                    scope.launch { disc.snapTo(p) }
+                }
+                disc.animateTo(s.rect.center - rootOrigin, tween(200, easing = FastOutSlowInEasing))
+                landed()
                 pulledId = null
                 ejecting = null
                 crateTarget = null
@@ -423,66 +451,90 @@ fun RoomScreen(
                     contentAlignment = alignment,
                     link = deckLink,
                     onScreenLongPress = { panel = Panel.SIGNAL; pulledId = null },
+                    ledOverride = if (ejecting != null) "EJECT" else null,
                 )
             }
-            val crate = @Composable { m: Modifier ->
+            val crate = @Composable { m: Modifier, geometry: CrateGeometry ->
                 Crate(
                     albums = state.albums,
-                    hasFolder = state.hasFolder,
                     pulledId = pulledId,
-                    loadedId = state.deck.album?.id,
-                    onPickFolder = actions::pickFolder,
                     onPull = { pulledId = it.id },
                     onPutBack = { pulledId = null },
                     onFrontSlot = { slot = it },
                     onMenu = { menuFor = it.id },
                     modifier = m,
+                    geometry = geometry,
+                    label = { if (it.id == state.deck.album?.id) "on the platter" else null },
+                    onFront = { frontId = it?.id },
                     initialIndex = initialCrateIndex,
                     scrollTo = crateTarget,
-                    emptyTitle = emptyTitle(state),
-                    emptyDetail = emptyDetail(state),
                 )
             }
+            val front = state.albums.firstOrNull { it.id == frontId } ?: state.albums.firstOrNull()
+            val line = nowLine(state, pulled != null, nearPlatter)
+            val help = @Composable { h: TeHelp, m: Modifier -> if (roomHelps) HelpKey(h.title, m) { roomHelp = h } }
 
             if (portrait) {
+                // TE · Home: top bar, the deck's band, the crate, its caption, the track wheel and the
+                // "now spinning" line, with the nav bar (drawn by the room) underneath.
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 104.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = NAV_HEIGHT),
                 ) {
-                    // The deck runs almost edge to edge, past the room's side margins.
-                    turntable(Modifier.requiredWidth(screenW - 8.dp).weight(0.40f), Alignment.Center)
-                    TrackWheel(state, actions, Modifier.fillMaxWidth().padding(top = 6.dp))
-                    Spacer(Modifier.height(8.dp))
-                    crate(Modifier.fillMaxWidth().weight(0.60f))
+                    TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount)
+                    DeckBand(state, empty = state.albums.isEmpty(), help = { help(HELP_LED, it) }) { turntable(it, Alignment.Center) }
+                    if (state.albums.isEmpty()) {
+                        EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
+                    } else {
+                        Box(Modifier.fillMaxWidth().weight(301f)) {
+                            crate(Modifier.fillMaxSize(), CrateGeometry.Portrait)
+                            if (roomHelps) Row(Modifier.align(Alignment.TopEnd).padding(top = 11.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                BasicText("how the crate works", style = Room.LabelQuiet)
+                                HelpKey(HELP_CRATE.title, Modifier) { roomHelp = HELP_CRATE }
+                            }
+                        }
+                        front?.let { AlbumCaption(it, portrait = true) }
+                        Box(Modifier.fillMaxWidth().weight(105f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+                            TrackWheel(state, actions, rows = 4, help = { help(HELP_WHEEL, it) })
+                        }
+                        NowSpinning(line, hint = state.albums.size > 1)
+                    }
                 }
             } else {
-                Row(
-                    Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.displayCutout)
-                        .padding(start = 28.dp, end = 20.dp, top = 46.dp, bottom = 42.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(0.53f).fillMaxHeight()) {
-                        turntable(Modifier.fillMaxWidth().weight(1f), Alignment.CenterStart)
-                        TrackWheel(state, actions, Modifier.fillMaxWidth().padding(top = 4.dp))
+                // Landscape: the deck's band on the left, ruled off; the room's column on the right
+                // with the nav at its foot.
+                Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))) {
+                    Column(
+                        Modifier.weight(1f - LANDSCAPE_ROOM).fillMaxHeight().drawBehind {
+                            drawLine(Room.Hairline, Offset(size.width - 0.5.dp.toPx(), 0f), Offset(size.width - 0.5.dp.toPx(), size.height), 1.dp.toPx())
+                        },
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        BasicText("rg-1 · white / teal", style = Room.LabelQuiet, modifier = Modifier.align(Alignment.End).padding(start = 22.dp, end = 22.dp, top = 22.dp))
+                        turntable(Modifier.fillMaxWidth().weight(1f), Alignment.Center)
+                        Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 16.dp)) {
+                            BasicText(bandCaption(state, landscape = true), style = Room.LabelQuiet, modifier = Modifier.weight(1f), maxLines = 1)
+                            if (state.deck.album != null) BasicText("33⅓ rpm", style = Room.LabelQuiet)
+                        }
                     }
-                    Spacer(Modifier.width(24.dp))
-                    // Room underneath for the tab bar.
-                    crate(Modifier.weight(0.47f).fillMaxHeight().padding(bottom = LANDSCAPE_TAB_ROOM))
+                    Column(Modifier.weight(LANDSCAPE_ROOM).fillMaxHeight().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = NAV_HEIGHT)) {
+                        TopBar(state, onDownloads = { panel = Panel.DOWNLOADS; pulledId = null }, onAccount = openAccount)
+                        if (state.albums.isEmpty()) {
+                            EmptyRoom(state, actions, Modifier.fillMaxWidth().weight(1f))
+                        } else {
+                            crate(Modifier.fillMaxWidth().weight(168f), CrateGeometry.Landscape)
+                            front?.let { AlbumCaption(it, portrait = false) }
+                            Box(Modifier.fillMaxWidth().weight(80f).padding(horizontal = 22.dp), contentAlignment = Alignment.Center) {
+                                TrackWheel(state, actions, rows = 3)
+                            }
+                            NowSpinning(line, hint = state.albums.size > 1, landscape = true)
+                        }
+                    }
                 }
             }
-
-            CornerLabels(
-                state, pulled != null, portrait, screenW, backdrop, actions,
-                onOpen = { if (it == Panel.SETTINGS) settings = null; panel = it; pulledId = null },
-                onDownloads = { panel = Panel.DOWNLOADS; pulledId = null },
-                onAccount = openAccount,
-                onSignal = { panel = Panel.SIGNAL; pulledId = null },
-            )
         }
 
         // The pulled record, drawn above everything so it can travel across the room.
@@ -597,11 +649,14 @@ fun RoomScreen(
                                 val busy = current.deck.album?.id?.let { it != pulled.id } == true
                                 scope.launch {
                                     if (onPlatter && busy) {
-                                        // Platter occupied: the record bounces off and goes back to hand.
-                                        refused()
+                                        // Platter occupied: the disc doesn't land. It bounces back along its
+                                        // path (0.4 s, a small overshoot) with a double buzz and slides into its sleeve.
                                         occupied = true
-                                        launch { lift.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 500f)) }
-                                        disc.animateTo(restPos, spring(dampingRatio = 0.42f, stiffness = 240f))
+                                        launch { refused(); delay(90); refused() }
+                                        launch { lift.animateTo(1f, tween(400)) }
+                                        disc.animateTo(restPos, spring(dampingRatio = 0.6f, stiffness = 380f))
+                                        disc.animateTo(s.rect.center - rootOrigin, tween(200, easing = FastOutSlowInEasing))
+                                        pulledId = null
                                     } else if (onPlatter && target != null) {
                                         launch { lift.animateTo(1f, tween(180)) }
                                         // Turn to where the platter has stopped, so the 3D record lands lined up.
@@ -645,10 +700,13 @@ fun RoomScreen(
             }
 
             // The sleeve sits in front of the disc while it slides out, and behind it once you pick it up.
+            // Its label says what to do; once the record is over the deck the empty sleeve fades back.
             SleeveArt(
                 pulled,
-                Modifier
+                label = if (proximity > 0.05f) "sleeve · empty" else "pull up · drag",
+                modifier = Modifier
                     .zIndex(if (dragging || proximity > 0.05f) 4f else 6f)
+                    .graphicsLayer { alpha = 1f - 0.55f * (proximity * 3f).coerceIn(0f, 1f) }
                     .offset { IntOffset((s.rect.left - rootOrigin.x).roundToInt(), (s.rect.top - rootOrigin.y).roundToInt()) }
                     .size(s.size)
                     .combinedClickable(
@@ -746,6 +804,7 @@ fun RoomScreen(
 
         // Full pages, above the room and under the nav bar.
         val page = panel?.takeIf { it.fullPage }
+        val pageSheets = remember { PageSheetHost() }
         AnimatedVisibility(
             visible = page != null,
             enter = fadeIn(tween(160)),
@@ -756,7 +815,7 @@ fun RoomScreen(
             if (page != null) shown = page
             val title = if (shown == Panel.SETTINGS) settings?.label ?: shown.title else shown.title
             // Dig and Friends scroll their own lists; the rest scroll as one page.
-            FullPage(shown.index, title, onClose = { closePanel() }, scroll = shown != Panel.DIG && shown != Panel.FRIENDS) { panelContent(shown) }
+            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = shown != Panel.DIG && shown != Panel.FRIENDS) { panelContent(shown) }
         }
 
         // One nav bar for the room and every page, the open page's cell in black.
@@ -771,6 +830,8 @@ fun RoomScreen(
                 .zIndex(11.5f)
                 .windowInsetsPadding(WindowInsets.navigationBars),
         )
+        // Sheets opened by a page's content cover the whole screen, nav bar included.
+        if (page != null) Box(Modifier.fillMaxSize().zIndex(11.7f)) { PageSheetLayer(pageSheets) }
 
         // Onboarding: its own full screen, on first launch or when Soulseek setup is asked for again.
         // Finishing drops you into the room, which pops in behind the fading greeting.
@@ -793,38 +854,36 @@ fun RoomScreen(
 
         state.albums.firstOrNull { it.id == removeId }?.let { record ->
             GlassConfirm(
-                "Remove record?",
-                if (record.source == Source.RECEIVED) "“${record.title}” and its received audio will be deleted from this device."
-                else "“${record.title}” will be removed from your shelf. Original music files are kept.",
-                "Remove record", "Keep it", roomBackdrop,
+                "remove record?",
+                if (record.source == Source.RECEIVED) "“${record.title.lowercase()}” and its received audio will be deleted from this device."
+                else "“${record.title.lowercase()}” will be removed from your shelf. original music files are kept.",
+                "remove record", "keep it", roomBackdrop,
                 onConfirm = { actions.removeRecord(record); removeId = null; pulledId = null },
                 onDismiss = { removeId = null },
             )
         }
 
-        // Platter occupied: a red note with the way out.
+        // Where toasts sit: above the "now spinning" line and the tabs, on the room's half in landscape.
+        val toastAt = Modifier
+            .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
+            .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(bottom = NAV_HEIGHT + 49.dp, start = 22.dp, end = 22.dp)
+            .widthIn(max = 520.dp)
+
+        // Platter occupied: the error toast for 4 s, with "eject →" (the put-back).
         if (occupied && !setupOpen) {
-            LaunchedEffect(Unit) { delay(5_000); occupied = false }
-            Row(
-                Modifier
-                    .zIndex(21f)
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (portrait) 120.dp else 56.dp, start = 22.dp, end = 22.dp)
-                    .widthIn(max = 520.dp)
-                    .background(Room.Background)
-                    .border(1.dp, Room.Danger)
-                    .testTag("platter-occupied")
-                    .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                BasicText("first, remove the current record from the platter.", style = Room.Label.copy(color = Room.Danger), modifier = Modifier.weight(1f, fill = false))
-                TextAction("eject", { occupied = false; deckActions.eject() }, tag = "occupied-eject", color = Room.Ink)
+            LaunchedEffect(Unit) { delay(4_000); occupied = false }
+            TeToast("first, remove the current record from the platter.", Room.Danger, toastAt.zIndex(21f).testTag("platter-occupied")) {
+                TeLink("eject", { occupied = false; deckActions.eject() }, tag = "occupied-eject", color = Color.White)
             }
         }
 
-        // Notes: one small glass note at a time. The cover notice waits for OK; a Soulseek problem
-        // stays until it's tapped away; anything else fades after a few seconds.
+        // The room's first-time helps.
+        Box(Modifier.fillMaxSize().zIndex(if (roomHelp != null) 31f else -1f)) { TeHelpSheet(roomHelp) { roomHelp = null } }
+
+        // Notes: one toast at a time. The cover notice waits for OK; a Soulseek problem stays until
+        // it's tapped away; anything else fades after a few seconds.
         val notice = state.coverLookupNoticePending && !setupOpen
         val msg = if (setupOpen) null else state.message
         val problem = state.soulseekError?.takeIf { panel == null && !setupOpen }
@@ -833,88 +892,79 @@ fun RoomScreen(
                 delay(4_500)
                 actions.dismissMessage()
             }
-            Box(
-                Modifier
-                    .zIndex(20f)
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (portrait) 120.dp else 56.dp, start = 24.dp, end = 24.dp)
-                    .widthIn(max = 520.dp)
-                    // A printed slip: white, ink rule, red rule for a Soulseek problem.
-                    .background(Room.Background)
-                    .border(1.dp, if (!notice && msg == null) Room.Danger else Room.Ink)
-                    .then(
-                        if (notice) Modifier.testTag("cover-lookup-notice")
-                        else Modifier.testTag("message").clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            if (msg != null) actions.dismissMessage() else actions.clearSoulseekError()
-                        },
-                    )
-                    .padding(horizontal = 18.dp, vertical = 11.dp),
-            ) {
-                if (notice) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BasicText(
-                        "Finding missing covers online is now opt-in. It is off unless you enable it in Settings › Soulseek › Collection & storage. " +
-                            "Lookups send artist and album title to MusicBrainz, the Cover Art Archive and the Internet Archive.",
-                        style = Room.Label.copy(fontWeight = FontWeight.Medium),
-                    )
-                    Pill("OK", actions::dismissCoverLookupNotice)
-                } else BasicText(msg ?: problem.orEmpty(), style = Room.Label.copy(color = if (msg == null) Room.Danger else Room.Ink))
-            }
+            val at = toastAt.zIndex(20f).then(
+                if (notice) Modifier.testTag("cover-lookup-notice")
+                else Modifier.testTag("message").clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                    if (msg != null) actions.dismissMessage() else actions.clearSoulseekError()
+                },
+            )
+            if (notice) TeToast(
+                "finding missing covers online is now opt-in. it is off unless you enable it in settings › soulseek › collection & storage. " +
+                    "lookups send artist and album title to musicbrainz, the cover art archive and the internet archive.",
+                Room.Accent, at,
+            ) { TeLink("ok", actions::dismissCoverLookupNotice, tag = "action:OK", arrow = "", color = Color.White) }
+            else TeToast(msg ?: problem.orEmpty(), if (msg == null) Room.Danger else Room.Accent, at)
         }
     }
 }
 
-/** A question asked on glass over the room. Back or a tap outside answers with [dismiss]. */
+/** TE · Remove record?: a TE card with the 22/700 question, a 10/400 line and two keys side by side, the red one to act. */
 @Composable
 private fun GlassConfirm(
     title: String,
     detail: String,
     confirm: String,
     dismiss: String,
-    backdrop: Backdrop,
+    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize().zIndex(30f), contentAlignment = Alignment.Center) {
-        // A sibling scrim, so the question and its answers stay separate nodes for TalkBack.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Room.Scrim)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-        )
-        Column(
-            Modifier
-                .padding(22.dp)
-                .widthIn(max = 420.dp)
-                .background(Room.Background)
-                .border(1.dp, Room.Ink)
-                .pointerInput(Unit) { detectTapGestures { } }
-                .padding(20.dp)
-                .testTag("confirm"),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BasicText(title, style = Room.Title.copy(fontSize = 16.sp))
-            BasicText(detail, style = Room.Label.copy(color = Room.Body))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill(dismiss, onDismiss)
-                Pill(confirm, onConfirm, active = true)
-            }
+    TeCard("confirm", onDismiss) {
+        BasicText(title.uppercase(), style = Room.Title)
+        BasicText(detail, style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            TeButton(dismiss, onDismiss, Modifier.weight(1f), kind = KeyKind.OUTLINE)
+            val tick = rememberTick()
+            Box(
+                Modifier
+                    .weight(1f)
+                    .background(Room.Danger)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onConfirm() }
+                    .padding(horizontal = 22.dp, vertical = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) { BasicText(confirm, style = Room.Text.copy(color = Color.White), maxLines = 1) }
         }
     }
 }
 
+/**
+ * TE · Toast: a black slip 22 dp from the sides, above the line and the tabs, 11 × 16 inside: an
+ * 8 dp lamp (blue for news, red for a problem) and 10/400 white text, with an optional key.
+ */
+@Composable
+private fun TeToast(text: String, lamp: Color, modifier: Modifier, action: (@Composable () -> Unit)? = null) {
+    Row(
+        modifier.background(Room.Ink).padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        Box(Modifier.size(8.dp).background(lamp))
+        BasicText(text, style = Room.Label.copy(color = Color.White, lineHeight = 15.sp), modifier = Modifier.weight(1f))
+        action?.invoke()
+    }
+}
+
 private fun emptyTitle(state: RoomState): String = when {
-    !state.hasFolder -> "Choose your\nmusic folder"
-    state.scan is ScanState.Scanning -> "Reading your\nfolder…"
-    else -> "No albums found"
+    !state.hasFolder -> "CHOOSE YOUR MUSIC FOLDER"
+    state.scan is ScanState.Scanning -> "READING YOUR FOLDER…"
+    else -> "NO ALBUMS FOUND"
 }
 
 private fun emptyDetail(state: RoomState): String = when {
-    !state.hasFolder -> "Each album folder becomes\na record on your shelf"
+    !state.hasFolder -> "each album folder becomes a record on your shelf. flac only. nothing leaves your phone."
     state.scan is ScanState.Scanning -> (state.scan as ScanState.Scanning).progress.let { "${it.folders} folders · ${it.audioFiles} music files so far" }
-    state.report != null -> state.report.summary + "\n\nTap to pick another folder"
-    else -> "Tap to pick another folder"
+    state.report != null -> state.report.summary.lowercase() + " pick another folder to try again."
+    else -> "pick another folder to try again."
 }
 
 /**
@@ -961,8 +1011,7 @@ private fun PanelSheet(
  * body 11 dp below it and 22 dp in, above the keyboard and the nav bar.
  */
 @Composable
-private fun FullPage(index: String, title: String, onClose: () -> Unit, scroll: Boolean = false, navRoom: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
-    val sheets = remember { PageSheetHost() }
+private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
         Column(
             Modifier
@@ -980,8 +1029,6 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, scroll: 
                 )
             }
         }
-        // Sheets opened by the page's content cover the whole page, edge to edge.
-        PageSheetLayer(sheets)
     }
 }
 
@@ -1003,143 +1050,240 @@ private fun RoomBackground(modifier: Modifier, @Suppress("UNUSED_PARAMETER") por
     Box(modifier.background(Room.Background))
 }
 
+/** TE · Home's top bar: the side that's up (or the empty platter) on the left; the line out, downloads and the shelf on the right. */
 @Composable
-private fun CornerLabels(
-    state: RoomState,
-    pulled: Boolean,
-    portrait: Boolean,
-    screenW: Dp,
-    backdrop: Backdrop,
-    actions: RoomActions,
-    onOpen: (Panel) -> Unit,
-    onDownloads: () -> Unit,
-    onAccount: () -> Unit,
-    onSignal: () -> Unit,
-) {
+private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> Unit) {
     val deck = state.deck
-    val nowSpinning = when {
-        deck.album == null -> "Nothing on the platter"
-        deck.sideFinished -> "Side ${deck.side?.letter} finished — tap the record to flip it"
-        deck.needleDown -> "Now spinning — Side ${deck.side?.letter} · ${deck.currentTrackTitle ?: deck.album.title}"
-        else -> "${deck.album.title} · Side ${deck.side?.letter} cued — lower the tonearm"
-    }
-    val scanText = when (val s = state.scan) {
-        is ScanState.Scanning -> "Scanning · ${s.progress.albums} albums found"
-        is ScanState.FindingCovers -> "Finding covers · ${s.done + 1} of ${s.total}"
-        null -> null
-    }
-    val newDrop = state.drops is DropState.Ready && state.claimed.size < DropsRepository.CLAIMS_PER_WEEK
+    val side = deck.side
     // Downloads still in the queue or waiting for attention; finished and cancelled ones don't count.
     val transfers = state.soulseekTransfers.filter { it.state != SoulseekTransferState.COMPLETED && it.state != SoulseekTransferState.CANCELLED }
-    val badges = buildSet {
-        if (newDrop) add(Panel.DROPS)
-        if (state.soulseekConversations.any { it.unread > 0 }) add(Panel.FRIENDS)
+    val scanText = when (val s = state.scan) {
+        is ScanState.Scanning -> "scanning · ${s.progress.albums}"
+        is ScanState.FindingCovers -> "covers · ${s.done + 1}/${s.total}"
+        null -> null
     }
-
-    // Which side is up and where the needle is: "side a · a2 · 2/4".
-    val sideLine = deck.side?.let { side -> "side ${side.letter.lowercaseChar()} · ${deck.trackCode.lowercase()} · ${deck.trackIndex + 1}/${side.tracks.size}" }
-        ?: "platter empty"
-
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout).padding(start = if (portrait) 16.dp else 28.dp, end = if (portrait) 16.dp else 28.dp, top = 4.dp, bottom = 12.dp)) {
-        // Top bar, ruled underneath: the side that's up on the left; the shelf and the line out on the right.
-        Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().drawBehind {
-                drawLine(Room.Ink, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
-            },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BasicText(sideLine, style = Room.Label.copy(color = if (deck.album != null) Room.Ink else Room.Quiet), modifier = Modifier.testTag("side-indicator"), maxLines = 1)
-            if (state.hasFolder) RefreshKey(actions::rescan)
-            Spacer(Modifier.weight(1f))
-            if (scanText != null) BasicText(scanText.lowercase(), style = Room.LabelQuiet, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-            BasicText(recordCount(state.albums.size), style = Room.Label, maxLines = 1)
-            StatusDot("↓ ${transfers.size}", downloadsColor(transfers), "open-downloads", onDownloads)
-            // The connection: one square lamp, its words left to TalkBack.
-            StatusDot("", connectionColor(state.soulseekSession), "open-account", onAccount, description = connectionLabel(state.soulseekSession))
+    Row(
+        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(Modifier.weight(1f).testTag("side-indicator").semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Lamp(if (deck.album != null) Room.Signal else null)
+            BasicText(
+                when {
+                    side != null -> "side ${side.letter.lowercaseChar()}"
+                    state.albums.isEmpty() -> "no record"
+                    else -> "platter empty"
+                },
+                style = Room.Strong,
+                maxLines = 1,
+            )
+            if (side != null) BasicText("${deck.trackCode.lowercase()} · ${deck.trackIndex + 1} / ${side.tracks.size}", style = Room.LabelQuiet, maxLines = 1)
         }
-
-        if (portrait) {
-            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = NAV_HEIGHT), horizontalAlignment = Alignment.CenterHorizontally) {
-                BasicText(nowSpinning, style = Room.LabelQuiet, maxLines = 1)
-            }
-        } else {
-            // Landscape mirrors portrait: the same top bar, the line and the tabs at the foot.
-            BasicText(nowSpinning, style = Room.LabelQuiet, modifier = Modifier.align(Alignment.BottomStart).widthIn(max = screenW * 0.48f), maxLines = 1)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (scanText != null) BasicText(scanText, style = Room.LabelQuiet, maxLines = 1)
+            val c = connectionColor(state.soulseekSession)
+            Box(
+                Modifier
+                    .testTag("open-account")
+                    .semantics { contentDescription = connectionLabel(state.soulseekSession) }
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onAccount)
+                    .touchHeight()
+                    .padding(horizontal = 4.dp),
+            ) { Lamp(if (c == Room.Quiet) null else c) }
+            BasicText(
+                "↓ ${transfers.size}",
+                style = Room.Label.copy(color = if (downloadsColor(transfers) == Room.Danger) Room.Danger else Room.Ink),
+                modifier = Modifier
+                    .testTag("open-downloads")
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onDownloads)
+                    .touchHeight(),
+            )
+            BasicText("${state.albums.size} rec", style = Room.Label, maxLines = 1, modifier = Modifier.semantics { contentDescription = recordCount(state.albums.size) })
         }
     }
 }
 
+/** An 8 dp square lamp: filled with [color], or hollow ink when there's nothing to say. */
+@Composable
+private fun Lamp(color: Color?) {
+    Box(Modifier.size(8.dp).then(if (color != null) Modifier.background(color) else Modifier.border(1.dp, Room.Ink)))
+}
+
+/** The deck's band: the RG-1 at 412 × 240, and under it "rg-1 · side a · 01:12" and "33⅓ rpm". */
+@Composable
+private fun DeckBand(state: RoomState, empty: Boolean, help: @Composable (Modifier) -> Unit, deck: @Composable (Modifier) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(bottom = if (empty) 0.dp else 16.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(412f / 240f).alpha(if (empty) 0.5f else 1f)) { deck(Modifier.fillMaxSize()) }
+        Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(bandCaption(state, landscape = false), style = Room.LabelQuiet, maxLines = 1)
+            help(Modifier.padding(start = 8.dp))
+            Spacer(Modifier.weight(1f))
+            if (!empty) BasicText("33⅓ rpm", style = Room.LabelQuiet)
+        }
+    }
+}
+
+/** What the deck's caption says: the side and the time, or why the platter is empty. */
+private fun bandCaption(state: RoomState, landscape: Boolean): String {
+    val deck = state.deck
+    val side = deck.side
+    return when {
+        state.albums.isEmpty() -> "rg-1 · nothing on the platter"
+        side == null -> "rg-1 · platter empty"
+        landscape -> "${deck.trackCode.lowercase()} · ${deck.currentTrackTitle?.lowercase().orEmpty()} · ${clock(deck.trackPositionMs, pad = false)}"
+        else -> "rg-1 · side ${side.letter.lowercaseChar()} · ${clock(deck.trackPositionMs, pad = true)}"
+    }
+}
+
+/** The record in front: its title in 18/700 caps, the artist in 9/400 and the spec as a TE Tag. */
+@Composable
+private fun AlbumCaption(album: Album, portrait: Boolean) {
+    Column(
+        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = if (portrait) 11.dp else 0.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(if (portrait) 6.dp else 4.dp),
+    ) {
+        BasicText(album.title.uppercase(), style = if (portrait) Room.Album else Room.Album.copy(fontSize = 16.sp), maxLines = 1)
+        if (portrait) {
+            BasicText(album.artist.lowercase(), style = Room.Label.copy(fontSize = 9.sp, color = Room.Body), maxLines = 1, modifier = Modifier.testTag("caption-artist"))
+            SpecTag(album.quality.label)
+        } else {
+            BasicText("${album.artist.lowercase()} · ${album.quality.shortLabel.lowercase()}", style = Room.Label.copy(color = Room.Body), maxLines = 1, modifier = Modifier.testTag("caption-artist"))
+        }
+        album.unavailableReason?.let { BasicText(it.lowercase(), style = Room.Label.copy(color = Room.Danger, textAlign = TextAlign.Center), maxLines = 2) }
+    }
+}
+
+/** The line above the nav: an orange lamp and what's happening, and "flick ← →" for the crate. */
+@Composable
+private fun NowSpinning(line: Pair<String, Boolean>, hint: Boolean, landscape: Boolean = false) {
+    Row(
+        Modifier.fillMaxWidth().hairlineTop(Room.HairlineSoft).padding(horizontal = 22.dp, vertical = if (landscape) 6.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Lamp(if (line.second) Room.Signal else null)
+        BasicText(line.first, style = Room.Label, maxLines = 1, modifier = Modifier.weight(1f).testTag("now-line"))
+        if (hint) BasicText("flick ← →", style = Room.LabelQuiet)
+    }
+}
+
+/** What the line above the nav says, and whether its lamp is lit. */
+private fun nowLine(state: RoomState, pulled: Boolean, overPlatter: Boolean): Pair<String, Boolean> {
+    val deck = state.deck
+    val side = deck.side?.letter?.lowercaseChar()
+    return when {
+        overPlatter && deck.album == null -> "let go to drop · side a" to true
+        pulled && deck.album == null -> "drag the record onto the platter" to true
+        deck.album == null -> "nothing on the platter" to false
+        deck.sideFinished -> "side $side finished — tap the record to flip it" to true
+        deck.needleDown -> "now spinning — side $side · ${(deck.currentTrackTitle ?: deck.album.title).lowercase()}" to true
+        else -> "${deck.album.title.lowercase()} · side $side cued — lower the tonearm" to true
+    }
+}
+
+/** No records yet: TE · Home · empty, the 33/700 title, a line and the key, low for the thumb. */
+@Composable
+private fun EmptyRoom(state: RoomState, actions: RoomActions, modifier: Modifier) {
+    Column(modifier.padding(horizontal = 22.dp, vertical = 33.dp), verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom)) {
+        BasicText(emptyTitle(state), style = Room.Display.copy(fontSize = 33.sp, lineHeight = 36.sp), modifier = Modifier.testTag("empty-title"))
+        BasicText(emptyDetail(state), style = Room.Text.copy(color = Room.Body, lineHeight = 18.sp), modifier = Modifier.testTag("empty-detail"))
+        if (state.scan !is ScanState.Scanning) TeButton(if (state.hasFolder) "choose another folder" else "choose folder", actions::pickFolder, Modifier.testTag("choose-folder"))
+    }
+}
+
 /**
- * The record's songs under the deck, coded by side (A1, A2, B1…): about four rows at a time, the one
- * under the needle sharp and the rest soft. Tap one to drop the needle there.
+ * The record's songs, coded by side (a1, a2, b1…): the one playing sharp between ink rules with
+ * "▲▼", the others soft and fading. Scroll through them; tap one to drop the needle there.
  */
 @Composable
-private fun TrackWheel(state: RoomState, actions: RoomActions, modifier: Modifier = Modifier) {
+private fun TrackWheel(state: RoomState, actions: RoomActions, rows: Int, help: @Composable (Modifier) -> Unit = {}) {
     val deck = state.deck
     val album = deck.album
+    val height = WHEEL_FOCUS + WHEEL_ROW * (rows - 1)
     if (album == null) {
         // Keeps its room, so the crate doesn't jump as records come and go.
-        Column(modifier) {
-            BasicText("rg-1 · no record", style = Room.LabelQuiet.copy(fontSize = 10.sp), modifier = Modifier.padding(bottom = 4.dp))
-            Spacer(Modifier.height(WHEEL_ROW * 4))
-        }
+        Spacer(Modifier.fillMaxWidth().height(height))
         return
     }
-    val rows = remember(album.id, deck.sides) {
-        deck.sides.flatMap { side -> side.tracks.mapIndexed { i, t -> Triple(side.index, i, t) } }
-    }
-    val current = rows.indexOfFirst { (side, i, _) -> side == deck.sideIndex && i == deck.trackIndex }.coerceAtLeast(0)
-    val list = androidx.compose.foundation.lazy.rememberLazyListState()
-    LaunchedEffect(current) { list.animateScrollToItem((current - 1).coerceAtLeast(0)) }
+    val list = remember(album.id, deck.sides) { deck.sides.flatMap { side -> side.tracks.mapIndexed { i, t -> Triple(side.index, i, t) } } }
+    val current = list.indexOfFirst { (side, i, _) -> side == deck.sideIndex && i == deck.trackIndex }.coerceAtLeast(0)
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(current) { scroll.animateScrollToItem((current - 1).coerceAtLeast(0)) }
     val tick = rememberTick()
-    Column(modifier.testTag("track-wheel")) {
-        val side = deck.side
-        BasicText(
-            "rg-1 · side ${side?.letter?.lowercaseChar() ?: "a"} · ${formatClock(deck.trackPositionMs)}",
-            style = Room.LabelQuiet.copy(fontSize = 10.sp),
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        androidx.compose.foundation.lazy.LazyColumn(state = list, modifier = Modifier.fillMaxWidth().height(WHEEL_ROW * 4)) {
-            items(rows.size) { n ->
-                val (sideIndex, i, track) = rows[n]
-                val focused = n == current
-                val distance = kotlin.math.abs(n - current)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(WHEEL_ROW)
-                        .then(if (focused) Modifier else Modifier.blur((distance.coerceAtMost(2) * 0.8f).dp).alpha(1f - 0.25f * distance.coerceAtMost(3)))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) {
-                            tick()
-                            if (sideIndex == deck.sideIndex) {
-                                val s = deck.side ?: return@clickable
-                                val at = s.positionOf(i, 0) + 1
-                                actions.needleDrop((at.toFloat() / s.durationMs.coerceAtLeast(1)).coerceIn(0f, 0.999f))
-                            } else actions.cueTrack(album, track.id)
-                        }
-                        .testTag("track:${'A' + sideIndex}${i + 1}"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    BasicText("${'a' + sideIndex}${i + 1}", style = Room.Label.copy(color = if (focused) Room.Signal else Room.Quiet), modifier = Modifier.width(26.dp))
-                    BasicText(track.title.lowercase(), style = Room.Label.copy(color = if (focused) Room.Ink else Room.Body), maxLines = 1, modifier = Modifier.weight(1f))
-                    BasicText(formatClock(track.durationMs), style = Room.LabelQuiet)
+    androidx.compose.foundation.lazy.LazyColumn(state = scroll, modifier = Modifier.fillMaxWidth().height(height).testTag("track-wheel")) {
+        items(list.size) { n ->
+            val (sideIndex, i, track) = list[n]
+            val focused = n == current
+            val distance = kotlin.math.abs(n - current)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (focused) Modifier.height(WHEEL_FOCUS).hairlineTop(Room.Ink).hairlineBottom(Room.Ink)
+                        else Modifier.height(WHEEL_ROW).blur(if (distance == 1) 0.6.dp else 1.dp).alpha(if (distance == 1) 0.45f else 0.25f),
+                    )
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) {
+                        tick()
+                        if (sideIndex == deck.sideIndex) {
+                            val s = deck.side ?: return@clickable
+                            val at = s.positionOf(i, 0) + 1
+                            actions.needleDrop((at.toFloat() / s.durationMs.coerceAtLeast(1)).coerceIn(0f, 0.999f))
+                        } else actions.cueTrack(album, track.id)
+                    }
+                    .testTag("track:${'A' + sideIndex}${i + 1}"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                BasicText("${'a' + sideIndex}${i + 1}", style = Room.Label.copy(color = if (focused) Room.Signal else Room.Quiet), modifier = Modifier.width(22.dp))
+                BasicText(track.title.lowercase(), style = if (focused) Room.Text else Room.Label, maxLines = 1, modifier = Modifier.weight(1f))
+                if (focused) {
+                    help(Modifier)
+                    BasicText("▲▼", style = Room.LabelQuiet)
                 }
             }
         }
     }
 }
 
-private val WHEEL_ROW = 18.dp
+/** The wheel's rows: 10 sp with 6 dp above and below; the playing one 24 + 12 between its rules. */
+private val WHEEL_ROW = 25.dp
+private val WHEEL_FOCUS = 36.dp
 
-private fun formatClock(ms: Long): String {
+private fun clock(ms: Long, pad: Boolean): String {
     val total = (ms / 1000).coerceAtLeast(0)
-    return "%d:%02d".format(total / 60, total % 60)
+    return if (pad) "%02d:%02d".format(total / 60, total % 60) else "%d:%02d".format(total / 60, total % 60)
 }
 
-/** Space kept under the crate in landscape for the tab bar (58 dp) and a small gap. */
-private val LANDSCAPE_TAB_ROOM = 50.dp
+/** A TE Help "?" that opens its help panel. */
+@Composable
+private fun HelpKey(about: String, modifier: Modifier, onClick: () -> Unit) {
+    Box(modifier) { InfoDot(about, onClick) }
+}
+
+/** The room's first-time helps, from TE · Help panels. */
+private val HELP_CRATE = TeHelp(
+    "help · room · first time", "the crate",
+    listOf(
+        "flick left or right to browse. tap a sleeve or pull it up to take the record out.",
+        "drag the record onto the platter to play it. tap it to flip the side, hold it to slow it down.",
+        "long-press a sleeve for the record menu: details, put back, remove.",
+    ),
+)
+private val HELP_WHEEL = TeHelp(
+    "help · room · first time", "the track wheel",
+    listOf(
+        "the songs of the record on the platter, numbered by side: a1, a2, b1…",
+        "scroll to move through them; the sharp one is playing. tap another to drop the needle there.",
+    ),
+)
+private val HELP_LED = TeHelp(
+    "help · room · first time", "the led window",
+    listOf(
+        "shows the track and time while a record plays.",
+        "hold it to open the signal chain: what the file is, what runout does, and what your speaker gets.",
+    ),
+)
 
 internal fun recordCount(n: Int) = if (n == 1) "1 record" else "$n records"
 

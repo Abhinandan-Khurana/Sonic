@@ -1,5 +1,8 @@
 package app.runout
 
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onAllNodesWithText
 import app.runout.discovery.remoteAlbums
 
 import app.runout.discovery.SearchSource
@@ -188,7 +191,7 @@ class ListeningRoomUiTest {
     @Test
     fun `landscape room, playing and pulled, renders`() {
         still("01_landscape_playing", state(deck = playing()), crateIndex = 3)
-        compose.onNodeWithText("Now spinning — Side A", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("now spinning — side a", substring = true).assertIsDisplayed()
         compose.onNodeWithTag("nav:DROPS").assertIsDisplayed()
     }
 
@@ -200,9 +203,9 @@ class ListeningRoomUiTest {
         compose.waitForIdle()
         compose.onNodeWithTag("pulled-disc").assertIsDisplayed()
         // No buttons beside the disc any more: what you can do lives behind a long press.
-        compose.onNodeWithText("Send with audio").assertDoesNotExist()
+        compose.onNodeWithText("send with audio").assertDoesNotExist()
         compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
-        compose.onNodeWithText("Send with audio").assertIsDisplayed() // Creative Commons
+        compose.onNodeWithText("send with audio").assertIsDisplayed() // Creative Commons
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_menu.png")
         compose.onNodeWithTag("menu:Send with audio").performClick()
         assertEquals(listOf("share:Night Drive"), actions.log.filter { it.startsWith("share") })
@@ -211,12 +214,13 @@ class ListeningRoomUiTest {
     @Test
     fun `a record's details hold the licence the short caption leaves out`() {
         compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
-        compose.onNodeWithText("Vela Park").assertIsDisplayed()
-        compose.onNodeWithText("CC BY 4.0").assertDoesNotExist()
+        // The caption under the crate.
+        compose.onNodeWithTag("caption-artist").assertIsDisplayed().assertTextContains("vela park", substring = true)
+        compose.onNodeWithText("cc by 4.0").assertDoesNotExist()
         compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
         compose.onNodeWithTag("menu:Details").performClick()
         compose.onNodeWithTag("record-details").assertIsDisplayed()
-        compose.onNodeWithText("CC BY 4.0", substring = true).assertExists()
+        compose.onAllNodesWithText("cc by 4.0", substring = true).onFirst().assertExists()
     }
 
     // ---------------------------------------------------------------------------------------
@@ -352,15 +356,15 @@ class ListeningRoomUiTest {
         }
         compose.setContent { RoomScreen(state(sound = actions.sound), actions) }
         compose.onNodeWithTag("nav:SETTINGS").performClick()
-        compose.onNodeWithTag("panel-title").assertTextContains("Settings")
+        compose.onNodeWithTag("panel-title").assertTextContains("SETTINGS")
         // A plain list first; Sound is one row of it.
         compose.onNodeWithTag("settings:SOUND").assertIsDisplayed()
         compose.onNodeWithTag("settings:SOUND").performClick()
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()
         // The signal chain: the file, Runout's path, and where it goes out.
         compose.onNodeWithTag("signal-path").assertIsDisplayed()
-        compose.onNodeWithTag("spec:Track").assertTextContains("24-BIT · 96 KHZ")
-        compose.onNodeWithTag("spec:Runout").assertTextContains("32-BIT FLOAT", substring = true)
+        compose.onNodeWithTag("spec:Track").assertTextContains("24-bit · 96 khz", ignoreCase = true)
+        compose.onNodeWithTag("spec:Runout").assertTextContains("32-bit float", substring = true, ignoreCase = true)
 
         compose.onNodeWithTag("fader:1k").performScrollTo().performTouchInput {
             swipe(center, center - Offset(0f, 140f), durationMillis = 300)
@@ -370,7 +374,7 @@ class ListeningRoomUiTest {
         assertEquals("Custom", actions.sound.presetName)
         assertTrue(actions.sound.eqEnabled)
 
-        compose.onNodeWithText("Warm vinyl").performScrollTo().performClick()
+        compose.onNodeWithText("Warm vinyl", ignoreCase = true).performScrollTo().performClick()
         assertTrue(actions.log.contains("preset:Warm vinyl"))
 
         compose.onNodeWithTag("toggle:Hi-res output").performScrollTo().performClick()
@@ -388,17 +392,17 @@ class ListeningRoomUiTest {
     fun `Friday Drops shows the week and claims a record`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
-        compose.onNodeWithText("Week of 16 October").assertIsDisplayed()
+        compose.onNodeWithText("Week of 16 October", ignoreCase = true).assertIsDisplayed()
         // Claims left are three TE lights; the drops stand on a shelf as sleeves.
         compose.onNodeWithContentDescription("2 of 3 claims left").assertIsDisplayed()
-        compose.onNodeWithText("In your crate").assertIsDisplayed() // already claimed
+        compose.onNodeWithText("In your crate", ignoreCase = true).assertIsDisplayed() // already claimed
         compose.onNodeWithTag("drop:NS050").assertIsDisplayed()
         compose.onAllNodes(hasText("Claim")).assertCountEquals(0)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/05_drops_panel.png")
         // A tap opens the drop: its licence, its tracks, and Claim inside.
         compose.onNodeWithTag("drop:NS050").performClick()
         compose.onNodeWithTag("drop-preview").assertIsDisplayed()
-        compose.onNodeWithText("CC BY-NC-SA 4.0").assertIsDisplayed()
+        compose.onNodeWithText("CC BY-NC-SA 4.0", ignoreCase = true).assertIsDisplayed()
         compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
         assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
     }
@@ -409,7 +413,7 @@ class ListeningRoomUiTest {
         compose.setContent { RoomScreen(state(drops = DropState.Idle), actions, initialPanel = Panel.DROPS) }
         compose.waitForIdle()
         assertTrue(actions.log.contains("refreshDrops"))
-        compose.onNodeWithText("Digging through the archive…").assertIsDisplayed()
+        compose.onNodeWithText("Digging through the archive…", ignoreCase = true).assertIsDisplayed()
     }
 
     @Test
@@ -422,7 +426,7 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("friend:maya").performClick()
         assertTrue(actions.log.contains("soulseekConversation:maya"))
         compose.onNodeWithTag("field:Private message").performTextInput("Hi Maya")
-        compose.onNodeWithText("Send message").performClick()
+        compose.onNodeWithTag("send-message").performClick()
         assertTrue(actions.log.contains("soulseekMessage:maya:Hi Maya"))
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/06_messages_panel.png")
     }
@@ -445,9 +449,10 @@ class ListeningRoomUiTest {
         assertTrue(actions.log.toString(), actions.log.contains("soulseekSignIn:Abhi_99:true"))
         // The ⓘ explains that there is no sign-up page.
         compose.onNodeWithTag("soulseek-id-info").performClick()
-        compose.onNodeWithText("Soulseek has no sign-up page", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Soulseek has no sign-up page", substring = true, ignoreCase = true).assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/12_login.png")
-        compose.onNodeWithTag("soulseek-id-help-close").performClick()
+        // The TE help panel closes with its "got it" key.
+        compose.onNodeWithText("got it").performClick()
         compose.onNodeWithTag("setup-close").performClick()
         compose.onNodeWithTag("screen:setup").assertDoesNotExist()
     }
@@ -456,7 +461,7 @@ class ListeningRoomUiTest {
     fun `Internet Archive claim actions are disabled without Soulseek sign in`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.DROPS) }
-        compose.onNodeWithText("Sign in with Soulseek").assertIsDisplayed()
+        compose.onNodeWithText("Sign in with Soulseek", ignoreCase = true).assertIsDisplayed()
         compose.onNodeWithTag("drop:NS050").performScrollTo().performClick()
         compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
         assertTrue(actions.log.none { it.startsWith("claim:") })
@@ -484,19 +489,21 @@ class ListeningRoomUiTest {
         listOf("DIG", "DROPS", "FRIENDS", "SETTINGS").forEach { compose.onNodeWithTag("nav:$it").assertIsDisplayed() }
         compose.onNodeWithTag("nav:PRESSING").assertDoesNotExist()
         compose.onNodeWithText("Pressing Plant").assertDoesNotExist()
-        // The top bar: no clock, no Change folder; the record count stays.
+        // The top bar (TE · Home): no clock, no folder keys (they live in Settings › Library); the count stays.
         compose.onNodeWithText("3:21 PM", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Change folder").assertDoesNotExist()
-        compose.onNodeWithTag("action:Rescan").assertIsDisplayed()
-        compose.onNodeWithText("5 records").assertIsDisplayed()
+        compose.onNodeWithTag("action:Rescan").assertDoesNotExist()
+        compose.onNodeWithText("5 rec").assertIsDisplayed()
     }
 
     @Test
-    fun `panels slide up as sheets in portrait`() {
+    fun `places open as full pages under the nav in portrait`() {
         portrait()
         still("08_portrait_settings", state(), panel = Panel.SETTINGS)
-        val sheet = compose.onNodeWithTag("panel-title").getBoundsInRoot()
-        assertTrue("sheet starts in the lower part of the screen", sheet.top.value > 892 * 0.2f)
+        // TE · Settings: the 44/700 title at the top of the page, the nav bar still at the foot.
+        val title = compose.onNodeWithTag("panel-title").getBoundsInRoot()
+        assertTrue("the page's title sits at the top", title.top.value < 892 * 0.2f)
+        compose.onNodeWithTag("nav:SETTINGS").assertIsDisplayed()
     }
 
     @Test
@@ -505,8 +512,8 @@ class ListeningRoomUiTest {
         compose.setContent {
             RoomScreen(state(albums = emptyList()).copy(report = report), RecordingActions())
         }
-        compose.onNodeWithTag("empty-title", useUnmergedTree = true).assertTextContains("No albums found")
-        compose.onNodeWithTag("empty-detail", useUnmergedTree = true).assertTextContains("Looked in 3 folders and found no music files (found .m4p ×12)", substring = true)
+        compose.onNodeWithTag("empty-title", useUnmergedTree = true).assertTextContains("NO ALBUMS FOUND")
+        compose.onNodeWithTag("empty-detail", useUnmergedTree = true).assertTextContains("looked in 3 folders and found no music files (found .m4p ×12)", substring = true)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/09_empty_with_report.png")
     }
 

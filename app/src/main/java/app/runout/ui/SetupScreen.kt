@@ -1,16 +1,20 @@
 package app.runout.ui
 
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,35 +22,41 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.runout.R
 import app.runout.soulseek.SoulseekConnection
 import app.runout.soulseek.SoulseekPolicy
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * Onboarding steps. The numbers are what is saved as the resume point, unchanged from the earlier
@@ -60,10 +70,10 @@ private fun stepFor(saved: Int, intro: Boolean): Step = when (saved) {
 }
 
 /**
- * Onboarding, on its own full screen: the intro, a Soulseek sign-in shaped like a music app's
- * welcome, then one decision per screen with everything near the bottom for a thumb. Choices move
- * on by themselves; there are no Continue buttons. It ends by greeting you and dropping you into
- * the room.
+ * Onboarding, on its own full screen over the room (TE · Onboarding boards): the intro, the
+ * Soulseek sign-in under its record collage, then one decision per screen under a giant dotted
+ * step number, with everything near the bottom for a thumb. Choices move on by themselves; there
+ * are no Continue buttons. It ends by greeting you beside the deck and dropping you into the room.
  */
 @Composable
 internal fun SetupScreen(
@@ -95,7 +105,6 @@ internal fun SetupScreen(
             .background(Room.Background)
             .testTag("screen:setup"),
     ) {
-        OnboardingBackground()
         AnimatedContent(
             targetState = step,
             transitionSpec = { (fadeIn(tween(260)) + slideInVertically(tween(320)) { it / 12 }) togetherWith fadeOut(tween(180)) },
@@ -105,7 +114,7 @@ internal fun SetupScreen(
             key(shown) {
                 when (shown) {
                     Step.INTRO -> RunoutIntro(onFinished = { move(Step.LOGIN) })
-                    Step.LOGIN -> LoginStep(state, actions, onConnected = { move(Step.DOWNLOADS) }, onOffline = { actions.disconnectSoulseek(); move(Step.OFFLINE) })
+                    Step.LOGIN -> LoginStep(state, actions, onClose, onConnected = { move(Step.DOWNLOADS) }, onOffline = { actions.disconnectSoulseek(); move(Step.OFFLINE) })
                     Step.OFFLINE -> OfflineStep(state, actions, onDone = { move(Step.WELCOME) }, onBack = { back() })
                     Step.DOWNLOADS -> DownloadsStep(state, actions, onDone = { move(Step.SHARE) }, onBack = { back() })
                     Step.SHARE -> ShareStep(state, actions, onDone = { move(Step.RHYTHM) }, onBack = { back() })
@@ -114,115 +123,165 @@ internal fun SetupScreen(
                 }
             }
         }
-        if (onClose != null && step == Step.LOGIN) {
-            Box(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                TextAction("Close", onClose, tag = "setup-close", color = Room.Ink)
-            }
-        }
     }
 }
 
-/** Plain white paper, like the room. */
-@Composable
-private fun OnboardingBackground() {
-    Box(Modifier.fillMaxSize().background(Room.Background))
-}
+// ---------------------------------------------------------------------------------------------
+// Pieces
 
-/** A step's frame: a small top row (Back, progress), and the content gathered at the bottom. */
+/**
+ * A full-height column that still scrolls when the screen is short: children can use weights to
+ * push the actions to the foot, and nothing is cut off on a small phone.
+ */
 @Composable
-private fun StepFrame(
-    progress: Int?,
-    onBack: (() -> Unit)?,
-    top: @Composable BoxScope.() -> Unit = {},
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).windowInsetsPadding(WindowInsets.ime)) {
-        top()
-        // The step as a poster number, set huge in the corner like a TE manual's chapter.
-        if (progress != null) BasicText(
-            "0${progress + 1}",
-            style = Room.Display.copy(fontSize = 112.sp, lineHeight = 112.sp),
-            modifier = Modifier.align(Alignment.TopStart).padding(start = 20.dp, top = 52.dp).semantics { contentDescription = "" },
-        )
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) TextAction("Back", onBack, tag = "setup-back", color = Room.Ink)
-            Spacer(Modifier.weight(1f))
-            if (progress != null) ProgressDots(progress, 3)
-        }
+private fun FootColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(
             Modifier
-                .align(Alignment.BottomCenter)
-                .widthIn(max = 520.dp)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 28.dp, top = 56.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .heightIn(min = maxHeight),
             content = content,
         )
     }
 }
 
+/**
+ * The key of a step: 16 × 22 in, a 12/400 label, black (white text), or #B2B2B2 while it can't
+ * be pressed yet. An optional 16 dp icon sits 11 dp before the label.
+ */
 @Composable
-private fun ProgressDots(current: Int, of: Int) {
-    Row(
-        Modifier.semantics(mergeDescendants = true) { contentDescription = "Step ${current + 1} of $of" },
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        repeat(of) { i ->
-            Box(Modifier.size(8.dp).then(if (i <= current) Modifier.background(Room.Ink) else Modifier.border(1.dp, Room.Ink)))
-        }
-    }
-}
-
-@Composable
-private fun Headline(kicker: String?, title: String, body: String?) {
-    if (kicker != null) BasicText(kicker.uppercase(), style = Room.LabelQuiet.copy(fontSize = 10.sp, letterSpacing = 1.2.sp))
-    BasicText(title, style = Room.Title.copy(fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold), modifier = Modifier.semantics { heading() })
-    if (body != null) BasicText(body, style = Room.LabelQuiet.copy(fontSize = 13.sp, lineHeight = 18.sp))
-}
-
-/** The full-width primary button of a step. */
-@Composable
-private fun BigButton(text: String, onClick: () -> Unit, tag: String, enabled: Boolean = true, filled: Boolean = true, leading: (DrawScope.() -> Unit)? = null) {
+private fun StepKey(
+    text: String,
+    onClick: () -> Unit,
+    tag: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: (androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit)? = null,
+) {
     val tick = rememberTick()
     Row(
-        Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .alpha(if (enabled) 1f else 0.45f)
-            .background(if (filled) Room.Ink else Room.Background, RectangleShape)
-            .border(1.dp, Room.Ink, RectangleShape)
+        modifier
+            .background(if (enabled) Room.Ink else Room.Faint)
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
             .testTag(tag)
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.Center,
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(11.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (leading != null) Canvas(Modifier.size(18.dp)) { leading() }
-        if (leading != null) Spacer(Modifier.width(10.dp))
-        BasicText(text, style = Room.Title.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (filled) Color.White else Room.Ink))
+        if (icon != null) Canvas(Modifier.size(16.dp)) { icon() }
+        BasicText(text, style = Room.Text.copy(color = Color.White), maxLines = 1)
     }
 }
 
+/** A plain text action (12/400 ink unless told otherwise), with a full-height touch target. */
 @Composable
-private fun QuietLink(text: String, onClick: () -> Unit, tag: String, modifier: Modifier = Modifier) {
+private fun TextKey(text: String, onClick: () -> Unit, tag: String, modifier: Modifier = Modifier, style: TextStyle = Room.Text) {
+    val tick = rememberTick()
     BasicText(
         text,
-        style = Room.LabelQuiet.copy(fontSize = 13.sp),
+        style = style,
         modifier = modifier
             .testTag(tag)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
-            .touchHeight()
-            .padding(horizontal = 4.dp),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
+            .touchHeight(),
     )
+}
+
+/** A 10/400 grey kicker, the 33/700 title and the 12/400 body of a step (TE · Onboarding · Offline). */
+@Composable
+private fun StepCopy(label: String, title: String, body: String) {
+    BasicText(label, style = Room.LabelQuiet)
+    BasicText(title, style = Room.Display.copy(fontSize = 33.sp, lineHeight = 36.sp), modifier = Modifier.fillMaxWidth().semantics { heading() })
+    BasicText(body, style = OnboardingBody, modifier = Modifier.fillMaxWidth())
+}
+
+/**
+ * Steps 02–05: "← back" and five progress squares along the top (22 in), the step number set at
+ * 132/700 under them, the copy at the foot of the content, then the actions, 22 / 22 / 33 in.
+ */
+@Composable
+private fun StepPage(
+    number: Int,
+    onBack: () -> Unit,
+    copy: @Composable ColumnScope.() -> Unit,
+    actions: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    FootColumn {
+        // 22 in on the board; the 48 dp touch height of "← back" takes up most of that.
+        Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 5.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextKey("← back", onBack, "setup-back", Modifier.semantics { contentDescription = "Back" })
+            Spacer(Modifier.weight(1f))
+            Pips(number)
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 22.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            BasicText(
+                "%02d".format(number),
+                style = Room.Display.copy(fontSize = 132.sp, lineHeight = 119.sp),
+                modifier = Modifier.clearAndSetSemantics { },
+            )
+            Column(Modifier.fillMaxWidth().padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(22.dp), content = copy)
+        }
+        if (actions != null) ActionColumn(Modifier.padding(top = 22.dp), actions)
+    }
+}
+
+/**
+ * The actions at the foot, 22 / 33 in and 16 apart on the board. The text links below the key
+ * carry a 48 dp touch height, which already gives them that space, so it isn't added again.
+ */
+@Composable
+private fun ActionColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = LINK_FOOT),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        content = content,
+    )
+}
+
+/** 33 dp under the last link's text, less the half of its touch height that sits under it. */
+private val LINK_FOOT = 17.dp
+
+/** "what's this?" in blue, its text resting on the field's rule, with a 48 dp touch height. */
+@Composable
+private fun HelpLink(onClick: () -> Unit) {
+    val tick = rememberTick()
+    Box(
+        Modifier
+            .testTag("soulseek-id-info")
+            .semantics { contentDescription = "How Soulseek IDs work" }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
+            .height(48.dp),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        BasicText("what's this?", style = Room.Label.copy(color = Room.Accent), modifier = Modifier.padding(bottom = 1.dp))
+    }
+}
+
+/** Five 8 dp squares, 4 apart: filled up to this step, outlined after it. */
+@Composable
+private fun Pips(number: Int) {
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "Step $number of 5" },
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        repeat(5) { i ->
+            Box(Modifier.size(8.dp).then(if (i < number) Modifier.background(Room.Ink) else Modifier.border(1.dp, Room.Ink)))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Sign-in
 
 @Composable
-private fun LoginStep(state: RoomState, actions: RoomActions, onConnected: () -> Unit, onOffline: () -> Unit) {
+private fun LoginStep(state: RoomState, actions: RoomActions, onClose: (() -> Unit)?, onConnected: () -> Unit, onOffline: () -> Unit) {
     val session = state.soulseekSession
     var id by rememberSaveable(state.soulseekSavedUsername) { mutableStateOf(state.soulseekSavedUsername.orEmpty()) }
     // Passwords never go into saved instance state.
@@ -236,150 +295,169 @@ private fun LoginStep(state: RoomState, actions: RoomActions, onConnected: () ->
         if (session.connected && !wasConnected) onConnected()
         wasConnected = session.connected
     }
+    val canConnect = !busy && SoulseekPolicy.validUsername(id.trim()) && password.isNotEmpty()
     val connect = {
         actions.clearSoulseekError()
         // Always remembered: this is an app on your phone, you stay signed in (Android Keystore).
         actions.signInSoulseek(id.trim(), password, true)
         password = ""
     }
-    // With the keyboard up there is no room for the collage and the headline: they'd slide up
-    // under each other. The records fade away and the title shrinks to the wordmark.
+    // With the keyboard up there is no room for the collage and the line: they'd slide up under
+    // each other. The collage folds away and the wordmark shrinks to 22.
     @OptIn(ExperimentalLayoutApi::class)
     val typing = WindowInsets.isImeVisible
-    val collage by androidx.compose.animation.core.animateFloatAsState(if (typing) 0f else 1f, label = "collage")
-    StepFrame(progress = null, onBack = null, top = {
-        if (collage > 0f) RecordCollage(Modifier.fillMaxWidth().fillMaxHeight(0.42f).alpha(collage))
-    }) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (!typing) AppMark()
-            Canvas(Modifier.size(width = 150.dp, height = 22.dp).semantics { contentDescription = "Runout" }) {
-                drawDotWordmark("RUNOUT", Offset(size.width / 2f, size.height / 2f), dot = size.height / 7.2f, shown = 1f)
+    val wordmark by animateFloatAsState(if (typing) 22f else 44f, label = "wordmark")
+    // On a short screen the collage gives way too, so the key and the fields stay in reach.
+    val tall = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 600
+
+    @Composable
+    fun Connect(modifier: Modifier) {
+        if (session.connected) StepKey("continue", onConnected, "setup-continue", modifier)
+        else StepKey(if (busy) "connecting…" else "connect", connect, "submit-soulseek", modifier, enabled = canConnect)
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        FootColumn {
+            AnimatedVisibility(!typing && tall, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                RecordCollage()
             }
-            if (!typing) BasicText(
-                "Every record you own.\nOne room to play them.",
-                style = Room.Title.copy(fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
-                modifier = Modifier.semantics { heading() },
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
+            ) {
+                Wordmark(wordmark.sp)
+                if (!typing) BasicText("every record you own. one room to play them.", style = OnboardingBody, modifier = Modifier.fillMaxWidth())
+                if (session.connected) {
+                    BasicText("signed in to soulseek as ${session.username}.", style = OnboardingBody)
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.Bottom) {
+                        LineField(
+                            id, { id = it.take(30) }, label = "soulseek id", placeholder = "your name", name = "Soulseek ID",
+                            quietRule = typing, imeAction = ImeAction.Next, modifier = Modifier.weight(1f),
+                        )
+                        HelpLink { info = true }
+                    }
+                    LineField(
+                        password, { password = it.take(128) }, label = "password", placeholder = "••••••••", name = "Password",
+                        secret = true, quietRule = typing, imeAction = ImeAction.Done, onAction = { if (canConnect) connect() },
+                    )
+                    if (id.isNotEmpty() && !SoulseekPolicy.validUsername(id.trim())) {
+                        BasicText("use 1–30 printable characters.", style = Room.Label.copy(color = Room.Danger))
+                    }
+                    (session.error ?: state.soulseekError)?.let {
+                        BasicText(it, style = Room.Label.copy(color = Room.Danger, lineHeight = 15.sp), modifier = Modifier.testTag("soulseek-error"))
+                    }
+                }
+                if (typing) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Connect(Modifier)
+                        Spacer(Modifier.weight(1f))
+                        TextKey("skip, listen offline →", onOffline, "setup-offline", style = Room.Label)
+                    }
+                }
+            }
+            if (!typing) {
+                ActionColumn {
+                    Connect(Modifier.fillMaxWidth())
+                    if (!session.connected && state.soulseekSavedUsername != null && !busy) {
+                        TextKey("sign in again as ${state.soulseekSavedUsername} →", actions::signInSavedSoulseek, "setup-saved", style = Room.Label)
+                    }
+                    TextKey("skip, listen offline →", onOffline, "setup-offline")
+                }
+            }
+        }
+        // Opened again from the room: "close ×" over the light sleeve at the top right.
+        if (onClose != null) {
+            TextKey(
+                "close ×", onClose, "setup-close",
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 22.dp)
+                    .semantics { contentDescription = "Close" },
             )
         }
-        Spacer(Modifier.height(4.dp))
-        if (session.connected) {
-            BasicText("Signed in to Soulseek as ${session.username}.", style = Room.Label)
-            BigButton("Continue", onConnected, "setup-continue")
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { Field(id, { id = it.take(30) }, "Soulseek ID") }
-                InfoButton { info = true }
-            }
-            Field(password, { password = it.take(128) }, "Password", secret = true, onSubmit = { if (SoulseekPolicy.validUsername(id.trim()) && password.isNotEmpty() && !busy) connect() })
-            if (id.isNotEmpty() && !SoulseekPolicy.validUsername(id.trim())) {
-                BasicText("Use 1–30 printable characters.", style = Room.LabelQuiet.copy(color = Room.Danger))
-            }
-            (session.error ?: state.soulseekError)?.let { BasicText(it, style = Room.Label.copy(color = Room.Danger), modifier = Modifier.testTag("soulseek-error")) }
-            BigButton(if (busy) "Connecting…" else "Connect", connect, "submit-soulseek", enabled = !busy && SoulseekPolicy.validUsername(id.trim()) && password.isNotEmpty())
-            if (state.soulseekSavedUsername != null && !busy) {
-                QuietLink("Sign in again as ${state.soulseekSavedUsername}", actions::signInSavedSoulseek, "setup-saved", Modifier.align(Alignment.CenterHorizontally))
-            }
-        }
-        QuietLink("Skip, listen offline", onOffline, "setup-offline", Modifier.align(Alignment.CenterHorizontally))
-    }
-    if (info) SoulseekIdInfo { info = false }
-}
-
-@Composable
-private fun InfoButton(onClick: () -> Unit) {
-    Box(
-        Modifier
-            .testTag("soulseek-id-info")
-            .semantics { contentDescription = "How Soulseek IDs work" }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
-            .size(44.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.size(20.dp).border(1.2.dp, Room.Quiet, RectangleShape), contentAlignment = Alignment.Center) {
-            BasicText("i", style = Room.Label.copy(fontWeight = FontWeight.SemiBold, color = Room.Quiet))
-        }
-    }
-}
-
-/** What the ⓘ says: Soulseek has no sign-up page; a new ID is made by signing in with it. */
-@Composable
-private fun SoulseekIdInfo(onDismiss: () -> Unit) {
-    BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.16f))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-        )
-        Column(
-            Modifier
-                .padding(12.dp)
-                .widthIn(max = 520.dp)
-                .fillMaxWidth()
-                .background(Color.White, RectangleShape)
-                .padding(22.dp)
-                .testTag("soulseek-id-help"),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BasicText("How a Soulseek ID works", style = Room.Title.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold))
-            BasicText("Soulseek has no sign-up page. Your ID is created the first time you sign in with it.", style = Room.Label)
-            BasicText("New here? Type the ID you'd like and a password, then Connect. If Soulseek says the password is wrong, that ID already belongs to someone: try another one.", style = Room.Label)
-            BasicText("Keep your password somewhere safe: Soulseek can't reset it. Signing in here signs out any other app using the same ID.", style = Room.LabelQuiet)
-            BigButton("Got it", onDismiss, "soulseek-id-help-close", filled = false)
-        }
-    }
-}
-
-/** The app mark: a small record with a soft-orange label. */
-@Composable
-private fun AppMark() {
-    Canvas(Modifier.size(58.dp)) {
-        val c = center
-        val r = size.minDimension / 2f
-        drawCircle(Color.Black.copy(alpha = 0.12f), r, c + Offset(0f, r * 0.08f))
-        drawCircle(Room.Ink, r, c)
-        for (i in 1..5) drawCircle(Color.White.copy(alpha = 0.08f), r * (0.5f + i * 0.09f), c, style = Stroke(1f))
-        drawCircle(Brush.linearGradient(listOf(Room.SignalLight, Room.Signal), start = c - Offset(r, r) * 0.3f, end = c + Offset(r, r) * 0.3f), r * 0.36f, c)
-        drawCircle(Color.White, r * 0.05f, c)
+        if (info) SoulseekIdHelp { info = false }
     }
 }
 
 /**
- * The hero at the top of the sign-in: records and sleeves scattered like a crate tipped over,
- * fading into the page (the music-app welcome, in the room's colours).
+ * A sign-in field of the board: a 10/400 grey label, 8 dp, the 16/400 value (placeholder in
+ * #B2B2B2), 8 dp, then a 1 dp rule, ink, or #CCCCCC on the field you're not in while typing.
+ * Tagged `field:<name>` like every TE field.
  */
 @Composable
-private fun RecordCollage(modifier: Modifier) {
-    val palette = listOf(
-        listOf(Color(0xFFE85D9C), Color(0xFF6A49D8)), listOf(Color(0xFF7FD3C1), Color(0xFF2F6E8E)),
-        listOf(Color(0xFFFFC27A), Color(0xFFE0603C)), listOf(Color(0xFFB9C7FF), Color(0xFF4256C9)),
-        listOf(Color(0xFFF7E3A1), Color(0xFF9C7B2E)), listOf(Color(0xFFE6B8FF), Color(0xFF8B3FB0)),
-    )
-    Canvas(modifier) {
-        val rnd = Random(17)
-        val cols = 4
-        val cell = size.width / cols
-        for (row in 0 until 4) for (col in 0 until cols) {
-            val i = row * cols + col
-            val c = Offset(col * cell + cell * (0.5f + (rnd.nextFloat() - 0.5f) * 0.35f) + (if (row % 2 == 1) cell * 0.5f else 0f) - cell * 0.25f, row * cell * 0.82f + cell * 0.35f)
-            val colors = palette[i % palette.size]
-            val r = cell * (0.36f + rnd.nextFloat() * 0.08f)
-            if (i % 3 == 1) {
-                // A sleeve.
-                drawRect(Color.Black.copy(alpha = 0.08f), topLeft = c - Offset(r, r) + Offset(0f, r * 0.08f), size = Size(r * 2, r * 2))
-                drawRect(Brush.linearGradient(colors, start = c - Offset(r, r), end = c + Offset(r, r)), topLeft = c - Offset(r, r), size = Size(r * 2, r * 2))
-            } else {
-                // A record, label in the sleeve's colours.
-                drawCircle(Color.Black.copy(alpha = 0.10f), r, c + Offset(0f, r * 0.06f))
-                drawCircle(Color(0xFF17181D), r, c)
-                for (k in 1..4) drawCircle(Color.White.copy(alpha = 0.06f), r * (0.5f + k * 0.1f), c, style = Stroke(1f))
-                drawCircle(Brush.linearGradient(colors, start = c - Offset(r, r) * 0.3f, end = c + Offset(r, r) * 0.3f), r * 0.34f, c)
-                drawCircle(Color.White, r * 0.04f, c)
-            }
+private fun LineField(
+    value: String,
+    onChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    name: String,
+    modifier: Modifier = Modifier,
+    secret: Boolean = false,
+    quietRule: Boolean = false,
+    imeAction: ImeAction = ImeAction.Default,
+    onAction: (() -> Unit)? = null,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val rule = if (quietRule && !focused) Room.Hairline else Room.Ink
+    Column(
+        modifier
+            .fillMaxWidth()
+            .drawBehind { drawLine(rule, Offset(0f, size.height - 0.5.dp.toPx()), Offset(size.width, size.height - 0.5.dp.toPx()), 1.dp.toPx()) }
+            .padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        BasicText(label, style = Room.LabelQuiet)
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (secret) KeyboardType.Password else KeyboardType.Text,
+                autoCorrectEnabled = false,
+                imeAction = imeAction,
+            ),
+            keyboardActions = if (onAction != null) KeyboardActions(onDone = { onAction() }) else KeyboardActions.Default,
+            textStyle = Room.Heading,
+            cursorBrush = SolidColor(Room.Signal),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("field:$name")
+                .semantics { contentDescription = name }
+                .onFocusChanged { focused = it.isFocused },
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) BasicText(placeholder, style = Room.Heading.copy(color = Room.Faint))
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+/** What "what's this?" says, in the TE help panel over the grey scrim: Soulseek has no sign-up page. */
+@Composable
+private fun SoulseekIdHelp(onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
+    Box(Modifier.fillMaxSize()) {
+        TeScrim(onDismiss, Modifier.fillMaxSize())
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Room.Background).windowInsetsPadding(WindowInsets.navigationBars)) {
+            TeHelpPanel(
+                "how a soulseek id works",
+                listOf(
+                    "soulseek has no sign-up page. your id is created the first time you sign in with it.",
+                    "new here? type the id you'd like and a password, then connect. if soulseek says the password is wrong, that id already belongs to someone: try another one.",
+                    "keep your password somewhere safe: soulseek can't reset it. signing in here signs out any other app using the same id.",
+                ),
+                onDismiss,
+                tag = "soulseek-id-help",
+            )
         }
-        // Fade into the page.
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Room.Background.copy(alpha = 0.6f), Room.Background), startY = size.height * 0.35f, endY = size.height))
     }
 }
 
@@ -388,11 +466,12 @@ private fun RecordCollage(modifier: Modifier) {
 
 @Composable
 private fun OfflineStep(state: RoomState, actions: RoomActions, onDone: () -> Unit, onBack: () -> Unit) {
-    StepFrame(progress = null, onBack = onBack) {
-        Headline("Offline / No account needed", "Bring your own records.", "Choose a folder of FLAC albums. You can connect Soulseek later from Settings › Soulseek.")
-        BigButton(if (state.hasFolder) "Change music folder" else "Choose music folder", actions::pickFolder, "setup-local-folder")
-        if (state.hasFolder) BasicText("Music folder selected. Your records will appear in the crate.", style = Room.LabelQuiet)
-        BigButton(if (state.hasFolder) "Start listening" else "Skip for now", onDone, "setup-finish", filled = false)
+    StepPage(2, onBack, copy = {
+        StepCopy("offline · no account needed", "BRING YOUR OWN RECORDS", "choose a folder of flac albums. you can connect soulseek later from settings › soulseek.")
+        if (state.hasFolder) BasicText("music folder selected. your records will appear in the crate.", style = Room.Label.copy(color = Room.Body))
+    }) {
+        StepKey(if (state.hasFolder) "change music folder" else "choose music folder", actions::pickFolder, "setup-local-folder", Modifier.fillMaxWidth())
+        TextKey(if (state.hasFolder) "start listening" else "skip for now", onDone, "setup-finish")
     }
 }
 
@@ -403,10 +482,11 @@ private fun DownloadsStep(state: RoomState, actions: RoomActions, onDone: () -> 
     LaunchedEffect(state.downloadFolder) {
         if (state.downloadFolder != null && state.downloadFolder != atEntry) onDone()
     }
-    StepFrame(progress = 0, onBack = onBack) {
-        Headline("Keep your records", "Where should downloads go?", "Finished FLAC downloads land in this folder, play in other apps too, and stay if you uninstall Runout.")
-        BigButton(if (state.downloadFolder == null) "Choose download folder" else "Change download folder", actions::pickDownloadFolder, "setup-download-folder")
-        QuietLink(if (state.downloadFolder != null) "Keep “${state.downloadFolder}”" else "Choose later", onDone, "setup-later", Modifier.align(Alignment.CenterHorizontally))
+    StepPage(3, onBack, copy = {
+        StepCopy("keep your records", "WHERE SHOULD DOWNLOADS GO?", "finished flac downloads land in this folder, play in other apps too, and stay if you uninstall runout.")
+    }) {
+        StepKey(if (state.downloadFolder == null) "choose download folder" else "change download folder", actions::pickDownloadFolder, "setup-download-folder", Modifier.fillMaxWidth())
+        TextKey(if (state.downloadFolder != null) "keep “${state.downloadFolder}”" else "choose later", onDone, "setup-later")
     }
 }
 
@@ -420,68 +500,70 @@ private fun ShareStep(state: RoomState, actions: RoomActions, onDone: () -> Unit
             onDone()
         }
     }
-    StepFrame(progress = 1, onBack = onBack) {
-        Headline("Give something back", "Share a folder?", null)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-            Canvas(Modifier.size(22.dp).padding(top = 2.dp)) { drawCaution(Room.Signal) }
-            BasicText(
-                "The folder you choose becomes public: anyone on Soulseek can browse it and download its FLAC files. Nothing else on your phone is shared.",
-                style = Room.Label.copy(fontSize = 13.sp, lineHeight = 18.sp),
-            )
-        }
-        BigButton("Share a folder", { asked = true; actions.pickSharedFolder() }, "setup-share", leading = { drawCaution(Color.White) })
-        QuietLink("Skip", { actions.setSoulseekSharing(false); onDone() }, "setup-share-skip", Modifier.align(Alignment.CenterHorizontally))
+    StepPage(4, onBack, copy = {
+        StepCopy(
+            "give something back", "SHARE A FOLDER?",
+            "the folder you choose becomes public: anyone on soulseek can browse it and download its flac files. nothing else on your phone is shared.",
+        )
+    }) {
+        StepKey("share a folder", { asked = true; actions.pickSharedFolder() }, "setup-share", Modifier.fillMaxWidth(), icon = { drawCaution() })
+        TextKey("skip", { actions.setSoulseekSharing(false); onDone() }, "setup-share-skip")
     }
-}
-
-/** A warning triangle with an exclamation mark. */
-private fun DrawScope.drawCaution(color: Color) {
-    val w = size.width
-    val p = Path().apply { moveTo(w / 2f, w * 0.06f); lineTo(w * 0.96f, w * 0.9f); lineTo(w * 0.04f, w * 0.9f); close() }
-    drawPath(p, color, style = Stroke(w * 0.09f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-    drawLine(color, Offset(w / 2f, w * 0.38f), Offset(w / 2f, w * 0.62f), strokeWidth = w * 0.1f, cap = StrokeCap.Round)
-    drawCircle(color, w * 0.055f, Offset(w / 2f, w * 0.76f))
 }
 
 @Composable
 private fun RhythmStep(state: RoomState, actions: RoomActions, onDone: () -> Unit, onBack: () -> Unit) {
     val connected = state.soulseekSession.connected
-    StepFrame(progress = 2, onBack = onBack) {
-        Headline("Choose your rhythm", "When should you stay online?", "Both reconnect after a network blip. Your own records always play offline.")
-        RhythmCard(
-            "While using Runout", "Less battery and data. Messages arrive when you come back.",
-            selected = !state.soulseekBackgroundConsent, enabled = connected, tag = "rhythm:app",
-        ) { actions.setSoulseekStayOnline(false); onDone() }
-        RhythmCard(
-            "Stay online", "Messages and sharing keep going with the screen off, with a Disconnect notification.",
-            selected = state.soulseekBackgroundConsent, enabled = connected, tag = "rhythm:background",
-        ) { actions.setSoulseekStayOnline(true); onDone() }
+    StepPage(5, onBack, copy = {
+        StepCopy("choose your rhythm", "WHEN SHOULD YOU STAY ONLINE?", "both reconnect after a network blip. your own records always play offline.")
+        Column(Modifier.fillMaxWidth()) {
+            RhythmCard(
+                "while using runout", "less battery and data. messages arrive when you come back.",
+                selected = !state.soulseekBackgroundConsent, enabled = connected, tag = "rhythm:app",
+            ) { actions.setSoulseekStayOnline(false); onDone() }
+            RhythmCard(
+                "stay online", "messages and sharing keep going with the screen off, with a disconnect notification.",
+                selected = state.soulseekBackgroundConsent, enabled = connected, tag = "rhythm:background",
+            ) { actions.setSoulseekStayOnline(true); onDone() }
+        }
+        BasicText("tap a card to choose · you can change it in settings", style = Room.LabelQuiet)
         if (!connected) ConnectionNotice(state, actions) { }
-    }
+    })
 }
 
-/** A choice you tap as a whole; the selected one is tinted, there is no button inside it. */
+/**
+ * A choice you tap as a whole: 16 in, a 16 dp radio square (an 8 dp ink mark when chosen), the
+ * 12/400 title over a 10/400 grey line. The chosen card has a 2 dp ink outline, the other #CCCCCC.
+ */
 @Composable
 private fun RhythmCard(title: String, detail: String, selected: Boolean, enabled: Boolean, tag: String, onPick: () -> Unit) {
     val tick = rememberTick()
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
-            .background(if (selected) Room.Surface else Room.Background, RectangleShape)
-            .border(if (selected) 2.dp else 1.dp, if (selected) Room.Ink else Room.Hairline, RectangleShape)
+            .alpha(if (enabled) 1f else 0.4f)
+            .border(if (selected) 2.dp else 1.dp, if (selected) Room.Ink else Room.Hairline)
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.RadioButton) { tick(); onPick() }
-            .semantics { if (selected) contentDescription = "$title, selected" }
+            .semantics { this.selected = selected; if (selected) contentDescription = "$title, selected" }
             .testTag(tag)
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        BasicText(title, style = Room.Title.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
-        BasicText(detail, style = Room.LabelQuiet.copy(fontSize = 12.5.sp, lineHeight = 17.sp))
+        Box(Modifier.size(16.dp).border(1.dp, Room.Ink).padding(3.dp)) {
+            if (selected) Box(Modifier.size(8.dp).background(Room.Ink))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicText(title, style = Room.Text)
+            BasicText(detail, style = Room.LabelQuiet.copy(lineHeight = 15.sp), modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
-/** The last screen: a greeting that pops in, then the room. */
+/**
+ * The last screen (TE · Onboarding · Welcome): the RG-1 above an orange square and the greeting
+ * in 44/700, "WELCOME IN, <Soulseek ID>." or "WELCOME IN, LISTENER." offline. The greeting pops
+ * in, holds, and the room takes over from the deck.
+ */
 @Composable
 private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
     val pop = remember { Animatable(0f) }
@@ -493,20 +575,36 @@ private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
         hold.animateTo(1f, tween(650))
         finish()
     }
-    Box(Modifier.fillMaxSize().testTag("setup-welcome"), contentAlignment = Alignment.Center) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .testTag("setup-welcome")
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 66.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
+    ) {
+        Image(
+            painterResource(R.drawable.onboarding_deck_empty),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().height(212.dp),
+        )
         Column(
             Modifier.graphicsLayer {
                 val s = 0.82f + 0.18f * pop.value
                 scaleX = s; scaleY = s
+                transformOrigin = TransformOrigin(0f, 1f)
                 alpha = pop.value.coerceIn(0f, 1f)
             },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            AppMark()
-            BasicText("WELCOME IN,", style = Room.Display.copy(fontSize = 34.sp, lineHeight = 36.sp))
-            BasicText("${(name ?: "listener").uppercase()}.", style = Room.Display.copy(fontSize = 34.sp, lineHeight = 36.sp, color = Room.Signal), maxLines = 1)
-            BasicText("make yourself at home.", style = Room.LabelQuiet.copy(fontSize = 13.sp))
+            Box(Modifier.size(22.dp).background(Room.Signal))
+            BasicText(
+                "WELCOME IN, ${(name ?: "listener").uppercase()}.",
+                style = Room.Display.copy(lineHeight = 46.sp),
+                modifier = Modifier.fillMaxWidth().semantics { heading() },
+            )
+            BasicText("make yourself at home.", style = Room.Text.copy(color = Room.Body))
         }
     }
 }

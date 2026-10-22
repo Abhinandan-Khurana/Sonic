@@ -1,5 +1,9 @@
 package app.runout.ui
 
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.calculateTargetValue
@@ -59,27 +63,39 @@ import androidx.compose.foundation.Canvas
 data class SleeveSlot(val rect: Rect, val size: Dp)
 
 /**
- * The crate: sleeves stand in a row in perspective; the one in the middle turns to face you and
- * lifts. Flick to dig, tap the front sleeve to pull its record out.
+ * Where the front sleeve sits in the crate, as fractions of the crate's box, from the boards: in
+ * portrait a 151 dp sleeve in a 412 × 301 crate, its top at 97; in landscape 130 in 412 × 168, at 10.
+ */
+data class CrateGeometry(val sleeveOfWidth: Float, val sleeveOfHeight: Float, val topOfHeight: Float) {
+    companion object {
+        val Portrait = CrateGeometry(151.3f / 412f, 151.3f / 300.7f, 96.7f / 300.7f)
+        val Landscape = CrateGeometry(130f / 412.5f, 130f / 168f, 10f / 168f)
+    }
+}
+
+/**
+ * The crate, after TE · Home: the front sleeve square to you with its faint reflection on the floor
+ * line; its neighbours turned hard away, edge to edge, and the ones beyond seen almost side-on. Flick
+ * to dig, tap the front sleeve to pull its record out.
  */
 @Composable
 fun Crate(
     albums: List<Album>,
-    hasFolder: Boolean,
     pulledId: String?,
-    loadedId: String?,
-    onPickFolder: () -> Unit,
     onPull: (Album) -> Unit,
     onPutBack: () -> Unit,
     onFrontSlot: (SleeveSlot) -> Unit,
     modifier: Modifier = Modifier,
+    geometry: CrateGeometry = CrateGeometry.Portrait,
+    /** The label tab on a sleeve (ON THE PLATTER), or null. */
+    label: (Album) -> String? = { null },
+    /** The record in front, for the caption under the crate. */
+    onFront: (Album?) -> Unit = {},
     /** Long-press on a sleeve: the record's menu. */
     onMenu: (Album) -> Unit = {},
     initialIndex: Int = 0,
     /** Dig to this record (a record flying back from the deck needs its sleeve in front). */
     scrollTo: String? = null,
-    emptyTitle: String = if (hasFolder) "No albums found" else "Choose your\nmusic folder",
-    emptyDetail: String = if (hasFolder) "Tap to pick another folder" else "Each album folder becomes\na record on your shelf",
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -93,22 +109,23 @@ fun Crate(
     LaunchedEffect(albums.size) {
         if (albums.isNotEmpty() && pos.value > albums.lastIndex) pos.snapTo(albums.lastIndex.toFloat())
     }
+    val frontIndex = pos.value.roundToInt().coerceIn(0, (albums.size - 1).coerceAtLeast(0))
+    val front = albums.getOrNull(frontIndex)
+    LaunchedEffect(front?.id) { onFront(front) }
 
-    BoxWithConstraints(modifier) {
-        val boxHeight = maxHeight
-        // 85 % of the old size, leaving headroom for the record as it rises out of its sleeve.
-        val sleeve = min(maxHeight.value * 0.50f, maxWidth.value * 0.40f).dp
+    BoxWithConstraints(modifier.clipToBounds()) {
+        val sleeve = min(maxWidth.value * geometry.sleeveOfWidth, maxHeight.value * geometry.sleeveOfHeight).dp
         val sleevePx = with(density) { sleeve.toPx() }
+        val top = maxHeight * geometry.topOfHeight
         val stepPx = sleevePx * 0.55f
-        var originInRoot = Offset.Zero
 
         Box(
             Modifier
                 .fillMaxSize()
                 .onGloballyPositioned { c ->
-                    originInRoot = c.positionInRoot()
-                    val cx = originInRoot.x + c.size.width / 2f
-                    val cy = originInRoot.y + c.size.height * 0.44f - with(density) { 10.dp.toPx() }
+                    val origin = c.positionInRoot()
+                    val cx = origin.x + c.size.width / 2f
+                    val cy = origin.y + with(density) { top.toPx() } + sleevePx / 2f
                     onFrontSlot(SleeveSlot(Rect(Offset(cx, cy), sleevePx / 2f), sleeve))
                 }
                 .pointerInput(albums.size, pulledId) {
@@ -137,45 +154,42 @@ fun Crate(
                     )
                 },
         ) {
-            if (albums.isEmpty()) {
-                EmptySleeve(
-                    title = emptyTitle,
-                    detail = emptyDetail,
-                    size = sleeve,
-                    onClick = onPickFolder,
-                    modifier = Modifier.align(Alignment.Center).padding(bottom = boxHeight * 0.12f),
-                )
-                return@Box
-            }
+            if (albums.isEmpty()) return@Box
             val center = pos.value
-            val first = (center - 6).toInt().coerceAtLeast(0)
-            val last = (center + 6).toInt().coerceAtMost(albums.lastIndex)
+            // The floor: a #E5E5E5 line under the sleeves, 7.5 % in from each side.
+            Canvas(Modifier.fillMaxSize().zIndex(-20f)) {
+                val y = top.toPx() + sleevePx
+                drawLine(Room.HairlineSoft, Offset(size.width * 0.075f, y), Offset(size.width * 0.925f, y), 0.85.dp.toPx())
+            }
+            val first = (center - 4).toInt().coerceAtLeast(0)
+            val last = (center + 4).toInt().coerceAtMost(albums.lastIndex)
             for (i in first..last) {
                 val album = albums[i]
                 key(album.id) {
                     val dx = i - center
                     val adx = abs(dx)
                     val near = min(adx, 1f)
-                    val x = if (adx <= 1f) dx * sleevePx * 0.74f else sign(dx) * (sleevePx * 0.74f + (adx - 1f) * sleevePx * 0.17f)
+                    val far = (adx - 1f).coerceIn(0f, 1f)
+                    // Neighbours stand edge to edge with the front sleeve, a half sleeve wide; the
+                    // next ones a seventh of a sleeve wide, almost side-on.
+                    val x = if (adx <= 1f) dx * sleevePx * 0.757f else sign(dx) * (sleevePx * 0.757f + (adx - 1f) * sleevePx * 0.33f)
                     val isFront = adx < 0.5f
-                    val hidden = isFront && album.id == pulledId
+                    val hidden = album.id == pulledId && isFront
                     Box(
                         Modifier
-                            .align(Alignment.Center)
-                            .padding(bottom = boxHeight * 0.12f)
+                            .align(Alignment.TopCenter)
+                            .padding(top = top)
                             .size(sleeve)
                             .zIndex(-adx)
                             .testTag("sleeve:${album.title}")
                             .graphicsLayer {
                                 translationX = x
-                                translationY = -12.dp.toPx() * (1f - near)
-                                // A slightly tighter turn than before, so the side sleeves read as standing in a crate.
-                                rotationY = -dx.coerceIn(-1f, 1f) * 52f
-                                val s = 1f - 0.16f * near
+                                rotationY = -sign(dx) * (near * 58f + far * 22f)
+                                val s = 1f - 0.045f * near - 0.08f * far
                                 scaleX = s
                                 scaleY = s
-                                cameraDistance = 16f * density.density
-                                transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                cameraDistance = 9f * density.density
+                                transformOrigin = TransformOrigin(0.5f, 1f)
                                 alpha = if (hidden) 0f else (1f - (adx - 2.4f).coerceAtLeast(0f)).coerceIn(0f, 1f)
                             }
                             .combinedClickable(
@@ -190,94 +204,28 @@ fun Crate(
                                 }
                             },
                     ) {
-                        SleeveArt(album, Modifier.fillMaxSize())
-                        // A faint reflection on the white floor, fading out within a fifth of the sleeve.
-                        if (adx < 2.5f) SleeveArt(
-                            album,
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    translationY = size.height + 2.dp.toPx()
-                                    scaleY = -1f
-                                    alpha = 0.16f
-                                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
-                                }
-                                .drawWithContent {
-                                    drawContent()
-                                    drawRect(
-                                        androidx.compose.ui.graphics.Brush.verticalGradient(
-                                            0f to Color.Transparent, 0.78f to Color.Transparent, 1f to Color.Black,
-                                        ),
-                                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                                    )
-                                },
-                            showSticker = false,
-                        )
-                        if (album.id == loadedId) {
-                            OnPlatterTag(Modifier.align(Alignment.BottomStart).padding(7.dp))
-                        }
+                        SleeveArt(album, Modifier.fillMaxSize(), label = if (adx < 0.5f) label(album) else null)
                     }
                 }
             }
-
-            // Caption under the front sleeve, set small like the references.
-            val front = albums.getOrNull(center.roundToInt().coerceIn(0, albums.lastIndex))
-            if (front != null) {
-                Column(
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .padding(top = boxHeight * 0.44f + sleeve / 2 + sleeve * 0.22f + 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    // Short: title and artist, the format as a tiny printed tag. The licence and the
-                    // rest live in the record's details (long-press).
-                    BasicText(front.title, style = Room.Title.copy(textAlign = TextAlign.Center), maxLines = 1)
-                    BasicText(front.artist, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center), maxLines = 1)
-                    SpecTag(front.quality.label, Modifier.padding(top = 4.dp))
-                    front.unavailableReason?.let {
-                        BasicText(it, style = Room.LabelQuiet.copy(textAlign = TextAlign.Center, color = Room.Danger), maxLines = 2)
-                    }
-                }
+            // The front sleeve's reflection: 30 % opacity, a third of a sleeve deep, washing out to white.
+            val shown = front != null && front.id != pulledId
+            if (front != null && shown) Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = top + sleeve)
+                    .size(sleeve, sleeve * 0.326f)
+                    .clipToBounds()
+                    .graphicsLayer { alpha = 0.3f * (1f - (abs(center - frontIndex) * 2f).coerceIn(0f, 1f)) },
+            ) {
+                // Flipped about its middle, so its bottom edge meets the floor line at the top of the box.
+                SleeveArt(
+                    front,
+                    Modifier.wrapContentHeight(Alignment.Top, unbounded = true).requiredSize(sleeve).graphicsLayer { scaleY = -1f },
+                    showSticker = false,
+                )
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.2f), 0.9f to Color.White)))
             }
-        }
-    }
-}
-
-@Composable
-private fun OnPlatterTag(modifier: Modifier) {
-    Box(
-        modifier
-            .background(Room.Signal)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    ) {
-        BasicText("On the platter", style = Room.Label.copy(color = Color.White, fontSize = 9.sp))
-    }
-}
-
-@Composable
-private fun EmptySleeve(title: String, detail: String, size: Dp, onClick: () -> Unit, modifier: Modifier) {
-    Box(
-        modifier
-            .size(size)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            drawRoundRect(
-                color = Room.Faint,
-                style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            BasicText(title, style = Room.Title.copy(textAlign = TextAlign.Center), modifier = Modifier.testTag("empty-title"))
-            BasicText(
-                detail,
-                style = Room.LabelQuiet.copy(textAlign = TextAlign.Center),
-                modifier = Modifier.padding(horizontal = 10.dp).testTag("empty-detail"),
-            )
         }
     }
 }

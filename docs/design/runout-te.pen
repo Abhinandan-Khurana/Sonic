@@ -41530,9 +41530,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "ACS9Z",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "UczTz",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "I8gwl",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "f1ulIF",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "I8YBE1",
@@ -41820,16 +41857,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "n7a7qp",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "kQPd6",
                   "x": 5.95,
@@ -41895,51 +41922,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "o5RyCf",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "wDALk",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "jRnzf",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "N5hp0y",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "n6e5WN",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "ciuWa",
+                  "id": "s0rSY",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "V0QCyz",
+                      "id": "PWGsL",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -42020,16 +42065,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "yAv0H",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -42573,9 +42608,46 @@
                 11,
                 22
               ],
-              "justifyContent": "end",
+              "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
+                {
+                  "type": "frame",
+                  "id": "V3xRS",
+                  "name": "Side",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "G409zJ",
+                      "name": "Square",
+                      "fill": "$te-orange",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "wWHYR",
+                      "name": "Side name",
+                      "fill": "$te-ink",
+                      "content": "side a",
+                      "fontFamily": "$te-font",
+                      "fontSize": 12,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "kqmAB",
+                      "name": "Track",
+                      "fill": "$te-muted",
+                      "content": "a2 · 2 / 4",
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
                 {
                   "type": "frame",
                   "id": "S1UrF",
@@ -42798,16 +42870,6 @@
                       "height": 57
                     },
                     {
-                      "type": "rectangle",
-                      "id": "WafzB",
-                      "x": 0,
-                      "y": 93.5,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 130,
-                      "height": 36.5
-                    },
-                    {
                       "type": "frame",
                       "id": "Kr6zb",
                       "x": 7,
@@ -42873,25 +42935,43 @@
                     },
                     {
                       "type": "frame",
-                      "id": "YUTtw",
-                      "x": 88,
+                      "id": "wb7Kf",
+                      "x": 91,
                       "y": 6,
-                      "name": "Hi-res",
+                      "name": "Sticker · hi-res",
+                      "rotation": -10,
+                      "width": 35,
+                      "height": 35,
                       "fill": "$te-orange",
-                      "padding": [
-                        2,
-                        5
-                      ],
+                      "cornerRadius": 17.5,
+                      "stroke": "#FFFFFF",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "D6eIj7",
-                          "name": "Label",
-                          "fill": "$te-ink",
+                          "id": "qTpnf",
+                          "name": "Line 1",
+                          "fill": "#000000",
+                          "content": "HI-RES",
+                          "fontFamily": "Inter",
+                          "fontSize": 5.95,
+                          "fontWeight": "800",
+                          "letterSpacing": 0.4
+                        },
+                        {
+                          "type": "text",
+                          "id": "XdIzl",
+                          "name": "Line 2",
+                          "fill": "#000000",
                           "content": "24/192",
-                          "fontFamily": "$te-font",
-                          "fontSize": 8,
-                          "fontWeight": "normal"
+                          "lineHeight": 1,
+                          "fontFamily": "Inter",
+                          "fontSize": 8.4,
+                          "fontWeight": "800",
+                          "letterSpacing": -0.2
                         }
                       ]
                     }
@@ -42972,16 +43052,6 @@
                           },
                           "width": 57,
                           "height": 57
-                        },
-                        {
-                          "type": "rectangle",
-                          "id": "MYKjC",
-                          "x": 0,
-                          "y": 93.5,
-                          "name": "Ground",
-                          "fill": "#1B1A2E",
-                          "width": 130,
-                          "height": 36.5
                         },
                         {
                           "type": "frame",
@@ -43340,9 +43410,37 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "G7mHb9",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "Nw45S",
+                  "name": "Square",
+                  "width": 8,
+                  "height": 8,
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1
+                },
+                {
+                  "type": "text",
+                  "id": "IcNjL",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "no record",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "t0svy",
@@ -53282,9 +53380,37 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "e0N2l",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "KGRqr",
+                  "name": "Square",
+                  "width": 8,
+                  "height": 8,
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1
+                },
+                {
+                  "type": "text",
+                  "id": "aNfES",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "platter empty",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "gRwnF",
@@ -53598,16 +53724,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "fdU2J",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "tK3vL",
                   "x": 5.95,
@@ -53673,51 +53789,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "D0x7u",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "dGl27",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "p08KTO",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "G4SvN0",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "rVAQY",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "Jql4X",
+                  "id": "q742cF",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "kgf8w",
+                      "id": "XC1Ub",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "pull up · drag",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "PULL UP · DRAG",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -53798,16 +53932,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "yhfLm",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -54255,9 +54379,37 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "m0bB0R",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "IrKJY",
+                  "name": "Square",
+                  "width": 8,
+                  "height": 8,
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1
+                },
+                {
+                  "type": "text",
+                  "id": "FQ63x",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "platter empty",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "YIHq1",
@@ -54545,16 +54697,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "YXQ2t",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "R2cOF",
                   "x": 5.95,
@@ -54620,51 +54762,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "eBaaP",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "BbnJf",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "f7xnyE",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "tjOmG",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "kWEOZ",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "CceWK",
+                  "id": "MG2kX",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "OuDbC",
+                      "id": "pQzz5",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "sleeve · empty",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "SLEEVE · EMPTY",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -54745,16 +54905,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "a4V6nV",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -56632,9 +56782,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "B7zCSl",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "O9IJH",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "yDIF5",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "YsMpo",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "mwNe6",
@@ -56916,16 +57103,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "DDiPS",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "wt8Ri",
                   "x": 5.95,
@@ -56991,51 +57168,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Deueg",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "A0wCB",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "Hrj2g",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "j3xen",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "nsO87",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "PueOh",
+                  "id": "cPsBt",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "cDmnP",
+                      "id": "aAoZL",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -57116,16 +57311,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "XJsEJ",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -60944,9 +61129,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "l1fJS",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "YU0zz",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "DUUuq",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "TWl6J",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "xshqz",
@@ -61228,16 +61450,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "ckxNA",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "KnFas",
                   "x": 5.95,
@@ -61303,51 +61515,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "v20Hu",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "qrLcl",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "V37OnD",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "tCguB",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "v2iABj",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "NODkx",
+                  "id": "L7Jlk",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "k5rEws",
+                      "id": "moYNi",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -61428,16 +61658,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "Wcf48",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -62174,9 +62394,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "U8y2DR",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "CMlWt",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "pukR3",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "zOyjD",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "uS01c",
@@ -62458,16 +62715,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "m0MULj",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "qVFkK",
                   "x": 5.95,
@@ -62533,51 +62780,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "jlDEo",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "pt6Ep",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "TBMNo",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "BwZux",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "iOuh1",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "eJigQ",
+                  "id": "wYavF",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "U96At",
+                      "id": "eGKwm",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -62658,16 +62923,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "Yy3Ql",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -63518,9 +63773,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "haRSo",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "x1Q88R",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "o00gX3",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "WQJA3",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "lCLIQ",
@@ -63802,16 +64094,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "jsp86",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "SFAh8",
                   "x": 5.95,
@@ -63877,51 +64159,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "IMLlY",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "baCW8",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "s4QZj",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "zmYNR",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "N8kig",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "R8vq8",
+                  "id": "epsSl",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "y6nrkE",
+                      "id": "K3sqF",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -64002,16 +64302,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "Gjjxa",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -64502,9 +64792,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "R1Lr6",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "lWzrW",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "kNopz",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "J4bLU",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "Xvxar",
@@ -64786,16 +65113,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "obxn0",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "J2icMP",
                   "x": 5.95,
@@ -64861,51 +65178,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "fUW92",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "mVgBM",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "RDXYk",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "L3oW4x",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZhFZ2",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "rrQJe",
+                  "id": "hvsKM",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "QoHd0",
+                      "id": "GkPoz",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -64986,16 +65321,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "szHMb",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -66541,9 +66866,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "p9vYZu",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "DvDPQ",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "GThtB",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "W0hXxf",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "nW8Hr",
@@ -66840,16 +67202,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "F7SWOz",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "k5D0N9",
                   "x": 5.95,
@@ -66915,51 +67267,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "wDCcL",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "sHhEs",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "fMm2S",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "DYVLM",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "LgpVU",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "EQqVB",
+                  "id": "c9ghu",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "Xled6",
+                      "id": "K8QwiI",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -67040,16 +67410,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "v2Q9gh",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -68048,9 +68408,46 @@
             11,
             22
           ],
-          "justifyContent": "end",
+          "justifyContent": "space_between",
           "alignItems": "center",
           "children": [
+            {
+              "type": "frame",
+              "id": "Yyn5g",
+              "name": "Side",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "b4H5A",
+                  "name": "Square",
+                  "fill": "$te-orange",
+                  "width": 8,
+                  "height": 8
+                },
+                {
+                  "type": "text",
+                  "id": "YiNEF",
+                  "name": "Side name",
+                  "fill": "$te-ink",
+                  "content": "side a",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "BeWh2",
+                  "name": "Track",
+                  "fill": "$te-muted",
+                  "content": "a2 · 2 / 4",
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
             {
               "type": "frame",
               "id": "p2Aze",
@@ -68347,16 +68744,6 @@
                   "height": 66.3
                 },
                 {
-                  "type": "rectangle",
-                  "id": "iRUEC",
-                  "x": 0,
-                  "y": 108.8,
-                  "name": "Ground",
-                  "fill": "#1B1A2E",
-                  "width": 151.29999999999998,
-                  "height": 42.5
-                },
-                {
                   "type": "frame",
                   "id": "mi7P2",
                   "x": 5.95,
@@ -68422,51 +68809,69 @@
                 },
                 {
                   "type": "frame",
-                  "id": "ovd5Q",
-                  "x": 107.1,
-                  "y": 6.8,
-                  "name": "Hi-res",
+                  "id": "G1sC7b",
+                  "x": 106.29999999999998,
+                  "y": 6,
+                  "name": "Sticker · hi-res",
+                  "rotation": -10,
+                  "width": 41,
+                  "height": 41,
                   "fill": "$te-orange",
-                  "stroke": "$te-canvas",
-                  "strokeWidth": 1,
-                  "padding": [
-                    3,
-                    6
-                  ],
+                  "cornerRadius": 20.5,
+                  "stroke": "#FFFFFF",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "OXPAt",
-                      "name": "Label",
-                      "fill": "$te-ink",
+                      "id": "YYbxJ",
+                      "name": "Line 1",
+                      "fill": "#000000",
+                      "content": "HI-RES",
+                      "fontFamily": "Inter",
+                      "fontSize": 6.970000000000001,
+                      "fontWeight": "800",
+                      "letterSpacing": 0.4
+                    },
+                    {
+                      "type": "text",
+                      "id": "CwcM5",
+                      "name": "Line 2",
+                      "fill": "#000000",
                       "content": "24/96",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "lineHeight": 1,
+                      "fontFamily": "Inter",
+                      "fontSize": 9.84,
+                      "fontWeight": "800",
+                      "letterSpacing": -0.2
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "w48O5Y",
+                  "id": "nl17T",
                   "x": 6.8,
-                  "y": 130.9,
-                  "name": "Sleeve label",
-                  "fill": "$te-ink",
+                  "y": 132.9,
+                  "name": "Sticker · label",
+                  "rotation": 3.0000000000000004,
+                  "fill": "#000000",
                   "padding": [
-                    3,
-                    6
+                    4,
+                    7
                   ],
                   "children": [
                     {
                       "type": "text",
-                      "id": "QnsLz",
+                      "id": "XXGh9",
                       "name": "Label",
-                      "fill": "$te-canvas",
-                      "content": "on the platter",
-                      "fontFamily": "$te-font",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
+                      "fill": "#FFFFFF",
+                      "content": "ON THE PLATTER",
+                      "fontFamily": "Inter",
+                      "fontSize": 7.5649999999999995,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.9
                     }
                   ]
                 }
@@ -68547,16 +68952,6 @@
                       },
                       "width": 66.3,
                       "height": 66.3
-                    },
-                    {
-                      "type": "rectangle",
-                      "id": "pAlpv",
-                      "x": 0,
-                      "y": 108.8,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 151.29999999999998,
-                      "height": 42.5
                     },
                     {
                       "type": "frame",
@@ -69439,16 +69834,6 @@
                       "height": 57
                     },
                     {
-                      "type": "rectangle",
-                      "id": "xd2tZ",
-                      "x": 0,
-                      "y": 93.5,
-                      "name": "Ground",
-                      "fill": "#1B1A2E",
-                      "width": 130,
-                      "height": 36.5
-                    },
-                    {
                       "type": "frame",
                       "id": "d5akqQ",
                       "x": 7,
@@ -69514,25 +69899,43 @@
                     },
                     {
                       "type": "frame",
-                      "id": "fch09",
-                      "x": 88,
+                      "id": "LuYkH",
+                      "x": 91,
                       "y": 6,
-                      "name": "Hi-res",
+                      "name": "Sticker · hi-res",
+                      "rotation": -10,
+                      "width": 35,
+                      "height": 35,
                       "fill": "$te-orange",
-                      "padding": [
-                        2,
-                        5
-                      ],
+                      "cornerRadius": 17.5,
+                      "stroke": "#FFFFFF",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "I3xvY",
-                          "name": "Label",
-                          "fill": "$te-ink",
+                          "id": "KKIdg",
+                          "name": "Line 1",
+                          "fill": "#000000",
+                          "content": "HI-RES",
+                          "fontFamily": "Inter",
+                          "fontSize": 5.95,
+                          "fontWeight": "800",
+                          "letterSpacing": 0.4
+                        },
+                        {
+                          "type": "text",
+                          "id": "PCuEN",
+                          "name": "Line 2",
+                          "fill": "#000000",
                           "content": "24/192",
-                          "fontFamily": "$te-font",
-                          "fontSize": 8,
-                          "fontWeight": "normal"
+                          "lineHeight": 1,
+                          "fontFamily": "Inter",
+                          "fontSize": 8.4,
+                          "fontWeight": "800",
+                          "letterSpacing": -0.2
                         }
                       ]
                     }
@@ -69613,16 +70016,6 @@
                           },
                           "width": 57,
                           "height": 57
-                        },
-                        {
-                          "type": "rectangle",
-                          "id": "A7c2ns",
-                          "x": 0,
-                          "y": 93.5,
-                          "name": "Ground",
-                          "fill": "#1B1A2E",
-                          "width": 130,
-                          "height": 36.5
                         },
                         {
                           "type": "frame",
@@ -70313,16 +70706,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "H47j5y",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#1B1A2E",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "fsq8W",
                               "x": 5.95,
@@ -70388,51 +70771,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "v66yyM",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "MbCFu",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "g6uALy",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "muaoL",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "j52I2G",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "qUlht",
+                              "id": "G8ulg",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "N7EBn",
+                                  "id": "RV7qM",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "on the platter",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "ON THE PLATTER",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -70513,16 +70914,6 @@
                                   },
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "cHImx",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#1B1A2E",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -71254,16 +71645,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "epsv2",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#1B1A2E",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "e1flec",
                               "x": 5.95,
@@ -71329,51 +71710,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "GOQGt",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "Li7q2",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Kw76J",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "l1DDbT",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "RMOT7",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "JreE0",
+                              "id": "g2Dfe",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "XYNY9",
+                                  "id": "O1ARcs",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "sleeve · empty",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "SLEEVE · EMPTY",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -71454,16 +71853,6 @@
                                   },
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "UEgTk",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#1B1A2E",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -72222,16 +72611,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "Ln9e6",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#1B1A2E",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "k262F",
                               "x": 5.95,
@@ -72297,51 +72676,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "p6PQ4",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "Kyimf",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "TO8Rc",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "MEaRO",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "qXns8",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "yg0TR",
+                              "id": "cwTzP",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "IysFZ",
+                                  "id": "C8DAY0",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "putting back",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "PUTTING BACK",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -72422,16 +72819,6 @@
                                   },
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "cWHOQ",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#1B1A2E",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -73216,16 +73603,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "B2DSlX",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#1B1A2E",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "VvStP",
                               "x": 5.95,
@@ -73291,51 +73668,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "Ykb8Y",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "W9LnT",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "HEeH8",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "lHS3A",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "MddFG",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "y5WcHn",
+                              "id": "rNmKA",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "lt9qd",
+                                  "id": "VVPqm",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "putting back",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "PUTTING BACK",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -73416,16 +73811,6 @@
                                   },
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "nHFPv",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#1B1A2E",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -74155,16 +74540,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "yxGXv",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#1B1A2E",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "d78vI7",
                               "x": 5.95,
@@ -74230,51 +74605,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "jGx8F",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "jo7qb",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "SUvB1",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "nhB2q",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "QloJr",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "O334wu",
+                              "id": "w1EpS",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Z5hKnT",
+                                  "id": "LS7yg",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "pull up · drag",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "PULL UP · DRAG",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -74355,16 +74748,6 @@
                                   },
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "TONfR",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#1B1A2E",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -75513,16 +75896,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "yCDx0",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#0B2A44",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "ryJNH",
                               "x": 5.95,
@@ -75588,51 +75961,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "dATDK",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "ELdT5",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "bgKtI",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "X43WTi",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "wnRpM",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "bbIxS",
+                              "id": "cOoVJ",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "WKJKf",
+                                  "id": "qsUmE",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "sleeve · empty",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "SLEEVE · EMPTY",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -75672,16 +76063,6 @@
                                   "fill": "#FAB413",
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "j9yODK",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#0B2A44",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -76808,16 +77189,6 @@
                               "height": 66.3
                             },
                             {
-                              "type": "rectangle",
-                              "id": "lOo99",
-                              "x": 0,
-                              "y": 108.8,
-                              "name": "Ground",
-                              "fill": "#0B2A44",
-                              "width": 151.29999999999998,
-                              "height": 42.5
-                            },
-                            {
                               "type": "frame",
                               "id": "njwqz",
                               "x": 5.95,
@@ -76883,51 +77254,69 @@
                             },
                             {
                               "type": "frame",
-                              "id": "I688a0",
-                              "x": 107.1,
-                              "y": 6.8,
-                              "name": "Hi-res",
+                              "id": "zz2YY",
+                              "x": 106.29999999999998,
+                              "y": 6,
+                              "name": "Sticker · hi-res",
+                              "rotation": -10,
+                              "width": 41,
+                              "height": 41,
                               "fill": "$te-orange",
-                              "stroke": "$te-canvas",
-                              "strokeWidth": 1,
-                              "padding": [
-                                3,
-                                6
-                              ],
+                              "cornerRadius": 20.5,
+                              "stroke": "#FFFFFF",
+                              "strokeWidth": 1.5,
+                              "layout": "vertical",
+                              "justifyContent": "center",
+                              "alignItems": "center",
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Qn4pb",
-                                  "name": "Label",
-                                  "fill": "$te-ink",
+                                  "id": "Njbci",
+                                  "name": "Line 1",
+                                  "fill": "#000000",
+                                  "content": "HI-RES",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 6.970000000000001,
+                                  "fontWeight": "800",
+                                  "letterSpacing": 0.4
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "ffLCX",
+                                  "name": "Line 2",
+                                  "fill": "#000000",
                                   "content": "24/96",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "lineHeight": 1,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 9.84,
+                                  "fontWeight": "800",
+                                  "letterSpacing": -0.2
                                 }
                               ]
                             },
                             {
                               "type": "frame",
-                              "id": "Iwk0p",
+                              "id": "v9zzxK",
                               "x": 6.8,
-                              "y": 130.9,
-                              "name": "Sleeve label",
-                              "fill": "$te-ink",
+                              "y": 132.9,
+                              "name": "Sticker · label",
+                              "rotation": 3.0000000000000004,
+                              "fill": "#000000",
                               "padding": [
-                                3,
-                                6
+                                4,
+                                7
                               ],
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "gAGXg",
+                                  "id": "f8irDI",
                                   "name": "Label",
-                                  "fill": "$te-canvas",
-                                  "content": "pull up · drag",
-                                  "fontFamily": "$te-font",
-                                  "fontSize": 10,
-                                  "fontWeight": "normal"
+                                  "fill": "#FFFFFF",
+                                  "content": "PULL UP · DRAG",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 7.5649999999999995,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.9
                                 }
                               ]
                             }
@@ -76967,16 +77356,6 @@
                                   "fill": "#FAB413",
                                   "width": 66.3,
                                   "height": 66.3
-                                },
-                                {
-                                  "type": "rectangle",
-                                  "id": "lfQVi",
-                                  "x": 0,
-                                  "y": 108.8,
-                                  "name": "Ground",
-                                  "fill": "#0B2A44",
-                                  "width": 151.29999999999998,
-                                  "height": 42.5
                                 },
                                 {
                                   "type": "frame",
@@ -77799,16 +78178,6 @@
                                   "height": 57
                                 },
                                 {
-                                  "type": "rectangle",
-                                  "id": "izUIJ",
-                                  "x": 0,
-                                  "y": 93.5,
-                                  "name": "Ground",
-                                  "fill": "#1B1A2E",
-                                  "width": 130,
-                                  "height": 36.5
-                                },
-                                {
                                   "type": "frame",
                                   "id": "Z3qI62",
                                   "x": 7,
@@ -77874,25 +78243,43 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "HIJsA",
-                                  "x": 88,
+                                  "id": "Xsbye",
+                                  "x": 91,
                                   "y": 6,
-                                  "name": "Hi-res",
+                                  "name": "Sticker · hi-res",
+                                  "rotation": -10,
+                                  "width": 35,
+                                  "height": 35,
                                   "fill": "$te-orange",
-                                  "padding": [
-                                    2,
-                                    5
-                                  ],
+                                  "cornerRadius": 17.5,
+                                  "stroke": "#FFFFFF",
+                                  "strokeWidth": 1.5,
+                                  "layout": "vertical",
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "ZVluL",
-                                      "name": "Label",
-                                      "fill": "$te-ink",
+                                      "id": "blACT",
+                                      "name": "Line 1",
+                                      "fill": "#000000",
+                                      "content": "HI-RES",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 5.95,
+                                      "fontWeight": "800",
+                                      "letterSpacing": 0.4
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "bZgxa",
+                                      "name": "Line 2",
+                                      "fill": "#000000",
                                       "content": "24/192",
-                                      "fontFamily": "$te-font",
-                                      "fontSize": 8,
-                                      "fontWeight": "normal"
+                                      "lineHeight": 1,
+                                      "fontFamily": "Inter",
+                                      "fontSize": 8.4,
+                                      "fontWeight": "800",
+                                      "letterSpacing": -0.2
                                     }
                                   ]
                                 }
@@ -77973,16 +78360,6 @@
                                       },
                                       "width": 57,
                                       "height": 57
-                                    },
-                                    {
-                                      "type": "rectangle",
-                                      "id": "I3lLN",
-                                      "x": 0,
-                                      "y": 93.5,
-                                      "name": "Ground",
-                                      "fill": "#1B1A2E",
-                                      "width": 130,
-                                      "height": 36.5
                                     },
                                     {
                                       "type": "frame",
@@ -78945,6 +79322,423 @@
                   "fontWeight": "normal"
                 }
               ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "mhZHA",
+      "x": 11902,
+      "y": 3346,
+      "name": "TE · Home · flipping the record · storyboard (~0.9 s)",
+      "width": 1500,
+      "fill": "$te-canvas",
+      "stroke": "$te-hairline",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "gap": 22,
+      "padding": 33,
+      "children": [
+        {
+          "type": "text",
+          "id": "bGpq3",
+          "name": "Title",
+          "fill": "$te-ink",
+          "content": "FLIP · SIDE A ⇄ SIDE B · ~0.9 S · TAP THE RECORD WHILE THE NEEDLE IS UP · SAME MOTION BACK FROM B TO A",
+          "fontFamily": "$te-font",
+          "fontSize": 12,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "d3Pthx",
+          "name": "Keyframes",
+          "width": "fill_container",
+          "gap": 22,
+          "children": [
+            {
+              "type": "frame",
+              "id": "rUzka",
+              "name": "Key 1",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 11,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "giMh7",
+                  "name": "Frame",
+                  "clip": true,
+                  "width": "fill_container",
+                  "height": 170,
+                  "fill": "$te-canvas",
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "vpo54",
+                      "x": 4,
+                      "y": 4,
+                      "name": "Deck",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "images/rg1-v3-flip-1.png",
+                        "mode": "contain"
+                      },
+                      "width": 264,
+                      "height": 160
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "ZenQh",
+                  "name": "Time",
+                  "fill": "$te-ink",
+                  "content": "0.0 s  tap",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "SP6mv",
+                  "name": "Desc",
+                  "fill": "$te-body",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "tap the record with the needle up. if it's playing, the arm lifts back to its rest first. led: FLIP.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "s4xo7",
+              "name": "Key 2",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 11,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "BFjJA",
+                  "name": "Frame",
+                  "clip": true,
+                  "width": "fill_container",
+                  "height": 170,
+                  "fill": "$te-canvas",
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "pXEZM",
+                      "x": 4,
+                      "y": 4,
+                      "name": "Deck",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "images/rg1-v3-flip-2.png",
+                        "mode": "contain"
+                      },
+                      "width": 264,
+                      "height": 160
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "uBu5c",
+                  "name": "Time",
+                  "fill": "$te-ink",
+                  "content": "0.15 s  lift",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "UX3sO",
+                  "name": "Desc",
+                  "fill": "$te-body",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "the disc rises straight off the spindle, ~1 cm, spinning to a stop.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "uwIz1",
+              "name": "Key 3",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 11,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "q01hIo",
+                  "name": "Frame",
+                  "clip": true,
+                  "width": "fill_container",
+                  "height": 170,
+                  "fill": "$te-canvas",
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "UQJgi",
+                      "x": 4,
+                      "y": 4,
+                      "name": "Deck",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "images/rg1-v3-flip-3.png",
+                        "mode": "contain"
+                      },
+                      "width": 264,
+                      "height": 160
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "H8rQj",
+                  "name": "Time",
+                  "fill": "$te-ink",
+                  "content": "0.4 s  turn over",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "N9XpKQ",
+                  "name": "Desc",
+                  "fill": "$te-body",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "the disc rolls over towards you around its left-right axis; the label passes edge-on and side b comes up. led: FLIP · B1.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Q1wEpp",
+              "name": "Key 4",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 11,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "wDp87",
+                  "name": "Frame",
+                  "clip": true,
+                  "width": "fill_container",
+                  "height": 170,
+                  "fill": "$te-canvas",
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "B64zfL",
+                      "x": 4,
+                      "y": 4,
+                      "name": "Deck",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "images/rg1-v3-flip-4.png",
+                        "mode": "contain"
+                      },
+                      "width": 264,
+                      "height": 160
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "FSIDH",
+                  "name": "Time",
+                  "fill": "$te-ink",
+                  "content": "0.65 s  settle",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "wo7xP",
+                  "name": "Desc",
+                  "fill": "$te-body",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "side b faces up and the disc lowers back onto the spindle with a soft ease-out.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xJP4b",
+              "name": "Key 5",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 11,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "EzRQd",
+                  "name": "Frame",
+                  "clip": true,
+                  "width": "fill_container",
+                  "height": 170,
+                  "fill": "$te-canvas",
+                  "stroke": "$te-ink",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "thzuz",
+                      "x": 4,
+                      "y": 4,
+                      "name": "Deck",
+                      "fill": {
+                        "type": "image",
+                        "enabled": true,
+                        "url": "images/rg1-v3-flip-5.png",
+                        "mode": "contain"
+                      },
+                      "width": 264,
+                      "height": 160
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "zAaVg",
+                  "name": "Time",
+                  "fill": "$te-ink",
+                  "content": "0.9 s  cued",
+                  "fontFamily": "$te-font",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "Z4fjB9",
+                  "name": "Desc",
+                  "fill": "$te-body",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "lands with a small thud and a haptic tick. led: CUE B1 · title, time 00:00. the track wheel jumps to b1; the top bar says side b.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$te-font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "v4Hd5u",
+          "name": "Notes",
+          "width": "fill_container",
+          "stroke": "$te-hairline",
+          "strokeWidth": {
+            "top": 1
+          },
+          "layout": "vertical",
+          "gap": 6,
+          "padding": [
+            11,
+            0,
+            0,
+            0
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "RIEwf",
+              "name": "Note",
+              "fill": "$te-muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "· b → a is the same motion; the label shows SIDE A as it lands.",
+              "lineHeight": 1.45,
+              "fontFamily": "$te-font",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "STaT8",
+              "name": "Note",
+              "fill": "$te-muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "· flat fallback (no 3D): the drawn disc squashes to a line on its horizontal axis and opens again showing the other side, same timing.",
+              "lineHeight": 1.45,
+              "fontFamily": "$te-font",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "D6wEk",
+              "name": "Note",
+              "fill": "$te-muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "· reduced motion: no turn; cross-fade the label (side a → side b) in 150 ms.",
+              "lineHeight": 1.45,
+              "fontFamily": "$te-font",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "lCvHN",
+              "name": "Note",
+              "fill": "$te-muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "· sound: a soft paper-and-vinyl whoosh on the turn, thud on landing (off in pure mode).",
+              "lineHeight": 1.45,
+              "fontFamily": "$te-font",
+              "fontSize": 10,
+              "fontWeight": "normal"
             }
           ]
         }

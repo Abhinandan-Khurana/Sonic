@@ -1,6 +1,9 @@
 package app.runout.ui
 
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,9 +39,12 @@ import app.runout.model.Album
 import app.runout.model.Source
 import com.kyant.backdrop.Backdrop
 
-/** A small glass card over the room; Back or a tap outside dismisses it. */
+/**
+ * The TE dialog card, centred over the grey scrim: white, a 2 dp ink outline, 22 dp in all round,
+ * 16 dp between parts, 22 dp from the screen's edges. Back or a tap outside dismisses it.
+ */
 @Composable
-private fun GlassCard(backdrop: Backdrop, tag: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+internal fun TeCard(tag: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     BackHandler(onBack = onDismiss)
     Box(Modifier.fillMaxSize().zIndex(25f), contentAlignment = Alignment.Center) {
         // The scrim is a sibling behind the card, not its parent: a clickable parent would merge the
@@ -51,15 +57,29 @@ private fun GlassCard(backdrop: Backdrop, tag: String, onDismiss: () -> Unit, co
         )
         Column(
             Modifier
-                .padding(24.dp)
-                .widthIn(max = 380.dp)
+                .padding(22.dp)
+                .widthIn(max = 420.dp)
                 .fillMaxWidth()
                 .background(Room.Background)
-                .border(1.dp, Room.Ink)
+                .border(2.dp, Room.Ink)
                 .pointerInput(Unit) { detectTapGestures { } }
-                .padding(vertical = 14.dp)
+                .padding(22.dp)
                 .testTag(tag),
-        ) { content() }
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            content = content,
+        )
+    }
+}
+
+/** The record at the top of a card: its 66 dp sleeve, the title in 16/700 and the artist in 10/400. */
+@Composable
+private fun CardRecord(record: Album, artist: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        SleeveArt(record, Modifier.size(66.dp), showSticker = false)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicText(record.title.uppercase(), style = Room.Album.copy(fontSize = 16.sp), maxLines = 2)
+            BasicText(artist.lowercase(), style = Room.Label.copy(color = Room.Body), maxLines = 1)
+        }
     }
 }
 
@@ -68,76 +88,83 @@ private fun GlassCard(backdrop: Backdrop, tag: String, onDismiss: () -> Unit, co
 internal fun RecordMenu(
     record: Album,
     pulled: Boolean,
-    backdrop: Backdrop,
+    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop,
     onPutBack: () -> Unit,
     onSend: () -> Unit,
     onRemove: () -> Unit,
     onDetails: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    GlassCard(backdrop, "record-menu", onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            BasicText(record.title, style = Room.Title.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
-            BasicText(record.artist, style = Room.LabelQuiet, maxLines = 1)
+    TeCard("record-menu", onDismiss) {
+        CardRecord(record, record.artist)
+        Column(Modifier.fillMaxWidth()) {
+            val rows = buildList {
+                if (pulled) add(Triple("Put back", onPutBack, Room.Ink))
+                add(Triple(if (record.audioShareable) "Send with audio" else "Send as a card", onSend, Room.Ink))
+                add(Triple("Details", onDetails, Room.Ink))
+                if (record.source != Source.FOLDER) add(Triple("Remove", onRemove, Room.Danger))
+            }
+            rows.forEachIndexed { n, (text, action, color) -> MenuRow("%02d".format(n + 1), text, action, color) }
         }
-        if (pulled) MenuRow("Put back", onPutBack)
-        MenuRow(if (record.audioShareable) "Send with audio" else "Send as a card", onSend)
-        MenuRow("Details", onDetails)
-        if (record.source != Source.FOLDER) MenuRow("Remove", onRemove, Room.Danger)
     }
 }
 
+/** A menu row: a hairline above, 16 dp above and below, the index, the 12/400 action and an arrow. */
 @Composable
-private fun MenuRow(text: String, onClick: () -> Unit, color: Color = Room.Ink) {
+private fun MenuRow(index: String, text: String, onClick: () -> Unit, color: Color = Room.Ink) {
     val tick = rememberTick()
-    BasicText(
-        text,
-        style = Room.Title.copy(color = color),
-        modifier = Modifier
+    Row(
+        Modifier
             .fillMaxWidth()
+            .hairlineTop()
             .testTag("menu:$text")
             .clickable(role = Role.Button) { tick(); onClick() }
-            .padding(horizontal = 20.dp, vertical = 13.dp),
-    )
-}
-
-/** The record's back cover: format, where it came from, its licence and the running order. */
-@Composable
-internal fun RecordDetails(record: Album, backdrop: Backdrop, onDismiss: () -> Unit) {
-    GlassCard(backdrop, "record-details", onDismiss) {
-        Column(
-            Modifier
-                .heightIn(max = 520.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            BasicText(record.title, style = Room.Title.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold))
-            BasicText(listOfNotNull(record.artist, record.year?.toString()).joinToString(" · "), style = Room.LabelQuiet)
-            SpecTag(record.quality.label)
-            record.unavailableReason?.let { BasicText(it, style = Room.LabelQuiet.copy(color = Room.Danger)) }
-            provenance(record)?.let { BasicText(it, style = Room.LabelQuiet.copy(color = Room.Accent)) }
-            record.tracks.forEach { track ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BasicText("${'A' + (track.discNumber - 1).coerceAtLeast(0)}${track.trackNumber}", style = Room.LabelQuiet)
-                    BasicText(track.title, style = Room.Label, maxLines = 1)
-                }
-            }
-            Pill("Close", onDismiss, Modifier.padding(top = 8.dp))
-        }
+            .padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        BasicText(index, style = Room.LabelQuiet)
+        BasicText(text.lowercase(), style = Room.Text.copy(color = color), modifier = Modifier.weight(1f))
+        BasicText("→", style = Room.Text.copy(color = color))
     }
 }
 
-/** The spec as a label sticker: a black tab, white Inter caps, stuck on a few degrees off true. */
+/** The record's back cover: format, licence, where it came from, and the running order by side. */
 @Composable
-internal fun SpecTag(text: String, modifier: Modifier = Modifier) {
-    BasicText(
-        text.uppercase(),
-        style = androidx.compose.ui.text.TextStyle(fontFamily = Room.Inter, fontSize = 8.5.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.SemiBold, color = Color.White),
-        maxLines = 1,
-        modifier = modifier
-            .rotate(3f)
-            .background(Room.Ink)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    )
+internal fun RecordDetails(record: Album, @Suppress("UNUSED_PARAMETER") backdrop: Backdrop, onDismiss: () -> Unit) {
+    TeCard("record-details", onDismiss) {
+        CardRecord(record, listOfNotNull(record.artist, record.year?.toString()).joinToString(" · "))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SpecTag(record.quality.label)
+            app.runout.model.Licences.label(record.license)?.let { TeTag(it.lowercase(), color = Room.Accent) }
+        }
+        record.unavailableReason?.let { BasicText(it.lowercase(), style = Room.Label.copy(color = Room.Danger, lineHeight = 15.sp)) }
+        provenance(record)?.let { BasicText(it.lowercase(), style = Room.Label.copy(color = Room.Accent, lineHeight = 15.sp)) }
+        val sides = remember(record.id) { app.runout.model.SideSplitter.split(record.tracks) }
+        Column(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+            sides.forEach { side ->
+                side.tracks.forEachIndexed { i, track ->
+                    // An ink rule where a new side begins, hairlines between songs.
+                    Row(
+                        Modifier.fillMaxWidth().hairlineTop(if (i == 0 && side.index > 0) Room.Ink else Room.HairlineSoft).padding(top = 11.dp, bottom = 11.dp, end = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(11.dp),
+                    ) {
+                        BasicText("${side.letter.lowercaseChar()}${i + 1}", style = Room.LabelQuiet)
+                        BasicText(track.title.lowercase(), style = Room.Label, maxLines = 1, modifier = Modifier.weight(1f))
+                        BasicText(clock(track.durationMs), style = Room.LabelQuiet.copy(textAlign = TextAlign.End), modifier = Modifier.width(44.dp))
+                    }
+                }
+            }
+        }
+        TeButton("close", onDismiss, Modifier.fillMaxWidth(), kind = KeyKind.OUTLINE)
+    }
 }
+
+private fun clock(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
+}
+
+/** The spec as a TE Tag: 1 dp ink outline, 3 × 6 inside, 10/400, lowercase. */
+@Composable
+internal fun SpecTag(text: String, modifier: Modifier = Modifier) = TeTag(text.lowercase(), modifier)

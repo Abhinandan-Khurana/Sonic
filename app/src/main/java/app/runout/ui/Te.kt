@@ -1,5 +1,8 @@
 package app.runout.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -149,11 +152,11 @@ internal fun DrawScope.drawNavIcon(panel: Panel, color: Color) {
 
 /**
  * TE Help Panel: white, a 2 dp ink rule along the top, 22 dp in (33 at the foot), 22 dp between
- * parts: "info" in blue and "close ×", the 22/700 title, numbered points under hairlines (10/400,
+ * parts: [label] in blue ("help · sound › output") and "close ×", the 22/700 title, numbered points under hairlines (10/400,
  * 15 line height, #4D4D4D) and a black "got it" key across the width.
  */
 @Composable
-fun TeHelpPanel(title: String, points: List<String>, onClose: () -> Unit, modifier: Modifier = Modifier, tag: String = "help-panel") {
+fun TeHelpPanel(title: String, points: List<String>, onClose: () -> Unit, modifier: Modifier = Modifier, tag: String = "help-panel", label: String = "info") {
     Column(
         modifier
             .fillMaxWidth()
@@ -164,18 +167,11 @@ fun TeHelpPanel(title: String, points: List<String>, onClose: () -> Unit, modifi
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BasicText("info", style = Room.Label.copy(color = Room.Accent), modifier = Modifier.weight(1f))
+            BasicText(label, style = Room.Label.copy(color = Room.Accent), modifier = Modifier.weight(1f))
             CloseKey(onClose)
         }
         BasicText(title.uppercase(), style = Room.Title, modifier = Modifier.fillMaxWidth().semantics { heading() })
-        Column(Modifier.fillMaxWidth()) {
-            points.forEachIndexed { i, text ->
-                Row(Modifier.fillMaxWidth().hairlineTop().padding(vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                    BasicText("%02d".format(i + 1), style = Room.LabelQuiet)
-                    BasicText(text, style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp), modifier = Modifier.weight(1f))
-                }
-            }
-        }
+        HelpPoints(points)
         TeButton("got it", onClose, Modifier.fillMaxWidth())
     }
 }
@@ -192,6 +188,40 @@ fun TeStats(stats: List<Pair<String, String>>, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * A help panel opened by a TE Help "?": the grey scrim over everything and the panel rising from
+ * the foot. Back or a tap on the scrim closes it.
+ */
+@Composable
+fun TeHelpSheet(help: TeHelp?, onClose: () -> Unit) {
+    if (help == null) return
+    // Through the page's sheet host, so inside a page it covers the whole page, edge to edge.
+    PageSheet("help:${help.title}", onClose) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(help.label, style = Room.Label.copy(color = Room.Accent), modifier = Modifier.weight(1f))
+            CloseKey(onClose)
+        }
+        BasicText(help.title.uppercase(), style = Room.Title, modifier = Modifier.fillMaxWidth().semantics { heading() })
+        HelpPoints(help.points)
+        TeButton("got it", onClose, Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun HelpPoints(points: List<String>) {
+    Column(Modifier.fillMaxWidth()) {
+        points.forEachIndexed { i, text ->
+            Row(Modifier.fillMaxWidth().hairlineTop().padding(vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                BasicText("%02d".format(i + 1), style = Room.LabelQuiet)
+                BasicText(text, style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp), modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** One help panel's words, from the TE · Help panels board. */
+data class TeHelp(val label: String, val title: String, val points: List<String>)
 
 /** The grey scrim behind every panel and dialog (#767676 at 60 %). */
 @Composable
