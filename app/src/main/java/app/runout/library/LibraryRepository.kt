@@ -49,7 +49,13 @@ class LibraryRepository(
     fun setCoverLookupEnabled(enabled: Boolean) {
         coverPrefs.edit { putBoolean("enabled", enabled) }
         _coverLookupEnabled.value = enabled
+        // Switched on: look for the missing covers now, not at the next scan. A scan under way
+        // does its own pass when it finishes.
+        if (enabled) synchronized(scanLock) {
+            if (scanJob?.isActive != true && coverJob?.isActive != true) coverJob = scope.launch { findMissingCovers() }
+        }
     }
+    private var coverJob: Job? = null
 
     fun dismissCoverLookupNotice() {
         coverPrefs.edit { putBoolean("notice-pending", false) }
@@ -179,24 +185,29 @@ class LibraryRepository(
             _albums.value = sortShelf(if (partial && !fresh) mergePartial(previous, found) else found)
             withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
 
-            if (coverLookupEnabled.value) {
-                val missing = _albums.value.filter { it.coverPath == null }
-                missing.forEachIndexed { i, album ->
-                    if (!coverLookupEnabled.value) return@forEachIndexed
-                    _scan.value = ScanState.FindingCovers(i, missing.size)
-                    val file = artwork.lookupOnline(album.id, album.artist, album.title)
-                    if (file != null) {
-                        val updated = withContext(Dispatchers.IO) { album.withCover(file) }
-                        _albums.update { list -> list.map { if (it.id == album.id) updated else it } }
-                    }
-                }
-                if (missing.isNotEmpty()) withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
-            }
+            findMissingCovers()
             _scan.value = null
         }
         scanJob = job
         job.start()
         return job
+    }
+
+    /** With online covers on: MusicBrainz and the Cover Art Archive for each album still without one. */
+    private suspend fun findMissingCovers() {
+        if (!coverLookupEnabled.value) return
+        val missing = _albums.value.filter { it.coverPath == null }
+        missing.forEachIndexed { i, album ->
+            if (!coverLookupEnabled.value) return@forEachIndexed
+            _scan.value = ScanState.FindingCovers(i, missing.size)
+            val file = artwork.lookupOnline(album.id, album.artist, album.title)
+            if (file != null) {
+                val updated = withContext(Dispatchers.IO) { album.withCover(file) }
+                _albums.update { list -> list.map { if (it.id == album.id) updated else it } }
+            }
+        }
+        if (_scan.value is ScanState.FindingCovers) _scan.value = null
+        if (missing.isNotEmpty()) withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
     }
 
     private fun Album.withCover(file: File?): Album =

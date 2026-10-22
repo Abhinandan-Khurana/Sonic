@@ -86,6 +86,21 @@ object Fixtures {
 }
 
 /** Serves recorded responses instead of the network, and counts calls. */
+/** A FLAC with its PICTURE blocks removed; STREAMINFO, comments and audio frames stay as they are. */
+fun flacWithoutPicture(bytes: ByteArray): ByteArray {
+    val blocks = mutableListOf<ByteArray>()
+    var pos = 4
+    while (true) {
+        val header = bytes[pos].toInt() and 255
+        val length = ((bytes[pos + 1].toInt() and 255) shl 16) or ((bytes[pos + 2].toInt() and 255) shl 8) or (bytes[pos + 3].toInt() and 255)
+        if (header and 127 != 6) blocks += bytes.copyOfRange(pos, pos + 4 + length).also { it[0] = (header and 127).toByte() }
+        pos += 4 + length
+        if (header and 128 != 0) break
+    }
+    blocks.last()[0] = (blocks.last()[0].toInt() or 128).toByte()
+    return bytes.copyOfRange(0, 4) + blocks.reduce { a, b -> a + b } + bytes.copyOfRange(pos, bytes.size)
+}
+
 class FakeHttp(private val routes: Map<String, () -> ByteArray?>) : Http {
     val calls = CopyOnWriteArrayList<String>()
 

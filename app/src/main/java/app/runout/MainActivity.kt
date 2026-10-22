@@ -261,7 +261,8 @@ class MainActivity : ComponentActivity() {
                     override fun setOnboardingStep(value: Int) { graph.soulseek.preferences.setStep(value) }
                     override suspend fun coverFor(item: ShelfItem): String? {
                         val id = "shelf-" + app.runout.library.LibraryScanner.stableId(item.artist.lowercase() + "|" + item.title.lowercase())
-                        return (graph.artwork.cachedFile(id) ?: graph.artwork.lookupOnline(id, item.artist, item.title))?.absolutePath
+                        val online = graph.library.coverLookupEnabled.value
+                        return (graph.artwork.cachedFile(id) ?: if (online) graph.artwork.lookupOnline(id, item.artist, item.title) else null)?.absolutePath
                     }
                 }
             }

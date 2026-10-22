@@ -65,6 +65,8 @@ class SoulseekRepository(
     private val artwork: ArtworkRepository? = null,
     private val retryDelaysMs: List<Long> = SoulseekPolicy.RETRY_DELAYS_MS,
     private val seekTimeoutMs: Long = SEEK_TIMEOUT_MS,
+    /** Settings › find missing covers online: off unless you opt in. */
+    private val coverLookup: () -> Boolean = { false },
 ) {
     private val db = database ?: Room.databaseBuilder(context.applicationContext, SoulseekDatabase::class.java, "soulseek.db").build()
     private val dao = db.soulseek()
@@ -964,7 +966,7 @@ class SoulseekRepository(
         catch (e: Throwable) { Result.failure(e) }
     }
     private suspend fun rememberCover(album: Album): Album {
-        if (album.coverPath != null || album.artist.isBlank() || album.title.isBlank()) return album
+        if (album.coverPath != null || album.artist.isBlank() || album.title.isBlank() || !coverLookup()) return album
         val file = runCatching { artwork?.lookupOnline(album.id, album.artist, album.title) }.getOrNull() ?: return album
         return album.copy(coverPath = file.absolutePath)
     }

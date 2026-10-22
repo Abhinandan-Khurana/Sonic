@@ -35,13 +35,16 @@ class SoulseekRepositoryTest {
     private val transports = CopyOnWriteArrayList<FakeTransport>()
     private val transport get() = transports.last()
     private var opens = 0
+    private val coverHttp = FakeHttp(mapOf("musicbrainz" to { "{\"release-groups\":[]}".toByteArray() }))
+    @Volatile private var coversOnline = false
     private val flac get() = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
 
     @Before fun setup() {
         db = Room.inMemoryDatabaseBuilder(Fixtures.context, SoulseekDatabase::class.java).allowMainThreadQueries().build()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         repo = SoulseekRepository(Fixtures.context, scope, { opens++; FakeTransport().also { transports += it } }, db,
-            retryDelaysMs = listOf(150L, 150L, 150L), seekTimeoutMs = 3_000L)
+            retryDelaysMs = listOf(150L, 150L, 150L), seekTimeoutMs = 3_000L,
+            artwork = app.runout.library.ArtworkRepository(Fixtures.context, http = coverHttp), coverLookup = { coversOnline })
     }
     @After fun teardown() = runBlocking {
         repo.logout().join()
@@ -374,6 +377,26 @@ class SoulseekRepositoryTest {
         await("listed") { repo.transfers.value.size == 3 }
         repo.removeFailed().join()
         await("failures cleared") { repo.transfers.value.map { it.id } == listOf("done") }
+    }
+
+    @Test fun `a download without a cover asks MusicBrainz only when online covers are on`() = runBlocking {
+        login(); val folder = destination()
+        val bare = flacWithoutPicture(Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac"))
+        transport.onCommand = { command ->
+            if (command.optString("op") == "download") {
+                val name = command.getString("path").replace('\\', '/').substringAfterLast('/')
+                val stage = File(command.getString("localDirectory"), name).apply { parentFile!!.mkdirs(); writeBytes(bare) }
+                transport.emit(JSONObject().put("type", "transfer").put("id", command.getString("id")).put("state", "completed")
+                    .put("bytes", stage.length()).put("path", stage.absolutePath).put("queuePosition", JSONObject.NULL).put("error", JSONObject.NULL))
+            }
+        }
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01 Opening.flac", bare.size.toLong())).join()
+        await("published without asking anyone") { repo.downloadAlbums.value.singleOrNull()?.tracks?.size == 1 }
+        assertTrue(coverHttp.calls.toString(), coverHttp.calls.isEmpty())
+        coversOnline = true
+        repo.download(SoulseekSearchResult("zoe", "Shares\\Night Drive\\01 Opening.flac", bare.size.toLong())).join()
+        await("asked once it's on") { coverHttp.calls.any { "musicbrainz" in it } }
+        assertTrue(folder.walkTopDown().any { it.isFile && it.name.endsWith(".flac") })
     }
 
     private fun sharedFiles() = transport.commands.filter { it.optString("op") == "shares" }.map { it.getJSONArray("files").length() }

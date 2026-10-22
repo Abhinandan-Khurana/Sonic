@@ -75,7 +75,7 @@ class AppGraph(app: Application) {
     val social = SocialRepository(app)
     val share = ShareRepository(app, social)
     val pressing = PressingRepository(app)
-    val soulseek = SoulseekRepository(app, scope, artwork = artwork)
+    val soulseek = SoulseekRepository(app, scope, artwork = artwork, coverLookup = { library.coverLookupEnabled.value })
     val drops = DropsRepository(app, http, canDownload = soulseek::canDownload, publishDownload = soulseek::publishArchiveDownload)
 
     /** One crate: your folder, records friends sent, Friday Drops you claimed and your own pressings. */
