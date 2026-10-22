@@ -47,13 +47,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.ImageShader
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
@@ -560,41 +553,11 @@ private fun ClaimLights(left: Int, onHelp: () -> Unit) {
     }
 }
 
-/** The drop tile's pastel steel: a cool light grey, darker at the corners and lit across the middle. */
-private val STEEL_BASE = Color(0xFFE1E4E8)
-private val STEEL_SHADE = Color(0xFFCDD2D8)
-private val STEEL_LIGHT = Color(0xFFF3F4F6)
-
-/**
- * Fine horizontal brushing and grain, as a small tile that repeats: each row a little lighter or
- * darker than the next, each pixel a speck of light or shadow. Built once, from a fixed seed.
- */
-private val steelGrain: ImageBitmap by lazy {
-    val n = 192
-    val random = java.util.Random(1977)
-    // Brushing: a smoothed random brightness for each row.
-    val rows = FloatArray(n) { random.nextGaussian().toFloat() }
-    val brushed = FloatArray(n) { y -> (rows[y] * 2f + rows[(y + 1) % n] + rows[(y + n - 1) % n]) / 4f }
-    val pixels = IntArray(n * n) { i ->
-        val v = brushed[i / n] * 0.55f + random.nextGaussian().toFloat() * 0.45f
-        val alpha = (kotlin.math.abs(v) * 22f).toInt().coerceIn(0, 60)
-        if (v > 0) android.graphics.Color.argb(alpha, 255, 255, 255) else android.graphics.Color.argb(alpha, 0, 0, 0)
-    }
-    android.graphics.Bitmap.createBitmap(pixels, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
-}
-
-private fun DrawScope.drawBrushedSteel() {
-    drawRect(STEEL_BASE)
-    // The metal's sheen: shade at the corners, a soft band of light across the middle.
-    drawRect(Brush.linearGradient(0f to STEEL_SHADE, 0.42f to STEEL_LIGHT, 0.58f to STEEL_BASE, 1f to STEEL_SHADE, start = Offset.Zero, end = Offset(size.width, size.height)))
-    drawRect(ShaderBrush(ImageShader(steelGrain, TileMode.Repeated, TileMode.Repeated)))
-}
-
 /** A licence for a tile: "cc by", without its version. */
 private fun shortLicence(label: String) = label.lowercase().replace(Regex(" \\d+(\\.\\d+)*$"), "")
 
 /**
- * One drop on the shelf: a brushed pastel-steel tile with grain, in a 2 dp ink outline, 16 dp in and 11 between parts: the sleeve, the number and
+ * One drop on the shelf: a white tile in a 2 dp ink outline, the sleeve centred, 16 dp in and 11 between parts: the sleeve, the number and
  * licence (blue), the 10/400 title and grey artist · year, and what you can do (green once it's in
  * your crate, the claiming percentage while it downloads, "claim →" otherwise).
  */
@@ -608,13 +571,13 @@ private fun DropSleeve(number: Int, item: DropItem, isClaimed: Boolean, progress
         modifier
             .testTag("drop:${item.identifier}")
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onOpen() }
-            .drawBehind { drawBrushedSteel() }
+            .background(Room.Background)
             .border(2.dp, Room.Ink)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(11.dp),
     ) {
         // 140 of the tile's 151 dp on the 412 dp board, square.
-        DropCover(number, item, cover, Modifier.fillMaxWidth(140f / 151f).aspectRatio(1f)) {
+        DropCover(number, item, cover, Modifier.fillMaxWidth(140f / 151f).aspectRatio(1f).align(Alignment.CenterHorizontally)) {
             if (progress != null) ProgressLine(progress, Modifier.align(Alignment.BottomCenter).padding(6.dp))
         }
         Row(Modifier.fillMaxWidth()) {
