@@ -1,6 +1,7 @@
 package app.runout
 
 import app.runout.ui.LookPreferences
+import app.runout.update.Updates
 import android.app.Application
 import android.net.ConnectivityManager
 import android.net.Network
@@ -85,6 +86,7 @@ class AppGraph(app: Application) {
     val sfx = VinylSfx(scope)
     val deck = Deck(app, sfx, scope, sound)
     val look = LookPreferences(app)
+    val updates = Updates(app, http, BuildConfig.VERSION_NAME)
     val social = SocialRepository(app)
     val share = ShareRepository(app, social)
     val pressing = PressingRepository(app)

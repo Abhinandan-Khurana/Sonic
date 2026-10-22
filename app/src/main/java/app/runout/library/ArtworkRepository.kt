@@ -139,7 +139,7 @@ class ArtworkRepository(
     }.getOrNull()
 
     companion object {
-        const val USER_AGENT = app.runout.net.DefaultHttp.USER_AGENT
+        val USER_AGENT = app.runout.net.DefaultHttp.USER_AGENT
         private const val MB_GAP_MS = 1100L
         private const val MISS_TTL_MS = 7L * 24 * 60 * 60 * 1000
         private const val MIN_SCORE = 90

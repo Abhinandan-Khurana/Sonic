@@ -1,5 +1,8 @@
 package app.runout.ui.settings
 
+import androidx.compose.ui.platform.LocalContext
+import app.runout.BuildConfig
+import app.runout.update.UpdateState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -98,6 +101,11 @@ private val HelpIntro = TeHelp("help · flags", "intro on launch", listOf(
     "tap anywhere to skip it. it plays in light or dark, on the deck you're using.",
 ))
 
+private val HelpUpdates = TeHelp("help · flags", "updates", listOf(
+    "sonic asks github for the project's newest release, only when you tap the key. nothing about you or your music is sent.",
+    "development builds count, since that's how sonic ships for now. the download opens in your browser; android installs it over this one only if it's signed by the same people.",
+))
+
 private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
     "puts a moon in the room's top bar. tap it to stop the music in 15 to 50 minutes.",
     "when the time is up the music fades out over a few seconds and the needle lifts.",
@@ -105,7 +113,8 @@ private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
 
 /**
  * Settings › Flags: 01 the deck's habits, each a switch; 02 the theme (the phone's, or light or
- * dark pinned); 03 which RG-1 stands in the room (the theme's, or one of the three pinned).
+ * dark pinned); 03 which RG-1 stands in the room (the theme's, or one of the three pinned); 04 the
+ * version and a check of the GitHub releases for a newer one.
  */
 @Composable
 internal fun FlagsPage(state: RoomState, actions: RoomActions) {
@@ -128,6 +137,61 @@ internal fun FlagsPage(state: RoomState, actions: RoomActions) {
             BasicText("theme puts the dark deck in a dark room and white / teal in a light one.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
             Segments(DeckSkin.entries, state.look.deck, { it.label }, tag = { "deck:${it.name}" }, onSelect = actions::setDeckSkin)
         }
+        PageSection("04 updates") {
+            UpdateCheck(state.update, actions::checkForUpdates) { help = HelpUpdates }
+        }
     }
     TeHelpSheet(help) { help = null }
+}
+
+/**
+ * Settings › Flags › 04 updates: the version on the phone and what the last check found, then the
+ * key that asks GitHub. A newer release shows as a grey tile with an orange lamp, its first lines,
+ * the download (opened in the browser) and its notes.
+ */
+@Composable
+private fun UpdateCheck(update: UpdateState, onCheck: () -> Unit, onHelp: () -> Unit) {
+    val context = LocalContext.current
+    fun open(url: String) { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } }
+    Row(Modifier.fillMaxWidth().hairlineTop().padding(top = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        BasicText("sonic ${BuildConfig.VERSION_NAME}", style = Room.Text)
+        HelpSquare("updates", onHelp)
+        Spacer(Modifier.weight(1f))
+        if (update == UpdateState.Checking) DotVinylSpinner(Modifier.size(18.dp), description = "Checking for updates")
+    }
+    BasicText(
+        when (update) {
+            UpdateState.Idle -> "not checked yet."
+            UpdateState.Checking -> "asking github…"
+            is UpdateState.UpToDate -> "up to date. checked ${checkedWhen(update.at)}."
+            is UpdateState.Available -> "a newer build is out."
+            is UpdateState.Failed -> update.reason
+        },
+        style = Room.Label.copy(color = if (update is UpdateState.Failed) Room.Danger else Room.Body, lineHeight = 15.sp),
+        modifier = Modifier.testTag("update-status"),
+    )
+    if (update is UpdateState.Available) {
+        val r = update.release
+        Column(Modifier.fillMaxWidth().background(Room.Surface).padding(16.dp).testTag("update-available"), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(8.dp).background(Room.Signal))
+                BasicText("sonic ${r.version}" + if (r.development) " · development build" else "", style = Room.Strong)
+            }
+            if (r.notes.isNotBlank()) BasicText(r.notes.lowercase(), style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp), maxLines = 4, overflow = TextOverflow.Ellipsis)
+            r.apk?.let { apk ->
+                TeButton("download" + (r.apkBytes?.let { " · ${it / 1_000_000} mb" } ?: ""), { open(apk) }, Modifier.fillMaxWidth().testTag("update-download"))
+            }
+            TeButton("release notes", { open(r.page) }, Modifier.fillMaxWidth().testTag("update-notes"), kind = KeyKind.OUTLINE)
+        }
+    }
+    TeButton("check for updates", onCheck, Modifier.fillMaxWidth().testTag("update-check"), kind = KeyKind.OUTLINE, enabled = update != UpdateState.Checking)
+}
+
+/** "today at 14:05", or the date for an older check. */
+private fun checkedWhen(at: Long): String {
+    val then = java.util.Calendar.getInstance().apply { timeInMillis = at }
+    val now = java.util.Calendar.getInstance()
+    val sameDay = then.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR) && then.get(java.util.Calendar.DAY_OF_YEAR) == now.get(java.util.Calendar.DAY_OF_YEAR)
+    return if (sameDay) "today at " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date(at))
+    else java.text.SimpleDateFormat("d MMM", java.util.Locale.ENGLISH).format(java.util.Date(at)).lowercase()
 }
