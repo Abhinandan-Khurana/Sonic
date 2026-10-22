@@ -43,7 +43,7 @@ class RunoutApp : Application() {
         super.onCreate()
         graph = AppGraph(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) { graph.soulseek.onForegroundChanged(true) }
+            override fun onStart(owner: LifecycleOwner) { graph.soulseek.onForegroundChanged(true); graph.drops.checkWeek() }
             override fun onStop(owner: LifecycleOwner) { graph.soulseek.onForegroundChanged(false) }
         })
         val connectivity = getSystemService(ConnectivityManager::class.java)

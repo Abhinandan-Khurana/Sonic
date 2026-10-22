@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -81,6 +82,35 @@ class FridayDropsTest {
         assertTrue(DropsRepository.searchUrl(3).contains("page=3"))
         assertTrue(DropsRepository.searchUrl(3).contains("creativecommons"))
         assertTrue("drops are picked from FLAC albums only", DropsRepository.searchUrl(3).contains("format%3Aflac"))
+    }
+
+    @Test
+    fun `from 30 October the ten don't depend on how the archive orders its page`() {
+        val pool = (1..100).map { DropItem("id$it", "Album $it", "Artist", 2020, null) }
+        val week = DropsRepository.STABLE_FROM
+        val a = DropsRepository.pickStable(pool, week)
+        assertEquals(10, a.map { it.identifier }.toSet().size)
+        assertEquals("any order of the same page", a.toSet(), DropsRepository.pickStable(pool.shuffled(java.util.Random(4)), week).toSet())
+        assertEquals(a, DropsRepository.pickStable(pool.reversed() + pool.take(7), week))
+        // An album that wasn't one of the ten leaving the page changes nothing.
+        val outsider = pool.first { it !in a }
+        assertEquals(a, DropsRepository.pickStable(pool - outsider, week))
+        assertNotEquals(a, DropsRepository.pickStable(pool, week + 1))
+        // The archive's oldest-first order, which new uploads don't reshuffle; earlier weeks keep theirs.
+        assertTrue(DropsRepository.searchUrl(DropsRepository.pageFor(week), stable = true).contains("publicdate+asc"))
+        assertTrue(DropsRepository.searchUrl(DropsRepository.pageFor(week - 1)).contains("downloads+desc"))
+        assertEquals(DropsRepository.pick(pool, DropsRepository.seed(week - 1)), DropsRepository.pickFor(week - 1, pool))
+        assertTrue(DropsRepository.pageFor(week + 7) in 1..DropsRepository.STABLE_PAGES.toInt())
+    }
+
+    @Test
+    fun `the drops tab marks a week until its drop is opened`() = runBlocking {
+        val drops = repo(http())
+        assertTrue(drops.newDrop.value)
+        drops.refresh()
+        assertFalse(drops.newDrop.value)
+        assertFalse("seen stays seen", repo(http()).newDrop.value)
+        assertTrue("next Friday is new", repo(http(), date = "2026-10-23").newDrop.value)
     }
 
     @Test

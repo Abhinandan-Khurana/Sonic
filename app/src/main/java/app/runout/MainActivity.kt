@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
             val friends by graph.social.friends.collectAsStateWithLifecycle()
             val drops by graph.drops.state.collectAsStateWithLifecycle()
             val claimed by graph.drops.claimed.collectAsStateWithLifecycle()
+            val newDrop by graph.drops.newDrop.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
             val note by message.collectAsStateWithLifecycle()
             val session by graph.soulseek.session.collectAsStateWithLifecycle()
@@ -310,6 +311,7 @@ class MainActivity : ComponentActivity() {
                     coverLookupEnabled = coverLookupEnabled,
                     coverLookupNoticePending = coverLookupNoticePending,
                     turtleMode = turtleMode,
+                    newDrop = newDrop,
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,
                     soulseekWaitingForWifi = waitingForWifi,

@@ -473,7 +473,9 @@ fun DropsPanel(
     signedIn: Boolean = false,
     onAccount: () -> Unit = {},
 ) {
-    LaunchedEffect(drops is DropState.Idle) { if (drops is DropState.Idle) actions.refreshDrops() }
+    // Every time Drops opens: this week's ten come from the phone once seen, and a new Friday
+    // while the app stayed open brings the new week instead of last week's.
+    LaunchedEffect(Unit) { actions.refreshDrops() }
     val left = (DropsRepository.CLAIMS_PER_WEEK - claimed.size).coerceAtLeast(0)
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var help by remember { mutableStateOf<TeHelp?>(null) }

@@ -114,7 +114,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import app.runout.drops.DropItem
 import app.runout.drops.DropState
-import app.runout.drops.DropsRepository
 import app.runout.library.ScanReport
 import app.runout.library.ScanState
 import app.runout.model.Album
@@ -185,6 +184,8 @@ data class RoomState(
     val coverLookupEnabled: Boolean = false,
     val coverLookupNoticePending: Boolean = false,
     val turtleMode: Boolean = false,
+    /** This week's Friday Drop hasn't been opened yet. */
+    val newDrop: Boolean = false,
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -1285,7 +1286,7 @@ internal val NAV_HEIGHT = 62.dp
 
 /** A new Friday Drop, or an unread message: an orange square on that place's cell. */
 internal fun navBadges(state: RoomState): Set<Panel> = buildSet {
-    if (state.drops is DropState.Ready && state.claimed.size < DropsRepository.CLAIMS_PER_WEEK) add(Panel.DROPS)
+    if (state.newDrop) add(Panel.DROPS)
     if (state.soulseekConversations.any { it.unread > 0 }) add(Panel.FRIENDS)
 }
 
