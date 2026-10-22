@@ -1,5 +1,16 @@
 package app.runout.ui
 
+import app.runout.ui.deck.RecordMaps
+import app.runout.ui.deck.DiscRenderer
+import app.runout.ui.deck.DeckRenderer
+import app.runout.ui.deck.DeckModel
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.viewinterop.AndroidView
+import android.view.TextureView
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -284,6 +295,8 @@ fun RoomScreen(
         if (state.folderPreview != null && panel == null) panel = Panel.DIG
     }
     val disc = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    // The deck's camera and position, so a pulled record can be the 3D record in your hand.
+    val deckLink = remember { DeckLink() }
     // The room's entrance after onboarding: 1 is fully in.
     val entry = remember { Animatable(1f) }
     // How high the disc is held (its scale), and how far it has turned since it left the sleeve.
@@ -350,6 +363,7 @@ fun RoomScreen(
                     actions = actions,
                     modifier = m,
                     contentAlignment = alignment,
+                    link = deckLink,
                 )
             }
             val crate = @Composable { m: Modifier ->
@@ -421,12 +435,50 @@ fun RoomScreen(
             val gaps = remember(pulled.id) { SideSplitter.split(pulled.tracks).firstOrNull()?.trackBoundaries() ?: emptyList() }
 
             val baseD = s.rect.width * 0.94f
+            // The 3D record in hand, once its first frames are up; until then (and with no GPU) the
+            // drawn disc below stands in, and it always takes the touches.
+            val use3d = DeckRenderer.available && deckLink.camera != null
+            var discRenderer by remember(pulled.id) { mutableStateOf<DiscRenderer?>(null) }
+            var disc3dShown by remember(pulled.id) { mutableStateOf(false) }
+            val use3dNow by rememberUpdatedState(use3d)
             val pc = platterCenter
             val dist = pc?.let { (disc.value + rootOrigin - it).getDistance() } ?: Float.MAX_VALUE
             val proximity = if (pc == null) 0f else (1f - dist / (platterRadius * 3.2f)).coerceIn(0f, 1f)
             val d = baseD + (platterRadius * 2f - baseD) * proximity
             val dDp = with(density) { d.toDp() }
             val restPos = s.rect.center - rootOrigin + pullOut(s)
+
+            if (use3d) {
+                AndroidView(
+                    factory = { ctx ->
+                        TextureView(ctx).also { tv ->
+                            runCatching { DiscRenderer(ctx, tv).also { it.resume() } }
+                                .onSuccess { r -> r.onReady = { disc3dShown = true }; discRenderer = r }
+                        }
+                    },
+                    onRelease = { discRenderer?.destroy(); discRenderer = null },
+                    modifier = Modifier.fillMaxSize().zIndex(4.9f),
+                )
+                LaunchedEffect(discRenderer, cover) {
+                    val r = discRenderer ?: return@LaunchedEffect
+                    val face = recordFace(pulled, cover, gaps, "A", measurer)
+                    val maps = withContext(Dispatchers.Default) { RecordMaps.normal(gaps) to RecordMaps.roughness(gaps) }
+                    r.setRecord(face.asAndroidBitmap(), maps.first, maps.second)
+                }
+                LaunchedEffect(discRenderer) {
+                    val r = discRenderer ?: return@LaunchedEffect
+                    snapshotFlow {
+                        val cam = deckLink.camera
+                        val target = platterCenter
+                        val near = if (target == null) 0f else (1f - (disc.value + rootOrigin - target).getDistance() / (platterRadius * 3.2f)).coerceIn(0f, 1f)
+                        val diameter = baseD + (platterRadius * 2f - baseD) * near
+                        if (cam == null) null else {
+                            r.setDeckCamera(cam, deckLink.origin - rootOrigin)
+                            DeckModel.heldDiscTransform(cam, disc.value + rootOrigin - deckLink.origin, diameter * lift.value / 2f, near, spin.value)
+                        }
+                    }.collect { m -> if (m != null) r.setTransform(m) }
+                }
+            }
 
             Canvas(
                 Modifier
@@ -436,7 +488,7 @@ fun RoomScreen(
                     .testTag("pulled-disc")
                     .graphicsLayer {
                         // Held up off the crate: a deeper shadow and a touch larger; squashed for a beat on landing.
-                        shadowElevation = if (dragging) 34f else 8f
+                        shadowElevation = if (disc3dShown) 0f else if (dragging) 34f else 8f
                         scaleX = lift.value
                         scaleY = lift.value
                         shape = androidx.compose.foundation.shape.CircleShape
@@ -463,6 +515,9 @@ fun RoomScreen(
                                 scope.launch {
                                     if (onPlatter && target != null) {
                                         launch { lift.animateTo(1f, tween(180)) }
+                                        // Turn to where the platter has stopped, so the 3D record lands lined up.
+                                        val p = deckLink.platterDegrees
+                                        launch { spin.animateTo(p + 360f * kotlin.math.round((spin.value - p) / 360f), tween(200)) }
                                         disc.animateTo(target - rootOrigin, tween(200, easing = FastOutSlowInEasing))
                                         // The thud: a short squash as it seats on the spindle.
                                         landed()
@@ -470,6 +525,8 @@ fun RoomScreen(
                                         lift.animateTo(0.95f, tween(70))
                                         lift.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 700f))
                                         actions.load(pulled)
+                                        // Hold the 3D record until the deck's own is drawn under it.
+                                        if (use3dNow) delay(HANDOVER_MS)
                                         pulledId = null
                                     } else {
                                         launch { lift.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 400f)) }
@@ -485,7 +542,7 @@ fun RoomScreen(
                         )
                     },
             ) {
-                drawRecord(
+                if (!disc3dShown) drawRecord(
                     center = Offset(size.width / 2f, size.height / 2f),
                     radius = size.minDimension / 2f,
                     rotation = spin.value,
@@ -509,7 +566,14 @@ fun RoomScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onLongClick = { menuFor = pulled.id },
-                        onClick = { pulledId = null },
+                        // Put back: the disc slides down into its sleeve before the sleeve goes back.
+                        onClick = {
+                            scope.launch {
+                                launch { lift.animateTo(1f, tween(160)) }
+                                disc.animateTo(s.rect.center - rootOrigin, tween(280, easing = FastOutSlowInEasing))
+                                pulledId = null
+                            }
+                        },
                     ),
             )
         }
@@ -947,3 +1011,6 @@ internal fun TextAction(text: String, onClick: () -> Unit, tag: String = "action
             .padding(horizontal = 2.dp),
     )
 }
+
+/** How long the 3D record stays over the platter after landing, until the deck draws its own. */
+private const val HANDOVER_MS = 350L

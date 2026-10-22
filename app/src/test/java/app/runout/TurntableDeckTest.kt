@@ -186,6 +186,23 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `a record in hand lands exactly as the record on the platter`() {
+        val cam = DeckCamera(1080f, 628f)
+        val centre = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
+        for (degrees in listOf(0f, 42f, 217.5f)) {
+            val held = DeckModel.heldDiscTransform(cam, centre, radiusPx = 180f, landing = 1f, spinDegrees = degrees)
+            val onPlatter = DeckModel.recordTransform(degrees)
+            for (i in held.indices) assertEquals("element $i at $degrees°", onPlatter[i], held[i], 2e-3f)
+        }
+        // Held anywhere on screen, its centre stays right under the finger.
+        val finger = centre + androidx.compose.ui.geometry.Offset(60f, 900f)
+        val inHand = DeckModel.heldDiscTransform(cam, finger, 180f, 0f, 0f)
+        val seen = cam.project(V3(inHand[12], inHand[13], inHand[14]))
+        assertEquals(finger.x, seen.x, 0.5f)
+        assertEquals(finger.y, seen.y, 0.5f)
+    }
+
+    @Test
     fun `the LED windows show the track, its code and the time`() {
         assertEquals(DeckLeds("DROP A RECORD", null, null), ledLines(DeckState()))
         deck.load(album())

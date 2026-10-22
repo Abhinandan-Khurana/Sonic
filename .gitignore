@@ -47,3 +47,6 @@ node_modules/
 
 # Python bytecode (Blender scripts)
 __pycache__/
+
+# Licensed fonts used only by the pen.dev design file (not redistributed)
+docs/design/fonts/

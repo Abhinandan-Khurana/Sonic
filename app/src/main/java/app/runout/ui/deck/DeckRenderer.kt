@@ -12,11 +12,8 @@ import android.view.Surface
 import android.view.TextureView
 import com.google.android.filament.Camera
 import com.google.android.filament.ColorGrading
-import com.google.android.filament.Engine
 import com.google.android.filament.EntityManager
 import com.google.android.filament.Filament
-import com.google.android.filament.IndirectLight
-import com.google.android.filament.LightManager
 import com.google.android.filament.MaterialInstance
 import com.google.android.filament.Renderer
 import com.google.android.filament.Scene
@@ -29,13 +26,8 @@ import com.google.android.filament.Viewport
 import com.google.android.filament.android.DisplayHelper
 import com.google.android.filament.android.TextureHelper
 import com.google.android.filament.android.UiHelper
-import com.google.android.filament.gltfio.AssetLoader
 import com.google.android.filament.gltfio.FilamentAsset
 import com.google.android.filament.gltfio.Gltfio
-import com.google.android.filament.gltfio.ResourceLoader
-import com.google.android.filament.gltfio.UbershaderProvider
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * Draws the 3D turntable into a [TextureView] with Filament, over a transparent background so the
@@ -43,7 +35,7 @@ import java.nio.ByteOrder
  * only when something changed. Everything here runs on the main thread.
  */
 class DeckRenderer(private val context: Context, textureView: TextureView) : Choreographer.FrameCallback {
-    private val engine = Engine.create()
+    private val engine = FilamentShared.engine
     private val renderer: Renderer = engine.createRenderer()
     private val scene: Scene = engine.createScene()
     private val view: View = engine.createView()
@@ -53,11 +45,8 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private val displayHelper = DisplayHelper(context)
     private var swapChain: SwapChain? = null
 
-    private val materials = UbershaderProvider(engine)
-    private val loader = AssetLoader(engine, materials, EntityManager.get())
-    private val resources = ResourceLoader(engine)
-    private val deck: FilamentAsset = load("deck/turntable.glb")
-    private val record: FilamentAsset = load("deck/record.glb")
+    private val deck: FilamentAsset = FilamentShared.load(context, "deck/turntable.glb")
+    private val record: FilamentAsset = FilamentShared.load(context, "deck/record.glb")
     private val platter = deck.getFirstEntityByName(DeckModel.PLATTER)
     private val tonearm = deck.getFirstEntityByName(DeckModel.TONEARM)
     private val keyEntities = DeckModel.keys.associateWith { deck.getFirstEntityByName(it.node) }
@@ -65,10 +54,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private val strip = materialOf(DeckModel.LED_STRIP)
     /** The title and time windows share one material in the model; gltfio may still split it. */
     private val screens = listOfNotNull(materialOf(DeckModel.SCREEN), materialOf(DeckModel.SCREEN_TIME)).distinct()
-    private val sun = EntityManager.get().create()
-    private val fill = EntityManager.get().create()
-    private val glint = EntityManager.get().create()
-    private val ambient: IndirectLight
+    private val lights: StudioLights
     private val sampler = TextureSampler(TextureSampler.MinFilter.LINEAR_MIPMAP_LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE)
     private val flatSampler = TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE)
     private var faceTexture: Texture? = null
@@ -112,33 +98,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
             clearColor = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
         }
 
-        LightManager.Builder(LightManager.Type.SUN)
-            .color(1f, 0.98f, 0.95f)
-            .intensity(SUN)
-            .direction(0.35f, -1f, -0.45f)
-            .sunAngularRadius(2.4f)
-            .castShadows(true)
-            .build(engine, sun)
-        LightManager.Builder(LightManager.Type.DIRECTIONAL)
-            .color(0.92f, 0.95f, 1f)
-            .intensity(FILL)
-            .direction(-0.6f, -0.5f, -0.2f)
-            .build(engine, fill)
-        // Low from behind the deck, so its mirror image off the record comes back to the camera:
-        // the grooves glint and the smooth bands between tracks show. Barely lights anything else.
-        LightManager.Builder(LightManager.Type.DIRECTIONAL)
-            .color(1f, 1f, 1f)
-            .intensity(GLINT)
-            .direction(0.1f, -0.9f, 0.42f)
-            .build(engine, glint)
-        ambient = IndirectLight.Builder()
-            .irradiance(1, floatArrayOf(1f, 1f, 1f))
-            .intensity(AMBIENT)
-            .build(engine)
-        scene.indirectLight = ambient
-        scene.addEntity(sun)
-        scene.addEntity(fill)
-        scene.addEntity(glint)
+        lights = StudioLights(engine, scene, shadows = true)
 
         scene.addEntities(deck.entities)
         val rm = engine.renderableManager
@@ -349,7 +309,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
             if (recordShown) { scene.removeEntities(record.entities); recordShown = false; dirty = true }
             return
         }
-        val t = mipmapped(face, srgb = true)
+        val t = FilamentShared.mipmapped(face, srgb = true)
         record.instance.materialInstances.forEach { it.setParameter("baseColorMap", t, sampler) }
         faceTexture?.let { engine.destroyTexture(it) }
         faceTexture = t
@@ -359,8 +319,8 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
 
     /** The record's grooves and glossy bands between tracks, from [RecordMaps]. */
     fun setRecordSurface(normal: Bitmap, roughness: Bitmap) {
-        val n = mipmapped(normal, srgb = false)
-        val r = mipmapped(roughness, srgb = false)
+        val n = FilamentShared.mipmapped(normal, srgb = false)
+        val r = FilamentShared.mipmapped(roughness, srgb = false)
         record.instance.materialInstances.forEach {
             if (it.material.hasParameter("normalMap")) it.setParameter("normalMap", n, sampler)
             if (it.material.hasParameter("normalScale")) it.setParameter("normalScale", 1f)
@@ -369,21 +329,6 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         surfaceTextures.forEach { engine.destroyTexture(it) }
         surfaceTextures = listOf(n, r)
         dirty = true
-    }
-
-    private fun mipmapped(b: Bitmap, srgb: Boolean): Texture {
-        val levels = 1 + (31 - Integer.numberOfLeadingZeros(maxOf(b.width, b.height)))
-        val texture = Texture.Builder()
-            .width(b.width)
-            .height(b.height)
-            .levels(levels)
-            .sampler(Texture.Sampler.SAMPLER_2D)
-            .format(if (srgb) Texture.InternalFormat.SRGB8_A8 else Texture.InternalFormat.RGBA8)
-            .usage(Texture.Usage.DEFAULT or Texture.Usage.GEN_MIPMAPPABLE)
-            .build(engine)
-        TextureHelper.setBitmap(engine, texture, 0, b)
-        texture.generateMipmaps(engine)
-        return texture
     }
 
     fun resume() {
@@ -446,15 +391,6 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         .format(Texture.InternalFormat.SRGB8_A8)
         .build(engine)
 
-    private fun load(path: String): FilamentAsset {
-        val bytes = context.assets.open(path).use { it.readBytes() }
-        val buffer = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).put(bytes).also { it.flip() }
-        val asset = loader.createAsset(buffer) ?: error("Couldn't read $path")
-        resources.loadResources(asset)
-        asset.releaseSourceData()
-        return asset
-    }
-
     fun destroy() {
         pause()
         onFrame = null
@@ -466,22 +402,15 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         surfaceTextures.forEach { engine.destroyTexture(it) }
         engine.destroyTexture(screenTexture)
         engine.destroyTexture(stripTexture)
-        loader.destroyAsset(deck)
-        loader.destroyAsset(record)
-        resources.destroy()
-        materials.destroyMaterials()
-        materials.destroy()
-        loader.destroy()
-        engine.destroyEntity(sun)
-        engine.destroyEntity(fill)
-        engine.destroyEntity(glint)
-        engine.destroyIndirectLight(ambient)
+        FilamentShared.loader.destroyAsset(deck)
+        FilamentShared.loader.destroyAsset(record)
+        lights.destroy()
         engine.destroyRenderer(renderer)
         engine.destroyView(view)
         engine.destroyScene(scene)
         engine.destroyCameraComponent(cameraEntity)
         EntityManager.get().destroy(cameraEntity)
-        engine.destroy()
+        // The engine is shared (FilamentShared) and lives on.
     }
 
     companion object {
@@ -489,13 +418,6 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         private const val WARM_UP_FRAMES = 30
         private const val READY_FRAMES = 4
 
-        // A high key light from the front left, a dimmer fill from the right, a glint from behind
-        // and an even ambient, scaled so they sum to 1 on an upward face (Lambert: Σ light·cos/π
-        // + ambient).
-        private const val SUN = 1.40f
-        private const val FILL = 0.41f
-        private const val GLINT = 0.35f
-        private const val AMBIENT = 0.47f
 
         private val LED_ON = android.graphics.Color.rgb(255, 46, 20)
         private val LED_GHOST = android.graphics.Color.rgb(42, 7, 5)

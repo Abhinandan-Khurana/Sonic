@@ -154,6 +154,54 @@ object DeckModel {
     fun armTransform(angle: Float, drop: Float): FloatArray =
         placeTurned(V3(pivot.x, pivot.y - NEEDLE_DROP * drop.coerceIn(0f, 1f), pivot.z), armYaw(angle))
 
+    /**
+     * The record in your hand, for the screen pixel [px] (in the deck view's pixels, also outside
+     * it) where its centre is, drawn [radiusPx] across. Held, it hangs along the camera ray at the
+     * depth that gives it that size, tilted [HELD_TILT] of the way towards you. As [landing] goes
+     * from 0 to 1 it slides onto the record's plane and lies flat, so at 1, over the platter centre,
+     * it is exactly the record on the platter, turned [spinDegrees] as [recordTransform] turns it.
+     */
+    fun heldDiscTransform(cam: DeckCamera, px: Offset, radiusPx: Float, landing: Float, spinDegrees: Float): FloatArray {
+        val l = landing.coerceIn(0f, 1f)
+        val w = l * l * (3f - 2f * l)
+        val ray = cam.ray(px)
+        val depth = RECORD_R * cam.focalPixels / radiusPx.coerceAtLeast(1f)
+        val held = cam.eye + ray * (depth / ray.dot(cam.viewForward))
+        val flat = cam.onPlane(px, RECORD_Y) ?: held
+        val at = held + (flat - held) * w
+        val up = V3(0f, 1f, 0f)
+        val tilted = (up + (ray * -1f - up) * HELD_TILT).normalized()
+        val normal = (tilted + (up - tilted) * w).normalized()
+        return placeTilted(at, normal, -spinDegrees * PI.toFloat() / 180f)
+    }
+
+    /** How far a held record leans from lying flat towards facing you (0 flat, 1 face-on). */
+    const val HELD_TILT = 0.7f
+
+    /** Translate to [at], tilted so its up axis is [normal], after turning [yaw] about that axis. */
+    private fun placeTilted(at: V3, normal: V3, yaw: Float): FloatArray {
+        // Rodrigues: the rotation taking +y onto the normal (axis y×n), then the turn about +y.
+        val vx = normal.z
+        val vz = -normal.x
+        val c = normal.y
+        val k = if (c > -0.9999f) 1f / (1f + c) else 0f
+        val a00 = 1f - vz * vz * k; val a01 = -vz; val a02 = vx * vz * k
+        val a10 = vz; val a11 = c; val a12 = -vx
+        val a20 = vx * vz * k; val a21 = vx; val a22 = 1f - vx * vx * k
+        val cy = cos(yaw)
+        val sy = sin(yaw)
+        // M = A · Ry, with Ry = [[c, 0, s], [0, 1, 0], [-s, 0, c]] as in placeTurned.
+        val m00 = a00 * cy - a02 * sy; val m01 = a01; val m02 = a00 * sy + a02 * cy
+        val m10 = a10 * cy - a12 * sy; val m11 = a11; val m12 = a10 * sy + a12 * cy
+        val m20 = a20 * cy - a22 * sy; val m21 = a21; val m22 = a20 * sy + a22 * cy
+        return floatArrayOf(
+            m00, m10, m20, 0f,
+            m01, m11, m21, 0f,
+            m02, m12, m22, 0f,
+            at.x, at.y, at.z, 1f,
+        )
+    }
+
     /** A key, pushed down by [pressed] (0 to 1) of its travel. */
     fun keyTransform(key: DeckKey, pressed: Float): FloatArray =
         placeTurned(V3(key.centre.x, key.centre.y - KEY_TRAVEL * pressed.coerceIn(0f, 1f), key.centre.z), 0f)
@@ -227,6 +275,21 @@ class DeckCamera(val width: Float, val height: Float) {
         if (t <= 0f) return null
         return eye + dir * t
     }
+
+    /** The unit view direction through the screen pixel [px], which may lie outside the view. */
+    fun ray(px: Offset): V3 {
+        val nx = px.x / width * 2f - 1f
+        val ny = 1f - px.y / height * 2f
+        return (forward + right * (nx * tanH) + up * (ny * tanV)).normalized()
+    }
+
+    /** Pixels per model unit at a depth of one unit along the view axis. */
+    val focalPixels: Float get() = width / 2f / tanH
+
+    val viewForward: V3 get() = forward
+
+    /** Half the width and half the height of the view's frustum at a distance [d] from the eye. */
+    fun halfExtentsAt(d: Float): Pair<Float, Float> = d * tanH to d * tanV
 
     /** How many pixels one model unit covers across the screen at [p]. */
     fun pixelsPerUnit(p: V3): Float = project(p + V3(0.5f, 0f, 0f)).x - project(p - V3(0.5f, 0f, 0f)).x

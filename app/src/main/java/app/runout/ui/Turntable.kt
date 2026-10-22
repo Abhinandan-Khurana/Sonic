@@ -173,6 +173,17 @@ fun ledLines(deck: DeckState): DeckLeds {
     return DeckLeds(title, deck.trackCode, time)
 }
 
+/**
+ * What the room needs to know about the deck to fly a 3D record onto it: the deck's camera, where
+ * its view sits in the room, and how far the platter has turned (so a landing record lines up).
+ */
+class DeckLink {
+    var camera by mutableStateOf<DeckCamera?>(null)
+    var origin by mutableStateOf(Offset.Zero)
+    /** Read on landing only, so a plain field: no recomposition per frame. */
+    var platterDegrees = 0f
+}
+
 @Composable
 fun Turntable(
     deck: DeckState,
@@ -181,6 +192,7 @@ fun Turntable(
     actions: DeckActions,
     modifier: Modifier = Modifier,
     contentAlignment: Alignment = Alignment.CenterStart,
+    link: DeckLink? = null,
 ) {
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
@@ -208,6 +220,7 @@ fun Turntable(
             }
             omega += (target - omega) * (1f - exp(-dt / tau))
             rotation = (rotation + omega * dt) % 360f
+            link?.platterDegrees = rotation
             // Straight to the renderer: no recomposition per frame.
             renderer?.setPlatter(rotation)
             if (target == 0f && omega < 0.4f) {
@@ -295,6 +308,7 @@ fun Turntable(
                     .onGloballyPositioned { coords ->
                         val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
                         onPlatterPlaced(coords.positionInRoot() + c, cam.pixelsPerUnit(DeckModel.platterCentre) * DeckModel.RECORD_R)
+                        link?.let { it.camera = cam; it.origin = coords.positionInRoot() }
                     },
             ) {
                 if (use3d) {
@@ -480,7 +494,7 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
  * The record's face for the 3D disc: the same drawing as everywhere else in the room (vinyl,
  * grooves, the cover as the label, side and format), painted square so the disc's UVs map it on.
  */
-private fun recordFace(album: Album, cover: ImageBitmap?, boundaries: List<Float>, side: String?, measurer: TextMeasurer): ImageBitmap {
+internal fun recordFace(album: Album, cover: ImageBitmap?, boundaries: List<Float>, side: String?, measurer: TextMeasurer): ImageBitmap {
     val px = 1024
     val image = ImageBitmap(px, px)
     val canvas = androidx.compose.ui.graphics.Canvas(image)
