@@ -461,11 +461,6 @@ fun RoomScreen(
     var swapping by remember { mutableStateOf(false) }
     var shakeX by remember { mutableFloatStateOf(0f) }
     val swapLift = remember { Animatable(0f) }
-    // The record a swap took off the deck, on its way back to the crate.
-    var homing by remember { mutableStateOf<Album?>(null) }
-    var homingFrom by remember { mutableStateOf(Offset.Zero) }
-    var homingTo by remember { mutableStateOf(Offset.Zero) }
-    val homingT = remember { Animatable(0f) }
     // A record the deck couldn't read when it landed.
     var cantPlay by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(state)
@@ -580,22 +575,6 @@ fun RoomScreen(
             spin.snapTo(0f)
             launch { spin.animateTo(42f, tween(760, easing = FastOutSlowInEasing)) }
             disc.animateTo(start + pullOut(s), spring(dampingRatio = 0.58f, stiffness = 260f))
-        }
-
-        // The old record of a swap, sent home: toward its side of the crate, where its sleeve stands.
-        fun flyHome(album: Album, from: Offset) {
-            val sl = slot ?: return
-            val at = current.albums.indexOfFirst { it.id == album.id }
-            val front = current.albums.indexOfFirst { it.id == frontId }
-            val side = if (at in 0 until front) -1f else 1f
-            homing = album
-            homingFrom = from - rootOrigin
-            homingTo = sl.rect.center - rootOrigin + Offset(side * sl.rect.width * 0.85f, 0f)
-            scope.launch {
-                homingT.snapTo(0f)
-                homingT.animateTo(1f, tween(620, easing = FastOutSlowInEasing))
-                homing = null
-            }
         }
 
         // The record in hand slides back down into its sleeve (not while it flies home or swaps).
@@ -795,7 +774,6 @@ fun RoomScreen(
                 dragging = false
                 occupied = false
                 useEject = false
-                val old = current.deck.album
                 val wasPlaying = current.deck.needleDown
                 try {
                     launch { disc.animateTo(target - rootOrigin + Offset(platterRadius * 0.45f, platterRadius * 0.6f), tween(320, easing = FastOutSlowInEasing)) }
@@ -803,8 +781,6 @@ fun RoomScreen(
                     swapLift.snapTo(0f)
                     swapLift.animateTo(1f, tween(420, easing = FastOutLinearInEasing))
                     actions.eject()
-                    // The old record goes home to the crate while the new one comes down.
-                    old?.let { flyHome(it, target) }
                     // The deck lets go of the old record before it drops back to the mat.
                     withTimeoutOrNull(500) { snapshotFlow { current.deck.album }.first { it == null } }
                     delay(50)
@@ -1020,8 +996,6 @@ fun RoomScreen(
             )
         }
 
-        // A record a swap took off the deck, flying back to the crate on a low arc and slipping in.
-        homing?.let { h -> HomingDisc(h, homingFrom, homingTo, platterRadius * 2f, (slot?.rect?.width ?: 0f) * 0.9f) { homingT.value } }
 
         // Long-press a sleeve or a disc: that record's details, with what you can do with it.
         state.albums.firstOrNull { it.id == detailsFor }?.let { record ->
@@ -1829,32 +1803,3 @@ private const val HANDOVER_MS = 350L
 /** How long a record is held over a busy platter before the swap, and how many shakes that is. */
 private const val SWAP_HOLD_MS = 650L
 private const val SWAP_SHAKES = 16
-
-/**
- * The record a swap took off the deck, on its way home: from the platter on a low arc toward its
- * side of the crate, shrinking to a sleeve's size, turning back a little and fading as it slips in.
- */
-@Composable
-private fun HomingDisc(album: Album, from: Offset, to: Offset, fromD: Float, toD: Float, progress: () -> Float) {
-    val cover by rememberCover(album)
-    val look = remember(album.id) { discLookFor(album) }
-    val fallback = remember(album.id) { fallbackColor(album) }
-    Canvas(Modifier.fillMaxSize().zIndex(4.95f).testTag("homing-disc")) {
-        val t = progress()
-        val arc = kotlin.math.sin(t * Math.PI.toFloat()) * fromD * 0.35f
-        val at = Offset(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t - arc)
-        val d = fromD + (toD - fromD) * t
-        val fade = 1f - ((t - 0.7f) / 0.3f).coerceIn(0f, 1f)
-        if (fade > 0f) drawIntoLayerAlpha(fade) {
-            drawRecord(at, d / 2f, -120f * t, look, cover, fallback, emptyList(), null, null)
-        }
-    }
-}
-
-/** Draws [block] at [alpha], as one layer so the record's own parts don't show through each other. */
-private inline fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntoLayerAlpha(alpha: Float, block: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) {
-    val paint = androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha }
-    drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), paint)
-    block()
-    drawContext.canvas.restore()
-}

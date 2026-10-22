@@ -1,5 +1,8 @@
 package app.runout.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.Job
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -156,29 +159,45 @@ fun Crate(
                 .pointerInput(albums.size) {
                     if (albums.isEmpty()) return@pointerInput
                     val tracker = VelocityTracker()
+                    fun clamp(p: Float) = p.coerceIn(-0.45f, albums.lastIndex + 0.45f)
+                    // A record out of its sleeve goes back in first; the crate waits for it, keeping
+                    // the finger's travel, then catches up and digs on.
+                    var putting: Job? = null
+                    var pending = 0f
                     detectHorizontalDragGestures(
                         onDragStart = {
                             tracker.resetTracking()
-                            // A record out of its sleeve goes back in as the crate starts to move.
-                            if (currentPulled != null) scope.launch { currentPutBack() }
+                            pending = 0f
+                            putting = if (currentPulled == null) null else scope.launch {
+                                currentPutBack()
+                                val caught = pending
+                                pending = 0f
+                                if (caught != 0f) pos.animateTo(clamp(pos.value - caught / stepPx), tween(160, easing = FastOutSlowInEasing))
+                            }
                         },
                         onHorizontalDrag = { change, dx ->
                             tracker.addPosition(change.uptimeMillis, change.position)
                             change.consume()
-                            scope.launch {
-                                pos.snapTo((pos.value - dx / stepPx).coerceIn(-0.45f, albums.lastIndex + 0.45f))
-                            }
+                            if (putting?.isActive == true) pending += dx
+                            else scope.launch { pos.snapTo(clamp(pos.value - dx / stepPx)) }
                         },
                         onDragEnd = {
                             val v = -tracker.calculateVelocity().x / stepPx
+                            val waitFor = putting
                             scope.launch {
+                                // A quick flick ends before the record is home: it digs once it is.
+                                waitFor?.join()
                                 val projected = decay.calculateTargetValue(pos.value, v)
                                 val snapped = projected.roundToInt().coerceIn(0, albums.lastIndex).toFloat()
                                 pos.animateTo(snapped, spring(dampingRatio = 0.86f, stiffness = 140f), initialVelocity = v)
                             }
                         },
                         onDragCancel = {
-                            scope.launch { pos.animateTo(pos.value.roundToInt().coerceIn(0, albums.lastIndex).toFloat()) }
+                            val waitFor = putting
+                            scope.launch {
+                                waitFor?.join()
+                                pos.animateTo(pos.value.roundToInt().coerceIn(0, albums.lastIndex).toFloat())
+                            }
                         },
                     )
                 },
