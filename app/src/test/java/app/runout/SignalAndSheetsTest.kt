@@ -205,6 +205,8 @@ class SignalAndSheetsTest {
 
     @Test fun `chat bubbles are solid, mine black and theirs orange, over an outlined composer`() {
         val chat = room.copy(
+            // A Soulseek download in the crate, so there's a record that can be sent.
+            albums = room.albums + Fixtures.nightDrive().copy(id = "slsk", source = app.runout.model.Source.SOULSEEK, from = "ro", remoteFolder = "Music/Night Drive"),
             soulseekConversation = "maya",
             soulseekConversations = listOf(app.runout.soulseek.SoulseekConversation("maya", listOf(
                 app.runout.soulseek.SoulseekMessage("1", "maya", "hello", 1L, false, app.runout.soulseek.SoulseekMessageState.SENT),
