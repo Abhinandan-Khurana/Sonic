@@ -243,6 +243,11 @@ interface RoomActions : DeckActions {
     fun resumeSoulseekTransfer(id: String) {}
     fun cancelSoulseekTransfer(id: String) {}
     fun retrySoulseekTransfer(id: String) {}
+    /** Off the downloads list (stopped first if running); music already saved stays. */
+    fun removeSoulseekTransfer(id: String) {}
+    fun removeFailedDownloads() {}
+    /** Just these files of the open folder, joining [albumId] on the shelf when it's an album Runout downloaded. */
+    fun downloadSoulseekTracks(files: List<SoulseekSearchResult>, albumId: String?) {}
     fun pickDownloadFolder() {}
     fun pickSharedFolder() {}
     /** The answer to [RoomState.offerShareSwap]: true picks a new shared folder (its own permission). */

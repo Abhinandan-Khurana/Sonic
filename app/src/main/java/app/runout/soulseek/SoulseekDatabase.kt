@@ -1,5 +1,6 @@
 package app.runout.soulseek
 
+import androidx.room.AutoMigration
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -27,6 +28,8 @@ data class TransferRow(
     val publishedUri: String? = null,
     val updatedAt: Long = System.currentTimeMillis(),
     val provider: String = "Soulseek",
+    /** The album on the shelf this file joins, in its folder; null for the peer's own folder's album. */
+    val albumId: String? = null,
 ) {
     fun model() = SoulseekTransfer(id, username, path, size, bytes, SoulseekTransferState.valueOf(state), queuePosition, speed, error, provider)
 }
@@ -54,6 +57,7 @@ interface SoulseekDao {
     @Query("SELECT * FROM soulseek_transfers WHERE owner = :owner AND state IN ('QUEUED','PAUSED') ORDER BY updatedAt ASC, id ASC") suspend fun resumable(owner: String): List<TransferRow>
     @Query("SELECT * FROM soulseek_transfers WHERE id = :id") suspend fun transfer(id: String): TransferRow?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTransfer(row: TransferRow)
+    @Query("DELETE FROM soulseek_transfers WHERE id = :id") suspend fun deleteTransfer(id: String)
     @Query("UPDATE soulseek_transfers SET state = 'PAUSED', speed = 0, error = :reason WHERE state IN ('QUEUED','DOWNLOADING','VALIDATING','PUBLISHING')") suspend fun pauseInterrupted(reason: String)
     @Query("UPDATE soulseek_transfers SET state = 'PAUSED', speed = 0, error = :reason WHERE owner = :owner AND state IN ('QUEUED','DOWNLOADING','VALIDATING','PUBLISHING')") suspend fun pauseOwner(owner: String, reason: String)
     @Query("SELECT * FROM soulseek_contacts WHERE owner = :owner ORDER BY username COLLATE NOCASE") fun contacts(owner: String): Flow<List<ContactRow>>
@@ -73,5 +77,11 @@ interface SoulseekDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putAlbum(row: DownloadAlbumRow)
 }
 
-@Database(entities = [TransferRow::class, ContactRow::class, MessageRow::class, DownloadAlbumRow::class], version = 1, exportSchema = true)
+@Database(
+    entities = [TransferRow::class, ContactRow::class, MessageRow::class, DownloadAlbumRow::class],
+    version = 2,
+    exportSchema = true,
+    // 2: a download can be aimed at an album already on the shelf (TransferRow.albumId).
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
+)
 abstract class SoulseekDatabase : RoomDatabase() { abstract fun soulseek(): SoulseekDao }

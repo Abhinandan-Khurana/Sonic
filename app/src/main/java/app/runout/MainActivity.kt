@@ -208,6 +208,9 @@ class MainActivity : ComponentActivity() {
                     override fun setTurtleMode(enabled: Boolean) { graph.soulseek.setTurtle(enabled) }
                     override fun resumeSoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun cancelSoulseekTransfer(id: String) { graph.soulseek.cancel(id) }
+                    override fun removeSoulseekTransfer(id: String) { graph.soulseek.remove(id) }
+                    override fun removeFailedDownloads() { graph.soulseek.removeFailed() }
+                    override fun downloadSoulseekTracks(files: List<SoulseekSearchResult>, albumId: String?) { graph.soulseek.downloadTracks(files, albumId) }
                     override fun retrySoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun pickDownloadFolder() { graph.soulseek.onExternalFlow(true); downloadPicker.launch(null) }
                     override fun pickSharedFolder() { graph.soulseek.onExternalFlow(true); sharePicker.launch(null) }

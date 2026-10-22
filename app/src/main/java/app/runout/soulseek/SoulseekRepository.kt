@@ -205,6 +205,14 @@ class SoulseekRepository(
     } }
     fun removeAlbum(id: String): Job = work { dao.removeAlbum(id) }
     fun download(result: SoulseekSearchResult): Job = work { enqueue(result) }
+    /**
+     * Just these tracks of a folder, into [albumId]'s folder and record when it's an album Runout
+     * downloaded (so a broken or missing song joins the rest), else into the folder's own album.
+     */
+    fun downloadTracks(files: List<SoulseekSearchResult>, albumId: String?): Job = work {
+        requireSignedIn(); storage.requireDestination()
+        files.forEach { enqueue(it, albumId) }
+    }
     fun downloadFolder(result: SoulseekSearchResult): Job = previewFolder(result)
     fun previewFolder(result: SoulseekSearchResult): Job = work {
         requireSignedIn()
@@ -220,16 +228,20 @@ class SoulseekRepository(
         preview.files.forEach { enqueue(it) }
         _folderPreview.value = null
     }
-    private suspend fun enqueue(result: SoulseekSearchResult) {
+    private suspend fun enqueue(result: SoulseekSearchResult, albumId: String? = null) {
         requireSignedIn(); storage.requireDestination()
         require(FlacPolicy.isFlacName(result.fileName) && result.size > 0 && result.size <= 1L shl 40) { "Only FLAC music files can be downloaded." }
         val owner = session.value.username!!
         val id = SoulseekPolicy.accountKey(owner, result.id)
         val previous = dao.transfer(id)
-        if (previous?.state == SoulseekTransferState.COMPLETED.name) return
+        // Done and still in the folder: nothing to do. Done but the file has gone: fetch it again.
+        val redo = previous?.state == SoulseekTransferState.COMPLETED.name
+        if (redo && previous?.let(::stillPublished) == true) return
         if (previous?.state in listOf("DOWNLOADING", "QUEUED", "VALIDATING", "PUBLISHING")) return
-        val row = previous?.copy(state = "QUEUED", error = null, updatedAt = System.currentTimeMillis())
-            ?: TransferRow(id, owner, result.username, result.path, result.size)
+        val row = previous?.copy(
+            state = "QUEUED", error = null, updatedAt = System.currentTimeMillis(), albumId = albumId ?: previous.albumId,
+            bytes = if (redo) 0 else previous.bytes, stagePath = if (redo) null else previous.stagePath, publishedUri = if (redo) null else previous.publishedUri,
+        ) ?: TransferRow(id, owner, result.username, result.path, result.size, albumId = albumId)
         dao.putTransfer(row)
         try { startService(SoulseekTransferService::class.java); startTransfer(row) }
         catch (e: Throwable) { dao.putTransfer(row.copy(state = "PAUSED", error = friendly(e))); throw e }
@@ -293,6 +305,32 @@ class SoulseekRepository(
         storage.stagingDirectory(id).deleteRecursively()
         // Cancellation never removes music already published to the user's folder.
     }
+    /** Off the list: stopped if it's running, its partial file deleted. Music already in your folder stays. */
+    fun remove(id: String): Job = work {
+        interruptedIds.remove(id)
+        val row = ownTransfer(id)
+        publicationJobs.remove(id)?.cancel()
+        archiveJobs.remove(id)?.cancel()
+        if (activeTransfers.contains(id)) command("cancel") { put("id", id) }
+        activeTransfers.remove(id)
+        dao.deleteTransfer(row.id)
+        storage.stagingDirectory(id).deleteRecursively()
+        pumpQueue()
+    }
+    /** Every failed or cancelled download off the list at once. */
+    fun removeFailed(): Job = work {
+        val owner = session.value.username ?: return@work
+        _transfers.value.filter { it.state == SoulseekTransferState.FAILED || it.state == SoulseekTransferState.CANCELLED }.forEach { t ->
+            val row = dao.transfer(t.id)?.takeIf { it.owner == owner } ?: return@forEach
+            dao.deleteTransfer(row.id)
+            storage.stagingDirectory(row.id).deleteRecursively()
+        }
+    }
+    /** A completed download whose file is still in the folder, whole. */
+    private fun stillPublished(row: TransferRow): Boolean = runCatching {
+        val file = row.publishedUri?.let { DocumentFile.fromSingleUri(context, Uri.parse(it)) } ?: return false
+        file.exists() && file.length() == row.size
+    }.getOrDefault(false)
     private suspend fun ownTransfer(id: String): TransferRow {
         val row = dao.transfer(id) ?: throw IllegalArgumentException("This download no longer exists.")
         check(row.owner == session.value.username) { "Sign in with the account that started this download." }
@@ -584,8 +622,10 @@ class SoulseekRepository(
         require(stage.parentFile == directory && stage.length() == initial.size && FlacPolicy.isFlacName(stage.name)) { "The completed download has an invalid path or size." }
         val info = FlacPolicy.read(stage, wantPicture = true) ?: throw IOException("This file is not valid FLAC music.")
         val remoteDirectory = initial.path.replace('\\', '/').substringBeforeLast('/', "")
-        val albumId = SoulseekPolicy.albumId(initial.username, remoteDirectory)
-        val albumTitle = info.album ?: remoteDirectory.substringAfterLast('/').ifBlank { "Soulseek downloads" }
+        // Aimed at an album already on the shelf: its folder and record, whoever shares the file.
+        val aimed = initial.albumId?.let { dao.album(it) }?.let { AlbumJson.fromJson(JSONObject(it.json)) }
+        val albumId = aimed?.id ?: SoulseekPolicy.albumId(initial.username, remoteDirectory)
+        val albumTitle = aimed?.title ?: info.album ?: remoteDirectory.substringAfterLast('/').ifBlank { "Soulseek downloads" }
         val folder = storage.albumDirectory(albumTitle, albumId)
         var row = dao.transfer(initial.id) ?: return@withLock
         val finalName = initial.id.take(10) + " " + SoulseekPolicy.safeName(stage.name, "Track.flac")

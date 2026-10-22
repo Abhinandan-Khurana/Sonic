@@ -310,6 +310,67 @@ class SoulseekRepositoryTest {
         repo.setTurtle(false)
     }
 
+    /** Downloads complete at once with the fixture of the same name. */
+    private fun completeDownloads() {
+        transport.onCommand = { command ->
+            if (command.optString("op") == "download") {
+                val name = command.getString("path").replace('\\', '/').substringAfterLast('/')
+                val bytes = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/$name")
+                val stage = File(command.getString("localDirectory"), name).apply { parentFile!!.mkdirs(); writeBytes(bytes) }
+                transport.emit(JSONObject().put("type", "transfer").put("id", command.getString("id")).put("state", "completed")
+                    .put("bytes", stage.length()).put("path", stage.absolutePath).put("queuePosition", JSONObject.NULL).put("error", JSONObject.NULL))
+            }
+        }
+    }
+
+    @Test fun `a missing track from another peer joins the album already on the shelf, in its folder`() = runBlocking {
+        login(); val folder = destination(); completeDownloads()
+        val opening = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
+        val lowlight = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/02 Lowlight.flac")
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01 Opening.flac", opening.size.toLong())).join()
+        await("first track on the shelf") { repo.downloadAlbums.value.singleOrNull()?.tracks?.size == 1 }
+        val album = repo.downloadAlbums.value.single()
+        // The same album shared by someone else: just the missing track, aimed at the album we have.
+        repo.downloadTracks(listOf(SoulseekSearchResult("zoe", "Shares/Night Drive/02 Lowlight.flac", lowlight.size.toLong())), album.id).join()
+        await("second track joins it") { repo.downloadAlbums.value.singleOrNull()?.tracks?.size == 2 }
+        assertEquals(album.id, repo.downloadAlbums.value.single().id)
+        val saved = folder.walkTopDown().filter { it.isFile && it.name.endsWith(".flac") }.toList()
+        assertEquals(2, saved.size)
+        assertEquals("both in one album folder", 1, saved.map { it.parentFile }.distinct().size)
+    }
+
+    @Test fun `a completed track whose file is gone downloads again, a present one does not`() = runBlocking {
+        login(); val folder = destination(); completeDownloads()
+        val opening = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
+        val file = SoulseekSearchResult("maya", "Music\\Night Drive\\01 Opening.flac", opening.size.toLong())
+        repo.download(file).join()
+        await("published") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.COMPLETED }
+        val downloads = { transport.commands.count { it.optString("op") == "download" } }
+        repo.download(file).join()
+        assertEquals("still in the folder: not fetched again", 1, downloads())
+        folder.walkTopDown().filter { it.isFile && it.name.endsWith(".flac") }.forEach { it.delete() }
+        repo.download(file).join()
+        await("fetched again") { downloads() == 2 }
+        await("published again") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.COMPLETED }
+        assertEquals(1, folder.walkTopDown().count { it.isFile && it.name.endsWith(".flac") })
+    }
+
+    @Test fun `remove takes a download off the list and remove all failed clears the failures`() = runBlocking {
+        login(); destination()
+        repo.download(SoulseekSearchResult("maya", "Music\\Night Drive\\01.flac", 1000)).join()
+        await("queued") { repo.transfers.value.size == 1 }
+        val id = repo.transfers.value.single().id
+        repo.remove(id).join()
+        await("off the list") { repo.transfers.value.isEmpty() }
+        assertTrue("the running download was stopped", transport.commands.any { it.optString("op") == "cancel" && it.optString("id") == id })
+        val owner = repo.session.value.username!!
+        listOf("a", "b").forEach { db.soulseek().putTransfer(TransferRow("failed-$it", owner, "maya", "x/$it.flac", 10, state = "FAILED", error = "peer left")) }
+        db.soulseek().putTransfer(TransferRow("done", owner, "maya", "x/c.flac", 10, state = "COMPLETED"))
+        await("listed") { repo.transfers.value.size == 3 }
+        repo.removeFailed().join()
+        await("failures cleared") { repo.transfers.value.map { it.id } == listOf("done") }
+    }
+
     private class FakeTransport : SoulseekTransport {
         val commands = CopyOnWriteArrayList<JSONObject>()
         private val events = ConcurrentLinkedQueue<JSONObject>()

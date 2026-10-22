@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -101,7 +102,7 @@ internal fun DiscoveryScreen(state: RoomState, actions: RoomActions, onAccount: 
                 listOf(SearchSource.LOCAL, SearchSource.SOULSEEK),
                 source,
                 { if (it == SearchSource.LOCAL) "on this device" else "soulseek" },
-                { actions.setSearchOptions(options.copy(source = it, kind = SearchKind.ALBUMS)) },
+                onSelect = { actions.setSearchOptions(options.copy(source = it, kind = SearchKind.ALBUMS)) },
             )
             if (source == SearchSource.SOULSEEK && !session.connected) SignedOutNote(session, actions, onAccount)
             when {
@@ -187,7 +188,7 @@ private fun SearchKey(searching: Boolean, enabled: Boolean, onSearch: () -> Unit
 
 /** A row of equal cells in a 1 dp ink outline; the chosen one is black with white 10/400 type. */
 @Composable
-private fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
+internal fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, tag: (T) -> String? = { null }, onSelect: (T) -> Unit) {
     val tick = rememberTick()
     Row(Modifier.fillMaxWidth().border(1.dp, Room.Ink)) {
         options.forEach { o ->
@@ -198,6 +199,7 @@ private fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, on
                     .background(if (on) Room.Ink else Room.Background)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Tab) { tick(); onSelect(o) }
                     .semantics { this.selected = on }
+                    .then(tag(o)?.let { Modifier.testTag(it) } ?: Modifier)
                     .padding(vertical = 11.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -551,6 +553,14 @@ internal fun FolderPreview(preview: SoulseekFolderPreview, state: RoomState, act
     val rate = preview.files.mapNotNull { it.sampleRate }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
     val peers = remember(state.discovery.remote, preview.directory) { peerCounts(state.discovery.remote)[folderKey(preview.directory)]?.first ?: 0 }
     val ready = !preview.loading && preview.error == null && preview.files.isNotEmpty()
+    // Part of this album already on the shelf, or downloads of it that broke: each track says where
+    // it stands, and only what's missing or broken downloads, into the same album and folder.
+    val shelf = remember(state.albums, preview) { shelfMatch(preview, state.albums) }
+    val states = preview.files.associate { it.id to fileState(it, shelf, state.soulseekTransfers) }
+    val partial = shelf != null || states.values.any { it.second != null }
+    val aimAt = shelf?.takeIf { it.source == app.runout.model.Source.SOULSEEK }?.id
+    val missing = preview.files.filter { states[it.id]?.first == FileState.MISSING || states[it.id]?.first == FileState.BROKEN }
+    val canGet = ready && state.downloadFolder != null && state.soulseekSession.connected
     Column(Modifier.fillMaxSize().testTag("screen:folder-preview"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         BackLink(actions::closeSoulseekFolder)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -589,18 +599,129 @@ internal fun FolderPreview(preview: SoulseekFolderPreview, state: RoomState, act
                         }
                     }
                     BasicText(duration(file.durationSec), style = Room.LabelQuiet.copy(textAlign = TextAlign.End), maxLines = 1, modifier = Modifier.width(44.dp))
+                    if (partial) states[file.id]?.let { (s, t) -> TrackState(s, t, enabled = canGet) { actions.downloadSoulseekTracks(listOf(file), aimAt) } }
                 }
             }
         }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             if (state.downloadFolder == null) TeButton("choose download folder", actions::pickDownloadFolder, Modifier.fillMaxWidth(), kind = KeyKind.OUTLINE)
-            else BasicText("keeps in ${state.downloadFolder}".lowercase(), style = Room.LabelQuiet)
-            TeButton(
+            else BasicText(
+                when {
+                    shelf != null && aimAt != null -> "joins ${shelf.title} in ${state.downloadFolder}"
+                    else -> "keeps in ${state.downloadFolder}"
+                }.lowercase(),
+                style = Room.LabelQuiet,
+            )
+            // Only once the whole list is in: until then nothing can be counted as missing.
+            if (partial && ready) {
+                val have = states.values.count { it.first == FileState.HAVE }
+                BasicText("you have $have of ${preview.files.size}" + (if (missing.isNotEmpty()) " · ${missing.size} missing or broken" else ""), style = Room.LabelQuiet, modifier = Modifier.testTag("folder-have"))
+                TeButton(
+                    if (missing.isEmpty()) "nothing missing" else "download ${plural(missing.size, "missing track")}",
+                    { actions.downloadSoulseekTracks(missing, aimAt) },
+                    Modifier.fillMaxWidth().testTag("confirm-folder"),
+                    enabled = canGet && missing.isNotEmpty(),
+                )
+            } else TeButton(
                 "download ${plural(preview.files.size, "flac track")}",
                 actions::confirmSoulseekFolder,
                 Modifier.fillMaxWidth().testTag("confirm-folder"),
-                enabled = ready && state.downloadFolder != null && state.soulseekSession.connected,
+                enabled = canGet,
             )
+        }
+    }
+}
+
+/** Where one track of a folder stands against the shelf and the downloads. */
+internal enum class FileState { HAVE, GETTING, BROKEN, MISSING }
+
+private val gettingStates = setOf(
+    SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.PAUSED,
+    SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING,
+)
+
+/** Letters and digits only, lower case: "New Kid in Town" and "new-kid-in-town" are one key. */
+internal fun nameKey(s: String): String = s.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
+
+/**
+ * A track as a key, from a file name as Runout saves it ("1a2b3c4d5e 02-New Kid In Town.flac") or a
+ * peer shares it ("02 - New Kid in Town.flac"): the number, extension and punctuation dropped.
+ */
+internal fun trackKey(fileName: String): String = nameKey(cleanTrackName(fileName.replace(SAVED_PREFIX, ""), "", null, 0).second)
+private val SAVED_PREFIX = Regex("^[0-9a-f]{10} ")
+
+/** What an album on the shelf is called, track by track: by tag title and by file name. */
+private fun shelfKeys(album: app.runout.model.Album): Set<String> = album.tracks.flatMapTo(HashSet()) { listOf(nameKey(it.title), trackKey(it.fileName)) }
+
+/**
+ * The album on the shelf this folder belongs to: Runout's own download of this very folder; else
+ * one with the folder's title (and artist, when both are known), whoever shared it; else the album
+ * sharing at least two of its track titles.
+ */
+internal fun shelfMatch(preview: SoulseekFolderPreview, albums: List<app.runout.model.Album>): app.runout.model.Album? {
+    val own = SoulseekPolicy.albumId(preview.username, preview.directory)
+    albums.firstOrNull { it.id == own }?.let { return it }
+    val keys = preview.files.mapTo(HashSet()) { trackKey(it.fileName) }
+    fun overlap(a: app.runout.model.Album) = shelfKeys(a).count { it in keys }
+    val (folderArtist, folderTitle) = folderNames(preview.directory)
+    val title = nameKey(folderTitle)
+    val artist = folderArtist?.let(::nameKey)?.takeIf { it.isNotBlank() }
+    val named = albums.filter { a ->
+        val k = nameKey(a.title)
+        val by = nameKey(a.artist).takeIf { it.isNotBlank() && it != "unknownartist" }
+        k.length >= 3 && (title.contains(k) || k.contains(title)) && (artist == null || by == null || artist.contains(by) || by.contains(artist))
+    }
+    named.maxByOrNull(::overlap)?.let { return it }
+    if (keys.isEmpty()) return null
+    val needed = minOf(2, keys.size)
+    return albums.map { it to overlap(it) }.filter { it.second >= needed }.maxByOrNull { it.second }?.first
+}
+
+/** One file of the folder: on the shelf, downloading now, broken (failed or cancelled), or missing. */
+internal fun fileState(file: SoulseekSearchResult, shelf: app.runout.model.Album?, transfers: List<SoulseekTransfer>): Pair<FileState, SoulseekTransfer?> {
+    val t = transfers.firstOrNull { it.username == file.username && it.path == file.path && it.size == file.size }
+    val have = shelf != null && trackKey(file.fileName) in shelfKeys(shelf)
+    val s = when {
+        t != null && t.state in gettingStates -> FileState.GETTING
+        have -> FileState.HAVE
+        t != null && (t.state == SoulseekTransferState.FAILED || t.state == SoulseekTransferState.CANCELLED) -> FileState.BROKEN
+        else -> FileState.MISSING
+    }
+    return s to t
+}
+
+/**
+ * The cell after a track's length: a green tick for one you have, its progress while it downloads
+ * (‖ when paused in the queue), and a ↓ key for one that's missing (ink) or broke (red), which downloads just that track.
+ */
+@Composable
+private fun TrackState(state: FileState, transfer: SoulseekTransfer?, enabled: Boolean, onDownload: () -> Unit) {
+    val tick = rememberTick()
+    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+        when (state) {
+            FileState.HAVE -> BasicText("✓", style = Room.Label.copy(color = Room.Online), modifier = Modifier.semantics { contentDescription = "In your library" })
+            FileState.GETTING -> BasicText(
+                when {
+                    transfer?.state == SoulseekTransferState.PAUSED -> "‖"
+                    transfer != null && transfer.progress > 0f -> "${(transfer.progress * 100).toInt()}%"
+                    else -> "…"
+                },
+                style = Room.LabelQuiet, maxLines = 1,
+                modifier = Modifier.semantics { contentDescription = if (transfer?.state == SoulseekTransferState.PAUSED) "Paused in your downloads" else "Downloading" },
+            )
+            FileState.BROKEN, FileState.MISSING -> {
+                val colour = if (state == FileState.BROKEN) Room.Danger else Room.Ink
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .border(1.dp, colour)
+                        .alpha(if (enabled) 1f else 0.4f)
+                        .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onDownload() }
+                        .semantics { contentDescription = if (state == FileState.BROKEN) "Download this track again" else "Download this track" }
+                        .testTag("get-track"),
+                    contentAlignment = Alignment.Center,
+                ) { BasicText("↓", style = Room.Label.copy(color = colour)) }
+            }
         }
     }
 }

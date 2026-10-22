@@ -372,11 +372,25 @@ private fun stateColor(state: SoulseekTransferState): Color = when (state) {
     else -> Room.Faint
 }
 
+/** The Downloads page's three segments, in the owner's order. */
+internal enum class DownloadGroup(val label: String, val empty: String) {
+    FAILED("failed", "nothing failed."),
+    COMPLETED("completed", "nothing finished yet."),
+    QUEUE("in queue", "nothing in the queue."),
+}
+
+internal fun downloadGroup(state: SoulseekTransferState): DownloadGroup = when (state) {
+    SoulseekTransferState.COMPLETED -> DownloadGroup.COMPLETED
+    SoulseekTransferState.FAILED, SoulseekTransferState.CANCELLED -> DownloadGroup.FAILED
+    else -> DownloadGroup.QUEUE
+}
+
 /**
- * Downloads: the ink-ruled done / active / queued strip, then each file under a hairline (index,
- * name, lamp and state, size, a boxed progress bar, pause / cancel), then shared uploads, the
+ * Downloads: three segments (failed · completed · in queue, with counts) over that group's files,
+ * each under a hairline (index, name, lamp and state, size, a boxed progress bar, its keys: pause or
+ * resume and remove in the queue, retry and remove when failed); then shared uploads, the
  * all-at-once controls and turtle mode. When Android's background usage is off, an amber alert
- * takes the strip's place.
+ * sits above the segments.
  */
 @Composable
 fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
@@ -385,20 +399,22 @@ fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
     val signedIn = state.soulseekSession.signedIn
     Column(Modifier.fillMaxWidth().testTag("panel:transfers"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         if (restricted) BackgroundUseNote { help = HelpBackgroundUsage }
-        else {
-            val t = state.soulseekTransfers
-            TeStats(
-                listOf(
-                    t.count { it.state == SoulseekTransferState.COMPLETED }.toString() to "done",
-                    t.count { it.state == SoulseekTransferState.DOWNLOADING || it.state == SoulseekTransferState.VALIDATING || it.state == SoulseekTransferState.PUBLISHING }.toString() to "active",
-                    t.count { it.state == SoulseekTransferState.QUEUED }.toString() to "queued",
-                ),
-            )
-        }
         NetworkNote(state, actions)
-        if (state.soulseekTransfers.isEmpty()) BasicText("nothing downloading.", style = Room.LabelQuiet, modifier = Modifier.testTag("downloads-empty"))
-        else Column(Modifier.fillMaxWidth()) {
-            state.soulseekTransfers.forEachIndexed { i, transfer -> TransferRow(i + 1, transfer, signedIn, restricted, actions) }
+        val groups = state.soulseekTransfers.groupBy { downloadGroup(it.state) }
+        var picked by rememberSaveable { mutableStateOf<DownloadGroup?>(null) }
+        // Opens on what needs you: the queue, then what failed, then what's done.
+        val group = picked ?: listOf(DownloadGroup.QUEUE, DownloadGroup.FAILED, DownloadGroup.COMPLETED).firstOrNull { groups[it].orEmpty().isNotEmpty() } ?: DownloadGroup.QUEUE
+        Segments(DownloadGroup.entries, group, { "${it.label} ${groups[it].orEmpty().size}" }, tag = { "downloads-tab:${it.name.lowercase()}" }) { picked = it }
+        val shown = groups[group].orEmpty()
+        when {
+            state.soulseekTransfers.isEmpty() -> BasicText("nothing downloading.", style = Room.LabelQuiet, modifier = Modifier.testTag("downloads-empty"))
+            shown.isEmpty() -> BasicText(group.empty, style = Room.LabelQuiet, modifier = Modifier.testTag("downloads-group-empty"))
+            else -> Column(Modifier.fillMaxWidth()) {
+                shown.forEachIndexed { i, transfer -> TransferRow(i + 1, transfer, signedIn, restricted, actions) }
+                if (group == DownloadGroup.FAILED) Row(Modifier.fillMaxWidth().hairlineTop().padding(top = 16.dp)) {
+                    ArrowLink("remove all failed", actions::removeFailedDownloads, tag = "downloads-remove-failed")
+                }
+            }
         }
         if (state.soulseekUploads.isNotEmpty()) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -458,19 +474,24 @@ private fun TransferRow(index: Int, transfer: SoulseekTransfer, signedIn: Boolea
         when (transfer.state) {
             SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 ArrowLink("pause", { actions.pauseSoulseekTransfer(transfer.id) }, tag = "pause:${transfer.id}")
-                ArrowLink("cancel", { actions.cancelSoulseekTransfer(transfer.id) }, tag = "cancel:${transfer.id}")
+                ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
             }
             SoulseekTransferState.PAUSED -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 ArrowLink("resume", { actions.resumeSoulseekTransfer(transfer.id) }, enabled = signedIn, tag = "resume:${transfer.id}")
-                ArrowLink("cancel", { actions.cancelSoulseekTransfer(transfer.id) }, tag = "cancel:${transfer.id}")
+                ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
             }
-            SoulseekTransferState.FAILED, SoulseekTransferState.CANCELLED ->
+            SoulseekTransferState.FAILED, SoulseekTransferState.CANCELLED -> Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 ArrowLink("retry", { actions.retrySoulseekTransfer(transfer.id) }, enabled = signedIn, tag = "retry:${transfer.id}")
+                ArrowLink("remove", { actions.removeSoulseekTransfer(transfer.id) }, tag = "remove:${transfer.id}")
+            }
             else -> Unit
         }
         val why = when {
             restricted && transfer.state == SoulseekTransferState.PAUSED && (transfer.error == null || SoulseekPolicy.isInterruption(transfer.error)) ->
                 "android paused this download: background usage is off for runout. it continues when you're back."
+            // Paused while signed out, and signed back in since: the note's first half no longer applies.
+            signedIn && transfer.state == SoulseekTransferState.PAUSED && transfer.error?.contains("sign in", ignoreCase = true) == true ->
+                "interrupted. resume to continue."
             else -> transfer.error?.lowercase()
         }
         why?.let { BasicText(it, style = Room.Label.copy(color = if (transfer.state == SoulseekTransferState.FAILED) Room.Danger else Room.Quiet, lineHeight = 15.sp)) }
