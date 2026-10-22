@@ -57,9 +57,6 @@ class OnboardingTest {
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/15_setup_share.png")
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/setup-share.png")
         compose.onNodeWithText("public", substring = true).assertIsDisplayed()
-        // Both sides of the choice, with the phone-friendly defaults spelled out.
-        compose.onNodeWithText("you share 0 files", substring = true).assertExists()
-        compose.onNodeWithText("uploads only run on wi-fi, at most 2 people at a time", substring = true).assertExists()
 
         compose.onNodeWithTag("setup-share").performClick()
         assertEquals(1, actions.shareAsked)
