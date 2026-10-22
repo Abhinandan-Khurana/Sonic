@@ -203,6 +203,8 @@ data class RoomState(
     val sleepAt: Long? = null,
     /** Settings › Flags › look: the theme and the deck. */
     val look: Look = Look(),
+    /** Settings › Storage (two fingers on Settings): the folders measured. */
+    val storage: app.runout.library.StorageState = app.runout.library.StorageState.Idle,
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -274,6 +276,10 @@ interface RoomActions : DeckActions {
     fun setTheme(theme: ThemeMode) {}
     fun setDeckSkin(deck: DeckSkin) {}
     fun setIntroOnLaunch(on: Boolean) {}
+    /** Measures the music and download folders for Settings › Storage. */
+    fun analyzeStorage() {}
+    /** Empties Sonic's cache (not covers, not the library). */
+    fun clearCache() {}
     /** Stops the music in so many minutes; null turns the timer off. */
     fun setSleepTimer(minutes: Int?) {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}

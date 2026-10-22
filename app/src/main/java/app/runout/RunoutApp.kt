@@ -13,6 +13,7 @@ import app.runout.discovery.DiscoveryRepository
 import app.runout.library.ArtworkRepository
 import app.runout.library.LibraryRepository
 import app.runout.library.LibraryScanner
+import app.runout.library.StorageAnalyzer
 import app.runout.model.Album
 import app.runout.model.Source
 import app.runout.net.DefaultHttp
@@ -85,6 +86,7 @@ class AppGraph(app: Application) {
     val sfx = VinylSfx(scope)
     val deck = Deck(app, sfx, scope, sound)
     val look = LookPreferences(app)
+    val storage = StorageAnalyzer(app)
     val social = SocialRepository(app)
     val share = ShareRepository(app, social)
     val pressing = PressingRepository(app)

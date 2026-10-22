@@ -537,6 +537,38 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `two fingers on Settings open the storage page, which measures and shows the folders`() {
+        portrait()
+        val asked = java.util.concurrent.atomic.AtomicInteger()
+        val actions = object : RecordingActions() { override fun analyzeStorage() { asked.incrementAndGet() } }
+        val usage = app.runout.library.FolderUsage(
+            "/Music", 212_501_000, 7, 3, 2,
+            mapOf(app.runout.library.StorageKind.FLAC_HI_RES to 120_000_000L, app.runout.library.StorageKind.FLAC_CD to 75_000_000L),
+            listOf(app.runout.library.RecordUsage("Night Drive", "Vela Park", 128_000_000), app.runout.library.RecordUsage("Moon Safari", "Air", 75_000_000)),
+        )
+        val report = app.runout.library.StorageReport(
+            app.runout.library.DeviceUsage(128_000_000_000, 41_000_000_000), usage, null, downloadsInMusic = true,
+            app = app.runout.library.AppUsage(12_000_000, 3_000_000, 1_000_000), at = 0L,
+        )
+        var storage by androidx.compose.runtime.mutableStateOf<app.runout.library.StorageState>(app.runout.library.StorageState.Idle)
+        compose.setContent { RoomScreen(state().copy(storage = storage), actions, initialPanel = Panel.SETTINGS) }
+        // Not on the list.
+        compose.onNodeWithTag("settings:STORAGE").assertDoesNotExist()
+        compose.onNodeWithTag("panel:settings").performTouchInput {
+            down(0, center); down(1, center + androidx.compose.ui.geometry.Offset(120f, 0f))
+            repeat(8) { moveBy(0, androidx.compose.ui.geometry.Offset(0f, -40f)); moveBy(1, androidx.compose.ui.geometry.Offset(0f, -40f)) }
+            up(0); up(1)
+        }
+        compose.onNodeWithTag("panel:storage").assertExists()
+        assertEquals(1, asked.get())
+        storage = app.runout.library.StorageState.Done(report)
+        compose.onNodeWithTag("storage-music").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("night drive").assertExists()
+        compose.onNodeWithText("downloads land inside your music folder, so they're counted above.").performScrollTo().assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_storage.png")
+    }
+
+    @Test
     fun `soulseek settings grey out how you share until sharing is on`() {
         portrait()
         val calls = mutableListOf<String>()

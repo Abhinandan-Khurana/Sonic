@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
             val newDrop by graph.drops.newDrop.collectAsStateWithLifecycle()
             val deckFlags by graph.deck.flags.collectAsStateWithLifecycle()
             val look by graph.look.look.collectAsStateWithLifecycle()
+            val storage by graph.storage.state.collectAsStateWithLifecycle()
             val dark = look.dark(androidx.compose.foundation.isSystemInDarkTheme())
             LaunchedEffect(dark) { applyTheme(dark) }
             // The next launch screen in the pinned theme's paper too (with "phone", Android's own).
@@ -235,6 +236,10 @@ class MainActivity : ComponentActivity() {
                     override fun setTheme(theme: app.runout.ui.ThemeMode) = graph.look.setTheme(theme)
                     override fun setDeckSkin(deck: app.runout.ui.DeckSkin) = graph.look.setDeck(deck)
                     override fun setIntroOnLaunch(on: Boolean) = graph.look.setIntroOnLaunch(on)
+                    override fun analyzeStorage() {
+                        graph.scope.launch { graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value) }
+                    }
+                    override fun clearCache() { graph.scope.launch { graph.storage.clearCache() } }
                     override fun setSleepTimer(minutes: Int?) = graph.deck.setSleepTimer(minutes)
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {
@@ -349,6 +354,7 @@ class MainActivity : ComponentActivity() {
                     newDrop = newDrop,
                     deckFlags = deckFlags,
                     look = look,
+                    storage = storage,
                     sleepAt = sleepAt,
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,

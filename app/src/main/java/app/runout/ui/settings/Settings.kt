@@ -1,5 +1,7 @@
 package app.runout.ui.settings
 
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -91,7 +93,14 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** The sections of the Settings sheet. */
-enum class SettingsSection(val label: String) { SOUND("Sound"), FLAGS("Flags"), LIBRARY("Library"), ACCOUNT("Soulseek"), ABOUT("About") }
+enum class SettingsSection(val label: String) {
+    SOUND("Sound"), FLAGS("Flags"), LIBRARY("Library"), ACCOUNT("Soulseek"), ABOUT("About"),
+    /** Not in the list: two fingers swiped up or down on Settings open it. */
+    STORAGE("Storage"),
+}
+
+/** The sections the Settings list shows, in order. */
+internal val LISTED_SECTIONS = SettingsSection.entries.filter { it != SettingsSection.STORAGE }
 
 /** "0.6", as the boards write it: the version without a trailing ".0". */
 private val VERSION = BuildConfig.VERSION_NAME.removeSuffix(".0")
@@ -117,8 +126,14 @@ fun SettingsPanel(
 ) {
     if (section == null) {
         var help by remember { mutableStateOf<TeHelp?>(null) }
+        val found = rememberTick(HapticFeedbackType.GestureThresholdActivate)
         Column(
-            Modifier.fillMaxWidth().fillPageHeight().testTag("panel:settings"),
+            Modifier
+                .fillMaxWidth()
+                .fillPageHeight()
+                // Two fingers up or down the page: the storage page, kept off the list.
+                .twoFingerSwipe { found(); onSection(SettingsSection.STORAGE) }
+                .testTag("panel:settings"),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             // What reaches your ears right now, moved here from Settings › Sound.
@@ -127,7 +142,7 @@ fun SettingsPanel(
             }
             Spacer(Modifier.weight(1f))
             Column(Modifier.fillMaxWidth()) {
-                SettingsSection.entries.forEachIndexed { i, s ->
+                LISTED_SECTIONS.forEachIndexed { i, s ->
                     TeRow("%02d".format(i + 1), s.label.lowercase(), summary(s, state), { onSection(s) }, Modifier.testTag("settings:${s.name}"))
                 }
             }
@@ -159,6 +174,7 @@ fun SettingsPanel(
             SettingsSection.LIBRARY -> LibraryPage(state, actions)
             SettingsSection.FLAGS -> FlagsPage(state, actions)
             SettingsSection.ABOUT -> AboutPage()
+            SettingsSection.STORAGE -> StoragePage(state, actions)
         }
     }
 }
@@ -180,6 +196,7 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
         "intro".takeIf { state.look.introOnLaunch },
     ).joinToString(" · ").ifEmpty { "all off" } + (if (state.look.theme != ThemeMode.PHONE) " · ${state.look.theme.label}" else "")
     SettingsSection.ABOUT -> "sonic $VERSION · rg-1"
+    SettingsSection.STORAGE -> ""
 }
 
 private val HelpCovers = TeHelp(
@@ -408,5 +425,32 @@ internal fun HelpToggle(
             if (detail != null) BasicText(detail.lowercase(), style = Room.LabelQuiet)
         }
         Switch(checked)
+    }
+}
+
+/**
+ * Two fingers dragged up or down past 56 dp: [onSwipe], once per gesture. Watches on the way in
+ * without taking anything, so one finger still scrolls the page and taps still land.
+ */
+internal fun Modifier.twoFingerSwipe(onSwipe: () -> Unit): Modifier = pointerInput(Unit) {
+    val reach = 56.dp.toPx()
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+        var start: Float? = null
+        var fired = false
+        while (true) {
+            val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            val pressed = event.changes.filter { it.pressed }
+            if (pressed.isEmpty()) break
+            if (pressed.size >= 2) {
+                val y = pressed.take(2).map { it.position.y }.average().toFloat()
+                if (start == null) start = y
+                if (!fired && kotlin.math.abs(y - start!!) > reach) {
+                    fired = true
+                    event.changes.forEach { it.consume() }
+                    onSwipe()
+                }
+            } else start = null
+        }
     }
 }
