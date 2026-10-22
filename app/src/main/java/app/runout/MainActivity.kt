@@ -23,6 +23,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
 import app.runout.model.Album
@@ -126,10 +127,14 @@ class MainActivity : ComponentActivity() {
 
 
             var clock by remember { mutableStateOf(now()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    clock = now()
-                    delay(15_000)
+            // Only while the activity is started: a clock no one can see needs no wake-ups.
+            val clockLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+            LaunchedEffect(clockLifecycle) {
+                clockLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                    while (true) {
+                        clock = now()
+                        delay(15_000)
+                    }
                 }
             }
 

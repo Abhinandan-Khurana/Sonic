@@ -738,6 +738,17 @@ fun RoomScreen(
                     onRelease = { discRenderer?.destroy(); discRenderer = null },
                     modifier = Modifier.fillMaxSize().zIndex(4.9f),
                 )
+                // Like the deck's: no frames while the app is in the background.
+                val discLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+                androidx.compose.runtime.DisposableEffect(discLifecycle, discRenderer) {
+                    val r = discRenderer
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                        if (e == androidx.lifecycle.Lifecycle.Event.ON_START) r?.resume()
+                        if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) r?.pause()
+                    }
+                    discLifecycle.addObserver(observer)
+                    onDispose { discLifecycle.removeObserver(observer) }
+                }
                 LaunchedEffect(discRenderer, cover) {
                     val r = discRenderer ?: return@LaunchedEffect
                     // Out of the sleeve it's side A; flying home from the deck, the side that was up.

@@ -32,7 +32,8 @@ import com.google.android.filament.gltfio.Gltfio
 /**
  * Draws the 3D turntable into a [TextureView] with Filament, over a transparent background so the
  * room's light shows around it. The deck's state comes in through the setters; frames are drawn
- * only when something changed. Everything here runs on the main thread.
+ * only when something changed, and the frame callback is only armed while there is something to
+ * draw, so a still deck costs no work per vsync. Everything here runs on the main thread.
  */
 class DeckRenderer(private val context: Context, textureView: TextureView) : Choreographer.FrameCallback {
     private val engine = FilamentShared.engine
@@ -79,6 +80,8 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     /** Frames still to draw after a change: a TextureView can drop a lone first frame. */
     private var settle = 0
     private var running = false
+    /** A frame callback is posted and not yet run. */
+    private var scheduled = false
 
     /** Called on each frame with work to do, so the room redraws and the TextureView takes the frame. */
     var onFrame: (() -> Unit)? = null
@@ -167,7 +170,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         if (degrees == tilt) return
         tilt = degrees
         if (viewW > 0 && viewH > 0) frame(DeckCamera(viewW.toFloat(), viewH.toFloat(), tilt))
-        dirty = true
+        invalidate()
     }
 
     /** Matches Filament's camera to the one the touch mapping uses. */
@@ -184,32 +187,45 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private fun warmUp() {
         dirty = false
         settle = WARM_UP_FRAMES
+        requestFrame()
+    }
+
+    /** Something changed: draw it on the next frame. */
+    private fun invalidate() {
+        dirty = true
+        requestFrame()
+    }
+
+    private fun requestFrame() {
+        if (!running || scheduled) return
+        scheduled = true
+        Choreographer.getInstance().postFrameCallback(this)
     }
 
     fun setPlatter(degrees: Float) {
-        if (degrees != platterDegrees) { platterDegrees = degrees; dirty = true }
+        if (degrees != platterDegrees) { platterDegrees = degrees; invalidate() }
     }
 
     /** The record turning over, 0 to 1 (see [DeckModel.flipTransform]); 0 lies on the mat. */
     fun setFlip(t: Float) {
         if (t == flip) return
         flip = t
-        dirty = true
+        invalidate()
     }
 
     /** The record being taken off the platter, 0 to 1 (see [DeckModel.liftOffTransform]). */
     fun setLiftOff(t: Float) {
         if (t == liftOff) return
         liftOff = t
-        dirty = true
+        invalidate()
     }
 
     fun setArm(angle: Float, drop: Float) {
-        if (angle != armAngle || drop != armDrop) { armAngle = angle; armDrop = drop; dirty = true }
+        if (angle != armAngle || drop != armDrop) { armAngle = angle; armDrop = drop; invalidate() }
     }
 
     fun setKey(key: DeckKey, pressed: Float) {
-        if (keyPress[key] != pressed) { keyPress[key] = pressed; dirty = true }
+        if (keyPress[key] != pressed) { keyPress[key] = pressed; invalidate() }
     }
 
     /** The orange lamp by START/STOP: lit while a record plays. */
@@ -224,7 +240,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
             m.setParameter("baseColorFactor", 0.16f, 0.06f, 0.035f, 1f)
             m.setParameter("emissiveFactor", 0f, 0f, 0f)
         }
-        dirty = true
+        invalidate()
     }
 
     /**
@@ -242,7 +258,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         }
         TextureHelper.setBitmap(engine, stripTexture, 0, stripPixels)
         glow(m, if (playing) 5f else 2f)
-        dirty = true
+        invalidate()
     }
 
     /**
@@ -265,7 +281,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         drawTime(c, time)
         TextureHelper.setBitmap(engine, screenTexture, 0, screenPixels)
         screens.forEach { glow(it, 1.6f) }
-        dirty = true
+        invalidate()
     }
 
     /** "m:ss" as four seven-segment digits and a colon, at the right of the time window's part of the texture. */
@@ -335,7 +351,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     /** The record's [face] (vinyl, label, track gaps), or null for an empty platter. */
     fun setRecord(face: Bitmap?) {
         if (face == null) {
-            if (recordShown) { scene.removeEntities(record.entities); recordShown = false; dirty = true }
+            if (recordShown) { scene.removeEntities(record.entities); recordShown = false; invalidate() }
             return
         }
         val t = FilamentShared.mipmapped(face, srgb = true)
@@ -343,7 +359,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         faceTexture?.let { engine.destroyTexture(it) }
         faceTexture = t
         if (!recordShown) { scene.addEntities(record.entities); recordShown = true }
-        dirty = true
+        invalidate()
     }
 
     /** The record's grooves and glossy bands between tracks, from [RecordMaps]. */
@@ -357,24 +373,28 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         }
         surfaceTextures.forEach { engine.destroyTexture(it) }
         surfaceTextures = listOf(n, r)
-        dirty = true
+        invalidate()
     }
 
     fun resume() {
-        if (!running) { running = true; dirty = true; Choreographer.getInstance().postFrameCallback(this) }
+        if (!running) { running = true; invalidate() }
     }
 
     fun pause() {
         running = false
+        scheduled = false
         Choreographer.getInstance().removeFrameCallback(this)
     }
 
     override fun doFrame(frameTimeNanos: Long) {
+        scheduled = false
         if (!running) return
-        Choreographer.getInstance().postFrameCallback(this)
+        // No surface yet: onNativeWindowChanged asks for frames again when one arrives.
         val chain = swapChain ?: return
         if (dirty) { settle = maxOf(settle, SETTLE_FRAMES); dirty = false }
-        if (settle <= 0 || !uiHelper.isReadyToRender) return
+        // Nothing to draw: the callback stays off until a setter asks again.
+        if (settle <= 0) return
+        if (!uiHelper.isReadyToRender) { requestFrame(); return }
         applyTransforms()
         if (renderer.beginFrame(chain, frameTimeNanos)) {
             renderer.render(view)
@@ -386,6 +406,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         }
         // Request a Compose redraw even when Filament skips a frame.
         onFrame?.invoke()
+        if (settle > 0) requestFrame()
     }
 
     private fun applyTransforms() {

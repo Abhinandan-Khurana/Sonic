@@ -225,6 +225,28 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `the needle is only followed while the record plays`() {
+        val (d, p) = runningDeck()
+        try {
+            assertFalse("nothing ticks with nothing on", d.ticking)
+            d.load(album())
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_READY)
+            settle(50)
+            assertTrue(d.state.value.isPlaying)
+            assertTrue(d.ticking)
+            p.playWhenReady = false
+            settle(50)
+            assertFalse("paused: no ticker waking the app", d.ticking)
+            assertEquals("the place it stopped at is kept", p.currentPosition, d.state.value.positionMs)
+            p.play()
+            settle(50)
+            assertTrue(d.ticking)
+        } finally { p.release() }
+    }
+
+    @Test
     fun `a track that can't be played lifts the needle and says why`() {
         val (d, p) = runningDeck()
         try {
