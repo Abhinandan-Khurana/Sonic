@@ -186,9 +186,19 @@ private fun SearchKey(searching: Boolean, enabled: Boolean, onSearch: () -> Unit
     }
 }
 
-/** A row of equal cells in a 1 dp ink outline; the chosen one is black with white 10/400 type. */
+/**
+ * A row of equal cells in a 1 dp ink outline; the chosen one is black with white 10/400 type. With
+ * [colour], each cell has its own: the chosen one filled with it, the others lettered in it.
+ */
 @Composable
-internal fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, tag: (T) -> String? = { null }, onSelect: (T) -> Unit) {
+internal fun <T> Segments(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    tag: (T) -> String? = { null },
+    colour: (T) -> Color = { Room.Ink },
+    onSelect: (T) -> Unit,
+) {
     val tick = rememberTick()
     Row(Modifier.fillMaxWidth().border(1.dp, Room.Ink)) {
         options.forEach { o ->
@@ -196,14 +206,14 @@ internal fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, t
             Box(
                 Modifier
                     .weight(1f)
-                    .background(if (on) Room.Ink else Room.Background)
+                    .background(if (on) colour(o) else Room.Background)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Tab) { tick(); onSelect(o) }
                     .semantics { this.selected = on }
                     .then(tag(o)?.let { Modifier.testTag(it) } ?: Modifier)
                     .padding(vertical = 11.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText(label(o), style = Room.Label.copy(color = if (on) Color.White else Room.Ink), maxLines = 1)
+                BasicText(label(o), style = Room.Label.copy(color = if (on) Color.White else colour(o)), maxLines = 1)
             }
         }
     }

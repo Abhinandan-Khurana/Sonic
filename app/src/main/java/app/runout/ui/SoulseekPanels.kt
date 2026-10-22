@@ -373,10 +373,10 @@ private fun stateColor(state: SoulseekTransferState): Color = when (state) {
 }
 
 /** The Downloads page's three segments, in the owner's order. */
-internal enum class DownloadGroup(val label: String, val empty: String) {
-    FAILED("failed", "nothing failed."),
-    COMPLETED("completed", "nothing finished yet."),
-    QUEUE("in queue", "nothing in the queue."),
+internal enum class DownloadGroup(val label: String, val empty: String, val colour: Color) {
+    FAILED("failed", "nothing failed.", Room.Danger),
+    COMPLETED("completed", "nothing finished yet.", Room.Online),
+    QUEUE("in queue", "nothing in the queue.", Room.Signal),
 }
 
 internal fun downloadGroup(state: SoulseekTransferState): DownloadGroup = when (state) {
@@ -386,7 +386,7 @@ internal fun downloadGroup(state: SoulseekTransferState): DownloadGroup = when (
 }
 
 /**
- * Downloads: three segments (failed · completed · in queue, with counts) over that group's files,
+ * Downloads: three segments (failed red · completed green · in queue orange, with counts) over that group's files,
  * each under a hairline (index, name, lamp and state, size, a boxed progress bar, its keys: pause or
  * resume and remove in the queue, retry and remove when failed); then shared uploads, the
  * all-at-once controls and turtle mode. When Android's background usage is off, an amber alert
@@ -404,7 +404,7 @@ fun SoulseekTransfersPanel(state: RoomState, actions: RoomActions) {
         var picked by rememberSaveable { mutableStateOf<DownloadGroup?>(null) }
         // Opens on what needs you: the queue, then what failed, then what's done.
         val group = picked ?: listOf(DownloadGroup.QUEUE, DownloadGroup.FAILED, DownloadGroup.COMPLETED).firstOrNull { groups[it].orEmpty().isNotEmpty() } ?: DownloadGroup.QUEUE
-        Segments(DownloadGroup.entries, group, { "${it.label} ${groups[it].orEmpty().size}" }, tag = { "downloads-tab:${it.name.lowercase()}" }) { picked = it }
+        Segments(DownloadGroup.entries, group, { "${it.label} ${groups[it].orEmpty().size}" }, tag = { "downloads-tab:${it.name.lowercase()}" }, colour = { it.colour }) { picked = it }
         val shown = groups[group].orEmpty()
         when {
             state.soulseekTransfers.isEmpty() -> BasicText("nothing downloading.", style = Room.LabelQuiet, modifier = Modifier.testTag("downloads-empty"))
