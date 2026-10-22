@@ -1,5 +1,7 @@
 package app.runout.ui
 
+import kotlinx.coroutines.flow.drop
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.requiredSize
@@ -116,6 +118,9 @@ fun Crate(
     LaunchedEffect(albums.size) {
         if (albums.isNotEmpty() && pos.value > albums.lastIndex) pos.snapTo(albums.lastIndex.toFloat())
     }
+    // A soft detent each time a record passes the front, as a finger flicks through a crate.
+    val detent = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
+    LaunchedEffect(Unit) { snapshotFlow { pos.value.roundToInt() }.drop(1).collect { detent() } }
     val frontIndex = pos.value.roundToInt().coerceIn(0, (albums.size - 1).coerceAtLeast(0))
     val front = albums.getOrNull(frontIndex)
     LaunchedEffect(front?.id) { onFront(front) }

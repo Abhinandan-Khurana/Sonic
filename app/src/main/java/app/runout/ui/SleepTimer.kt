@@ -102,6 +102,8 @@ internal fun SleepTimerCard(sleepAt: Long?, onSet: (Int?) -> Unit, onDismiss: ()
     val rowPx = with(LocalDensity.current) { SLEEP_ROW.toPx() }
     val centred by remember { derivedStateOf { (list.firstVisibleItemIndex + if (list.firstVisibleItemScrollOffset > rowPx / 2) 1 else 0).coerceIn(0, SLEEP_MINUTES.lastIndex) } }
     val tick = rememberTick()
+    val started = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+    val stopped = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.ToggleOff)
     // Every step the wheel passes, a tick under the finger.
     LaunchedEffect(list) { snapshotFlow { centred }.drop(1).collect { tick() } }
     TeCard("sleep-timer", onDismiss) {
@@ -143,8 +145,8 @@ internal fun SleepTimerCard(sleepAt: Long?, onSet: (Int?) -> Unit, onDismiss: ()
                 }
             }
         }
-        TeButton("stop in ${SLEEP_MINUTES[centred]} min", { onSet(SLEEP_MINUTES[centred]); onDismiss() }, Modifier.fillMaxWidth().testTag("sleep-start"))
-        if (left != null) TeButton("turn the timer off", { onSet(null); onDismiss() }, Modifier.fillMaxWidth().testTag("sleep-off"), kind = KeyKind.OUTLINE)
+        TeButton("stop in ${SLEEP_MINUTES[centred]} min", { started(); onSet(SLEEP_MINUTES[centred]); onDismiss() }, Modifier.fillMaxWidth().testTag("sleep-start"))
+        if (left != null) TeButton("turn the timer off", { stopped(); onSet(null); onDismiss() }, Modifier.fillMaxWidth().testTag("sleep-off"), kind = KeyKind.OUTLINE)
     }
 }
 

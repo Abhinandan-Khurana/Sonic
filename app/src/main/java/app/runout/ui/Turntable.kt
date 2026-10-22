@@ -278,6 +278,15 @@ fun Turntable(
     var faceSideIndex by remember(deck.album?.id) { mutableIntStateOf(deck.sideIndex) }
     val flipT = remember { Animatable(0f) }
     val thud = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+    // The hand on the deck: the arm lifts with a catch, ticks over each gap between songs and at the
+    // record's edge as it's carried, lands in the groove with a thud and settles on its rest softly.
+    // A press that slows the platter is felt as it takes hold; pulling the record off says no.
+    val armLift = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate)
+    val groove = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentTick)
+    val needleDown = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+    val armRest = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureEnd)
+    val platterHeld = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate)
+    val pullRefused = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Reject)
     LaunchedEffect(deck.album?.id, deck.sideIndex) {
         if (deck.sideIndex == faceSideIndex) return@LaunchedEffect
         val animate = android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
@@ -301,6 +310,7 @@ fun Turntable(
     // The record's face, painted once per record and side, then turned by the platter in 3D.
     val faceSide = deck.sides.getOrNull(faceSideIndex) ?: deck.side
     val boundaries = remember(faceSide) { faceSide?.trackBoundaries() ?: emptyList() }
+    val currentBoundaries by rememberUpdatedState(boundaries)
     val face = remember(deck.album?.id, faceSide, cover) {
         deck.album?.let { if (use3d) recordFace(it, cover, boundaries, faceSide?.letter?.toString(), textMeasurer) else null }
     }
@@ -515,10 +525,19 @@ fun Turntable(
                                     val wasDown = d.needleDown
                                     val startAngle = currentArm
                                     if (wasDown) actions.liftNeedle()
+                                    armLift()
                                     var moved = 0f
                                     var last = down.position
                                     var twoFingers = false
                                     dragAngle = currentArm
+                                    // Where the stylus is over the record: off it (-1), or the song it's over.
+                                    fun songUnder(angle: Float): Int {
+                                        val s = DeckModel.stylus(angle)
+                                        if (hypot(s.x - DeckModel.platterCentre.x, s.z - DeckModel.platterCentre.z) > DeckModel.RECORD_R) return -1
+                                        val f = DeckModel.fractionForAngle(angle)
+                                        return currentBoundaries.count { it < f }
+                                    }
+                                    var song = songUnder(currentArm)
                                     while (true) {
                                         val event = awaitPointerEvent()
                                         if (event.changes.count { it.pressed } > 1) { twoFingers = true; break }
@@ -527,6 +546,7 @@ fun Turntable(
                                         moved += (change.position - last).getDistance()
                                         last = change.position
                                         cam.onPlane(change.position, DeckModel.RECORD_Y)?.let { dragAngle = DeckModel.angleTowards(it) }
+                                        dragAngle?.let { a -> songUnder(a).let { now -> if (now != song) { song = now; groove() } } }
                                         change.consume()
                                     }
                                     if (twoFingers) {
@@ -540,10 +560,11 @@ fun Turntable(
                                     val s = DeckModel.stylus(a)
                                     val overRecord = hypot(s.x - DeckModel.platterCentre.x, s.z - DeckModel.platterCentre.z) <= DeckModel.RECORD_R
                                     if (moved < viewConfiguration.touchSlop) {
-                                        if (!wasDown) actions.needleDrop(0f)
+                                        if (!wasDown) { actions.needleDrop(0f); needleDown() } else armRest()
                                     } else if (overRecord) {
                                         actions.needleDrop(DeckModel.fractionForAngle(a))
-                                    }
+                                        needleDown()
+                                    } else armRest()
                                 } else if (d.album != null && DeckModel.isOnRecord(p)) {
                                     // A quick tap flips the record; a press on a spinning record slows it
                                     // down; pulling it off the platter asks for Eject instead.
@@ -555,7 +576,7 @@ fun Turntable(
                                         val event = withTimeoutOrNull(if (pressed) Long.MAX_VALUE else 170L) { awaitPointerEvent() }
                                         if (event == null) {
                                             pressed = true
-                                            if (d.needleDown) { holding = true; actions.holdPlatter() }
+                                            if (d.needleDown) { holding = true; actions.holdPlatter(); platterHeld() }
                                             continue
                                         }
                                         // A second finger: the view is being tilted, not the record touched.
@@ -567,6 +588,7 @@ fun Turntable(
                                         }
                                         if (!dragged && (change.position - down.position).getDistance() > dragLimit) {
                                             dragged = true
+                                            pullRefused()
                                             onRecordDragged?.invoke()
                                         }
                                     }

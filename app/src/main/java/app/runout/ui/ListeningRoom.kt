@@ -468,6 +468,7 @@ fun RoomScreen(
     val landed = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
     val refused = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Reject)
     val buzz = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
+    val buzzHard = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentTick)
     // The deck's Eject key, with the flight home when the 3D record can make it; otherwise at once.
     val deckActions = remember(actions) {
         object : DeckActions by actions {
@@ -756,8 +757,9 @@ fun RoomScreen(
                 swapping = false
             }
 
-            // Held over a busy platter for a second: the deck shakes, harder as it goes, with a tick
-            // per shake, then the records swap. Letting go or moving off before then stops it.
+            // Held over a busy platter for about two thirds of a second: the deck shakes, harder as it
+            // goes, with a tick per shake that firms up for the last few, then the records swap.
+            // Letting go or moving off before then stops it.
             val overBusy = dragging && !swapping && pc != null && dist < platterRadius * 0.95f &&
                 state.deck.album?.id?.let { it != pulled.id } == true
             LaunchedEffect(overBusy) {
@@ -769,7 +771,7 @@ fun RoomScreen(
                     repeat(SWAP_SHAKES) { i ->
                         val a = px * (1.5f + 2f * i / (SWAP_SHAKES - 1))
                         if (motion) shakeX = if (i % 2 == 0) a else -a
-                        buzz()
+                        if (i >= SWAP_SHAKES - 4) buzzHard() else buzz()
                         delay(SWAP_HOLD_MS / SWAP_SHAKES)
                     }
                 } finally {
@@ -1751,5 +1753,5 @@ internal fun TextAction(text: String, onClick: () -> Unit, tag: String = "action
 private const val HANDOVER_MS = 350L
 
 /** How long a record is held over a busy platter before the swap, and how many shakes that is. */
-private const val SWAP_HOLD_MS = 1_000L
-private const val SWAP_SHAKES = 24
+private const val SWAP_HOLD_MS = 650L
+private const val SWAP_SHAKES = 16

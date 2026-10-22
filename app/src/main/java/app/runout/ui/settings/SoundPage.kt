@@ -1,5 +1,6 @@
 package app.runout.ui.settings
 
+import kotlin.math.floor
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -266,6 +267,11 @@ private fun BandFader(label: String, gainDb: Float, maxDb: Float, onChange: (Flo
             (if (gainDb > 0.05f) "+" else "") + if (gainDb.roundToInt().toFloat() == gainDb) gainDb.roundToInt().toString() else "%.1f".format(gainDb),
             style = Room.Label.copy(color = if (abs(gainDb) < 0.05f) Room.Quiet else Room.Ink),
         )
+        // A detent at every whole dB under the finger, a firmer one at 0 dB, and a confirm when a
+        // double tap sets it back to flat.
+        val detent = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
+        val centre = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentTick)
+        val reset = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
         // 14 dp drawn, a little wider to grab.
         Canvas(
             Modifier
@@ -275,17 +281,23 @@ private fun BandFader(label: String, gainDb: Float, maxDb: Float, onChange: (Flo
                     if (!enabled) return@pointerInput
                     var start = 0f
                     var travelled = 0f
-                    detectVerticalDragGestures(onDragStart = { start = current; travelled = 0f }) { ch, dy ->
+                    var felt = 0f
+                    detectVerticalDragGestures(onDragStart = { start = current; travelled = 0f; felt = current }) { ch, dy ->
                         ch.consume()
                         travelled += dy
                         val perPx = (2 * maxDb) / size.height
-                        val next = ((start - travelled * perPx) * 2f).roundToInt() / 2f
-                        change(next.coerceIn(-maxDb, maxDb))
+                        val next = (((start - travelled * perPx) * 2f).roundToInt() / 2f).coerceIn(-maxDb, maxDb)
+                        if (next != felt) {
+                            if (next == 0f || (felt > 0f && next < 0f) || (felt < 0f && next > 0f)) centre()
+                            else if (floor(next) != floor(felt)) detent()
+                            felt = next
+                        }
+                        change(next)
                     }
                 }
                 .pointerInput(enabled) {
                     if (!enabled) return@pointerInput
-                    detectTapGestures(onDoubleTap = { change(0f) })
+                    detectTapGestures(onDoubleTap = { if (current != 0f) reset(); change(0f) })
                 },
         ) {
             val cx = size.width / 2f
