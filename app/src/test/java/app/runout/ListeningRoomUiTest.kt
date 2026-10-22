@@ -566,6 +566,15 @@ class ListeningRoomUiTest {
         compose.onNodeWithText("night drive").assertExists()
         compose.onNodeWithText("downloads land inside your music folder, so they're counted above.").performScrollTo().assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_storage.png")
+        // Two fingers down: back to the list.
+        compose.onNodeWithTag("storage-back-hint").assertExists()
+        compose.onNodeWithTag("panel:settings").performTouchInput {
+            down(0, center); down(1, center + androidx.compose.ui.geometry.Offset(120f, 0f))
+            repeat(8) { moveBy(0, androidx.compose.ui.geometry.Offset(0f, 40f)); moveBy(1, androidx.compose.ui.geometry.Offset(0f, 40f)) }
+            up(0); up(1)
+        }
+        compose.onNodeWithTag("panel:storage").assertDoesNotExist()
+        compose.onNodeWithTag("settings:SOUND").assertExists()
     }
 
     @Test

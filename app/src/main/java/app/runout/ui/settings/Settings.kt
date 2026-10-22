@@ -162,8 +162,8 @@ private fun SettingsHome(state: RoomState, onSection: (SettingsSection?) -> Unit
         Modifier
             .fillMaxWidth()
             .fillPageHeight()
-            // Two fingers up or down the page: the storage page, kept off the list.
-            .twoFingerSwipe { found(); onSection(SettingsSection.STORAGE) }
+            // Two fingers up the page: the storage page, kept off the list.
+            .twoFingerSwipe(up = true) { found(); onSection(SettingsSection.STORAGE) }
             .testTag("panel:settings"),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
@@ -207,10 +207,14 @@ private fun SettingsPage(
 ) {
     BackHandler { onSection(null) }
     PageStep { onSection(null) }
+    val back = rememberTick(HapticFeedbackType.GestureThresholdActivate)
     Column(
         Modifier
             .fillMaxWidth()
-            .then(if (section == SettingsSection.ABOUT) Modifier.fillPageHeight() else Modifier)
+            // Storage too, so two fingers anywhere below its last line still take it away.
+            .then(if (section == SettingsSection.ABOUT || section == SettingsSection.STORAGE) Modifier.fillPageHeight() else Modifier)
+            // Storage came up with two fingers; two fingers down take it away again.
+            .then(if (section == SettingsSection.STORAGE) Modifier.twoFingerSwipe(up = false) { back(); onSection(null) } else Modifier)
             .testTag("panel:settings"),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
@@ -479,10 +483,10 @@ internal fun HelpToggle(
 }
 
 /**
- * Two fingers dragged up or down past 56 dp: [onSwipe], once per gesture. Watches on the way in
- * without taking anything, so one finger still scrolls the page and taps still land.
+ * Two fingers dragged [up] (or down) past 56 dp: [onSwipe], once per gesture. Watches on the way
+ * in without taking anything, so one finger still scrolls the page and taps still land.
  */
-internal fun Modifier.twoFingerSwipe(onSwipe: () -> Unit): Modifier = pointerInput(Unit) {
+internal fun Modifier.twoFingerSwipe(up: Boolean, onSwipe: () -> Unit): Modifier = pointerInput(up) {
     val reach = 56.dp.toPx()
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -495,7 +499,8 @@ internal fun Modifier.twoFingerSwipe(onSwipe: () -> Unit): Modifier = pointerInp
             if (pressed.size >= 2) {
                 val y = pressed.take(2).map { it.position.y }.average().toFloat()
                 if (start == null) start = y
-                if (!fired && kotlin.math.abs(y - start!!) > reach) {
+                val travel = start!! - y
+                if (!fired && (if (up) travel > reach else -travel > reach)) {
                     fired = true
                     event.changes.forEach { it.consume() }
                     onSwipe()

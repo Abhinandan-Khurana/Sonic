@@ -40,6 +40,11 @@ internal fun StoragePage(state: RoomState, actions: RoomActions) {
             "what your music and downloads take up, read from the folders you picked. only sizes and names are looked at.",
             style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
         )
+        // The way back, as the way in: two fingers, this time down.
+        Row(Modifier.fillMaxWidth().testTag("storage-back-hint"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            androidx.compose.foundation.Canvas(Modifier.size(20.dp)) { drawTwoFingerSwipe(Room.Quiet) }
+            BasicText("swipe down with two fingers to go back to settings", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
+        }
         when (val s = state.storage) {
             is StorageState.Done -> Report(s.report, actions)
             is StorageState.Measuring -> Column(Modifier.fillMaxWidth().padding(vertical = 33.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
