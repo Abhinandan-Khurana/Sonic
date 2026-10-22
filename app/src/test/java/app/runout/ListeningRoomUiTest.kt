@@ -279,6 +279,19 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `the friends tab leaves an open chat even while the room still reports it`() {
+        portrait()
+        // The closed chat reaches the room a frame late; here it never does.
+        val s = state(contacts = listOf(SoulseekContact("maya", true))).copy(soulseekConversation = "maya")
+        compose.setContent { RoomScreen(s, RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("field:Private message").assertExists()
+        compose.onNodeWithTag("nav:FRIENDS").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("field:Private message").assertDoesNotExist()
+        compose.onNodeWithTag("new-chat").assertExists()
+    }
+
+    @Test
     fun `leaving dig forgets its search a while later`() {
         portrait()
         val cleared = java.util.concurrent.atomic.AtomicInteger()

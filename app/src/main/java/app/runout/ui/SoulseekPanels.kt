@@ -584,9 +584,11 @@ private fun TransferRow(index: Int, transfer: SoulseekTransfer, state: RoomState
  * can send a record as a card, which the other person can find on Soulseek with one tap.
  */
 @Composable
-fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onDig: () -> Unit = {}) {
+fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () -> Unit, onDig: () -> Unit = {}, ignoreChat: String? = null) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.soulseekConversation) { state.soulseekConversation?.let { selected = it } }
+    // [ignoreChat]: the chat that was open when the Friends tab was tapped. Closing it reaches the
+    // room a frame late, and must not reopen it.
+    LaunchedEffect(state.soulseekConversation) { state.soulseekConversation?.takeIf { it != ignoreChat }?.let { selected = it } }
     val peer = selected
     val clock = rememberClock()
     Box(Modifier.fillMaxSize().testTag("panel:messages")) {

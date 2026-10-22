@@ -352,12 +352,16 @@ fun RoomScreen(
     val pageSteps = remember { PageSteps() }
     // A place's page is drawn fresh when this changes: tapping the open place again takes it home.
     var home by remember { mutableIntStateOf(0) }
+    // The chat open when the Friends tab was tapped: Friends opens on the chats, not back in it.
+    var ignoreChat by remember { mutableStateOf<String?>(null) }
     fun closePanel() {
         if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
         pageHistory.clear()
         panel = null
     }
     fun goTo(next: Panel) {
+        // Sent to a chat on purpose (a folder's "message"): open it.
+        if (next == Panel.FRIENDS) ignoreChat = null
         panel?.takeIf { it != next }?.let { pageHistory += it }
         panel = next
     }
@@ -918,7 +922,7 @@ fun RoomScreen(
                 Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount, preview = state.preview)
                 Panel.FRIENDS -> {
                     if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
-                    SoulseekMessagesPanel(state, actions, onAccount = openAccount, onDig = { goTo(Panel.DIG) })
+                    SoulseekMessagesPanel(state, actions, onAccount = openAccount, onDig = { goTo(Panel.DIG) }, ignoreChat = ignoreChat)
                 }
                 Panel.SETTINGS -> SettingsPanel(
                     state, actions, settings, { settings = it },
@@ -1004,7 +1008,7 @@ fun RoomScreen(
                     }
                     if (it == Panel.SETTINGS) settings = null
                     // Friends always opens on its own page, not on the last chat.
-                    if (it == Panel.FRIENDS) actions.closeSoulseekConversation()
+                    if (it == Panel.FRIENDS) { ignoreChat = state.soulseekConversation; actions.closeSoulseekConversation() }
                     // A folder preview belongs to Dig's visit: leaving Dig, or tapping it again, closes it.
                     if (state.folderPreview != null && (panel == Panel.DIG || it == Panel.DIG)) actions.closeSoulseekFolder()
                     // The nav bar starts afresh: nothing to go back to.
