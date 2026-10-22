@@ -98,7 +98,10 @@ class LibraryRepository(
      * part of the app (the downloads or shared folder) still uses that same folder.
      */
     fun setFolder(uri: Uri, keepGrant: (Uri) -> Boolean = { false }): Job? {
+        // Read to play; write too when Android granted it, so Settings › Storage can delete a record.
         runCatching {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }.recoverCatching {
             context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val old = _folder.value
@@ -109,6 +112,8 @@ class LibraryRepository(
             // Stop reading the old folder before giving up access to it.
             scanJob?.cancel()
             if (!keepGrant(old)) runCatching {
+                context.contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }.recoverCatching {
                 context.contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             _albums.value = emptyList()

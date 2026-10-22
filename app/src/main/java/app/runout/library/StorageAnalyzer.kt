@@ -23,8 +23,18 @@ enum class StorageKind(val label: String) {
     OTHER("other files"),
 }
 
-/** One record's folder and what it takes. */
-data class RecordUsage(val title: String, val artist: String?, val bytes: Long)
+/**
+ * One record's folder and what it takes. [deletable] when the folder is the record's own: not the
+ * picked folder itself, and holding no other record's folder.
+ */
+data class RecordUsage(
+    val title: String,
+    val artist: String?,
+    val bytes: Long,
+    val folderUri: String? = null,
+    val albumId: String? = null,
+    val deletable: Boolean = false,
+)
 
 /** A picked folder, measured. */
 data class FolderUsage(
@@ -34,6 +44,7 @@ data class FolderUsage(
     val folders: Int,
     val albums: Int,
     val byKind: Map<StorageKind, Long>,
+    /** Every record in the folder, largest first. */
     val largest: List<RecordUsage>,
     /** The folder couldn't be read (permission gone, provider away). */
     val error: String? = null,
@@ -96,6 +107,23 @@ class StorageAnalyzer(private val context: Context) {
         _state.value = StorageState.Done(report)
     }
 
+    /**
+     * Deletes a record's folder and every file in it from the phone, through the folder's grant.
+     * Only ever a [RecordUsage.deletable] one; the caller takes it off the shelf and measures again.
+     */
+    suspend fun delete(record: RecordUsage): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            check(record.deletable) { "that folder holds more than one record" }
+            val uri = Uri.parse(requireNotNull(record.folderUri))
+            val done = try {
+                DocumentsContract.deleteDocument(context.contentResolver, uri)
+            } catch (e: SecurityException) {
+                error("sonic can't delete in this folder yet. choose it again in library, then try again.")
+            }
+            check(done) { "android couldn't delete that folder." }
+        }
+    }
+
     /** Empties Sonic's caches (never the covers or the library), then measures its corner again. */
     suspend fun clearCache() = withContext(Dispatchers.IO) {
         context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
@@ -126,7 +154,6 @@ class StorageAnalyzer(private val context: Context) {
     companion object {
         private val OTHER_AUDIO = setOf("mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "aif", "aiff", "alac", "ape", "wv", "dsf", "dff", "wma", "mka")
         private val PICTURES = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic")
-        private const val LARGEST = 5
 
         fun kindOf(name: String, hiRes: Boolean): StorageKind {
             val lower = name.lowercase()
@@ -159,7 +186,8 @@ class StorageAnalyzer(private val context: Context) {
                 runCatching { DocumentsContract.getDocumentId(Uri.parse(a.folderUri)) }.getOrNull()?.let { it to a }
             }.toMap()
             val kinds = mutableMapOf<StorageKind, Long>()
-            val records = mutableListOf<RecordUsage>()
+            val records = mutableListOf<Pair<String, RecordUsage>>()
+            val parent = mutableMapOf<String, String>()
             var bytes = 0L
             var files = 0
             var folders = 0
@@ -177,7 +205,7 @@ class StorageAnalyzer(private val context: Context) {
                 val album = byFolder[id]
                 var audio = 0L
                 for (e in children) {
-                    if (e.isDir) { queue += e.docId; continue }
+                    if (e.isDir) { queue += e.docId; parent[e.docId] = id; continue }
                     val kind = kindOf(e.name, album?.quality?.isHiRes == true)
                     kinds[kind] = (kinds[kind] ?: 0L) + e.size
                     bytes += e.size
@@ -185,9 +213,15 @@ class StorageAnalyzer(private val context: Context) {
                     if (kind == StorageKind.FLAC_HI_RES || kind == StorageKind.FLAC_CD || kind == StorageKind.OTHER_AUDIO) audio += e.size
                 }
                 progress(children.count { !it.isDir })
-                if (audio > 0) records += RecordUsage(album?.title ?: id.substringAfterLast('/').substringAfterLast(':'), album?.artist, audio)
+                if (audio > 0) records += id to RecordUsage(
+                    album?.title ?: id.substringAfterLast('/').substringAfterLast(':'), album?.artist, audio,
+                    folderUri = DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(), albumId = album?.id,
+                )
             }
-            return FolderUsage(label, bytes, files, folders, records.size, kinds, records.sortedByDescending { it.bytes }.take(LARGEST))
+            // A folder that holds another record's folder can't go without taking that one too.
+            val holders = records.flatMap { (id, _) -> generateSequence(parent[id]) { parent[it] }.toList() }.toSet()
+            val all = records.map { (id, r) -> r.copy(deletable = id != rootId && id !in holders) }
+            return FolderUsage(label, bytes, files, folders, records.size, kinds, all.sortedByDescending { it.bytes })
         }
 
         fun sizeOf(file: File): Long =

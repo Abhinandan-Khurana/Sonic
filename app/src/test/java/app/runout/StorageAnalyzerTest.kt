@@ -65,6 +65,24 @@ class StorageAnalyzerTest {
     }
 
     @Test
+    fun `only a record's own folder can be deleted, never the picked folder or one holding another record`() {
+        val tree = mapOf(
+            // Loose tracks right in /Music, an artist folder with its own tracks and an album inside it, and a plain album.
+            "primary:Music" to listOf(Entry("primary:Music/loose.flac", "loose.flac", false, 5), Entry("primary:Music/Air", "Air", true, 0), Entry("primary:Music/Vela", "Vela", true, 0)),
+            "primary:Music/Air" to listOf(Entry("primary:Music/Air/single.flac", "single.flac", false, 10), Entry("primary:Music/Air/Moon Safari", "Moon Safari", true, 0)),
+            "primary:Music/Air/Moon Safari" to listOf(Entry("primary:Music/Air/Moon Safari/01.flac", "01.flac", false, 30)),
+            "primary:Music/Vela" to listOf(Entry("primary:Music/Vela/01.flac", "01.flac", false, 20)),
+        )
+        val f = StorageAnalyzer.measure(this.tree, emptyList(), { _, id -> tree[id] })
+        val byTitle = f.largest.associateBy { it.title }
+        assertFalse("the picked folder itself", byTitle.getValue("Music").deletable)
+        assertFalse("holds Moon Safari", byTitle.getValue("Air").deletable)
+        assertTrue(byTitle.getValue("Moon Safari").deletable)
+        assertTrue(byTitle.getValue("Vela").deletable)
+        assertEquals(DocumentsContract.buildDocumentUriUsingTree(this.tree, "primary:Music/Vela").toString(), byTitle.getValue("Vela").folderUri)
+    }
+
+    @Test
     fun `a folder that can't be opened says so, and downloads inside music are spotted`() {
         val f = StorageAnalyzer.measure(tree, emptyList(), { _, _ -> null })
         assertNotNull(f.error)

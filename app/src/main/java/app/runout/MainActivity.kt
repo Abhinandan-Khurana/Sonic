@@ -240,6 +240,22 @@ class MainActivity : ComponentActivity() {
                         graph.scope.launch { graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value) }
                     }
                     override fun clearCache() { graph.scope.launch { graph.storage.clearCache() } }
+                    override fun deleteRecordFolder(record: app.runout.library.RecordUsage) {
+                        graph.scope.launch {
+                            val album = graph.shelf.value.firstOrNull { it.id == record.albumId }
+                            if (album != null && graph.deck.state.value.album?.id == album.id) graph.deck.eject()
+                            graph.storage.delete(record).onSuccess {
+                                when (album?.source) {
+                                    Source.SOULSEEK -> graph.soulseek.removeAlbum(album.id)
+                                    Source.DROP -> graph.drops.remove(album.id)
+                                    else -> Unit
+                                }
+                                graph.library.rescan()
+                                message.value = "Deleted “${record.title}”"
+                                graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value)
+                            }.onFailure { message.value = it.message ?: "Couldn't delete “${record.title}”" }
+                        }
+                    }
                     override fun setSleepTimer(minutes: Int?) = graph.deck.setSleepTimer(minutes)
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {

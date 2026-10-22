@@ -59,14 +59,14 @@ internal fun PageSheetLayer(host: PageSheetHost) {
 }
 
 /**
- * A white sheet that rises from the bottom of the page over a shade. Tapping the shade or Back
+ * A sheet of the room's paper (or, [inverted], of its ink) that rises from the bottom of the page over a shade. Tapping the shade or Back
  * closes it. Inside a full page it's drawn by the page itself (see [PageSheetHost]); anywhere else
  * it's drawn in place.
  */
 @Composable
-internal fun PageSheet(tag: String, onDismiss: () -> Unit, title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+internal fun PageSheet(tag: String, onDismiss: () -> Unit, title: String? = null, inverted: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val host = LocalPageSheetHost.current
-    val sheet: @Composable () -> Unit = { SheetBody(tag, onDismiss, title, content) }
+    val sheet: @Composable () -> Unit = { SheetBody(tag, onDismiss, title, inverted, content) }
     if (host == null) {
         sheet()
         return
@@ -77,7 +77,7 @@ internal fun PageSheet(tag: String, onDismiss: () -> Unit, title: String? = null
 }
 
 @Composable
-private fun SheetBody(tag: String, onDismiss: () -> Unit, title: String?, content: @Composable ColumnScope.() -> Unit) {
+private fun SheetBody(tag: String, onDismiss: () -> Unit, title: String?, inverted: Boolean, content: @Composable ColumnScope.() -> Unit) {
     BackHandler(onBack = onDismiss)
     val shown = remember { MutableTransitionState(false).apply { targetState = true } }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
@@ -96,9 +96,10 @@ private fun SheetBody(tag: String, onDismiss: () -> Unit, title: String?, conten
                 Modifier
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .background(Room.Background)
+                    // Inverted, for a warning: the theme's ink as its paper, under a red rule.
+                    .background(if (inverted) Room.Ink else Room.Background)
                     // The TE panel: a 2 dp ink rule on top, 22 dp in (33 at the foot), 22 dp between parts.
-                    .hairlineTop(Room.Ink, 2.dp)
+                    .hairlineTop(if (inverted) Room.InverseDanger else Room.Ink, 2.dp)
                     .pointerInput(Unit) { detectTapGestures { } }
                     .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 33.dp)

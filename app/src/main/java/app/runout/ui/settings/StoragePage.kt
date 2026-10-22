@@ -1,5 +1,17 @@
 package app.runout.ui.settings
 
+import app.runout.library.RecordUsage
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +46,8 @@ import app.runout.ui.*
  */
 @Composable
 internal fun StoragePage(state: RoomState, actions: RoomActions) {
+    // The record whose delete key was pressed, waiting on the warning.
+    var confirm by remember { mutableStateOf<RecordUsage?>(null) }
     LaunchedEffect(Unit) { if (state.storage !is StorageState.Measuring) actions.analyzeStorage() }
     Column(Modifier.fillMaxWidth().testTag("panel:storage"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         BasicText(
@@ -46,7 +60,7 @@ internal fun StoragePage(state: RoomState, actions: RoomActions) {
             BasicText("swipe down with two fingers to go back to settings", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
         }
         when (val s = state.storage) {
-            is StorageState.Done -> Report(s.report, actions)
+            is StorageState.Done -> Report(s.report, actions) { confirm = it }
             is StorageState.Measuring -> Column(Modifier.fillMaxWidth().padding(vertical = 33.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 DotVinylSpinner(Modifier.size(96.dp), description = "Measuring your folders")
                 BasicText(if (s.files == 0) "measuring your folders…" else "measuring… ${"%,d".format(s.files)} files", style = Room.LabelQuiet, modifier = Modifier.testTag("storage-measuring"))
@@ -54,10 +68,50 @@ internal fun StoragePage(state: RoomState, actions: RoomActions) {
             StorageState.Idle -> Unit
         }
     }
+    confirm?.let { record -> DeleteWarning(record, onDelete = { confirm = null; actions.deleteRecordFolder(record) }, onKeep = { confirm = null }) }
+}
+
+/**
+ * The warning before a record's folder goes: the theme turned over (white on a dark phone, black on
+ * a light one) under a red rule, the record, the red line, and the two keys.
+ */
+@Composable
+private fun DeleteWarning(record: RecordUsage, onDelete: () -> Unit, onKeep: () -> Unit) {
+    PageSheet("delete-warning", onKeep, inverted = true) {
+        BasicText("delete record", style = Room.Label.copy(color = Room.InverseBody))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicText(record.title.uppercase(), style = Room.Title.copy(color = Room.OnInk), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            record.artist?.let { BasicText(it.lowercase(), style = Room.Label.copy(color = Room.InverseBody)) }
+        }
+        BasicText("your album will be deleted.", style = Room.Strong.copy(color = Room.InverseDanger), modifier = Modifier.testTag("delete-warning-line"))
+        BasicText(
+            "its folder and every file in it (${bytes(record.bytes)}) are removed from your phone, not just from sonic. this can't be undone.",
+            style = Room.Label.copy(color = Room.InverseBody, lineHeight = 15.sp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            SheetKey("keep it", Room.OnInk, Room.Ink, Modifier.weight(1f).testTag("delete-keep"), outline = true, onClick = onKeep)
+            SheetKey("delete", Color.White, Room.InverseDanger, Modifier.weight(1f).testTag("delete-confirm"), onClick = onDelete)
+        }
+    }
+}
+
+/** A key in the turned-over sheet, where the room's own keys would vanish ink on ink. */
+@Composable
+private fun SheetKey(text: String, ink: Color, fill: Color, modifier: Modifier, outline: Boolean = false, onClick: () -> Unit) {
+    val tick = rememberTick()
+    Box(
+        modifier
+            .background(fill)
+            .then(if (outline) Modifier.border(1.dp, ink) else Modifier)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) { BasicText(text, style = Room.Text.copy(color = ink), maxLines = 1) }
 }
 
 @Composable
-private fun Report(r: StorageReport, actions: RoomActions) {
+private fun Report(r: StorageReport, actions: RoomActions, onDelete: (RecordUsage) -> Unit) {
     val music = r.music?.bytes ?: 0L
     val downloads = r.downloads?.bytes ?: 0L
     r.device?.let { d ->
@@ -72,12 +126,12 @@ private fun Report(r: StorageReport, actions: RoomActions) {
         }
     }
     PageSection("02 music folder" + (r.music?.label?.let { " · ${it.lowercase()}" } ?: "")) {
-        r.music?.let { Folder(it, "storage-music") } ?: Quiet("no music folder yet. choose one in library.")
+        r.music?.let { Folder(it, "storage-music", onDelete) } ?: Quiet("no music folder yet. choose one in library.")
     }
     PageSection("03 download folder" + (r.downloads?.label?.let { " · ${it.lowercase()}" } ?: "")) {
         when {
             r.downloadsInMusic -> Quiet("downloads land inside your music folder, so they're counted above.")
-            r.downloads != null -> Folder(r.downloads, "storage-downloads")
+            r.downloads != null -> Folder(r.downloads, "storage-downloads", onDelete)
             else -> Quiet("no download folder yet. choose one in library.")
         }
     }
@@ -91,9 +145,13 @@ private fun Report(r: StorageReport, actions: RoomActions) {
     }
 }
 
-/** A folder: its strip, its bar by kind with a legend line each, and its largest records. */
+/**
+ * A folder: its strip, its bar by kind with a legend line each, and its records largest first (five,
+ * then all of them), each with a delete key when the folder is the record's own.
+ */
 @Composable
-private fun Folder(f: FolderUsage, tag: String) {
+private fun Folder(f: FolderUsage, tag: String, onDelete: (RecordUsage) -> Unit) {
+    var all by remember(f.label) { mutableStateOf(false) }
     if (f.error != null) { BasicText(f.error, style = Room.Label.copy(color = Room.Danger, lineHeight = 15.sp)); return }
     Column(Modifier.fillMaxWidth().testTag(tag), verticalArrangement = Arrangement.spacedBy(11.dp)) {
         StatsStrip(listOf(bytes(f.bytes) to "size", "%,d".format(f.files) to "files", "${f.albums}" to "records"))
@@ -103,9 +161,9 @@ private fun Folder(f: FolderUsage, tag: String) {
             kinds.forEach { (k, b) -> Legend(colourOf(k), k.label, b, f.bytes) }
         }
         if (f.largest.isNotEmpty()) {
-            BasicText("largest records", style = Room.LabelQuiet, modifier = Modifier.padding(top = 11.dp))
+            BasicText("records, largest first", style = Room.LabelQuiet, modifier = Modifier.padding(top = 11.dp))
             Column(Modifier.fillMaxWidth()) {
-                f.largest.forEachIndexed { i, rec ->
+                (if (all) f.largest else f.largest.take(SHOWN)).forEachIndexed { i, rec ->
                     Row(
                         Modifier.fillMaxWidth().hairlineTop().padding(vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -117,9 +175,14 @@ private fun Folder(f: FolderUsage, tag: String) {
                             rec.artist?.let { BasicText(it.lowercase(), style = Room.LabelQuiet, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
                         BasicText(bytes(rec.bytes), style = Room.Label)
+                        if (rec.deletable) TrashKey(rec.title) { onDelete(rec) }
                     }
                 }
             }
+            if (f.largest.size > SHOWN) TeLink(
+                if (all) "fewer" else "all ${f.largest.size} records",
+                { all = !all }, tag = "$tag-all",
+            )
         }
     }
 }
@@ -184,4 +247,34 @@ internal fun bytes(b: Long): String = when {
 private fun percent(b: Long, of: Long): String = if (of <= 0) "" else {
     val p = b * 100.0 / of
     if (p in 0.01..0.99) "<1%" else "%.0f%%".format(p)
+}
+
+/** How many records a folder lists before "all n records". */
+private const val SHOWN = 5
+
+/** Lucide's trash-2, a 20 dp glyph in a 40 dp touch square, saying which record it deletes. */
+@Composable
+private fun TrashKey(title: String, onClick: () -> Unit) {
+    val tick = rememberTick()
+    Box(
+        Modifier
+            .size(40.dp)
+            .semantics { contentDescription = "Delete $title" }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
+            .testTag("delete:$title"),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+            val k = size.width / 24f
+            val st = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f * k, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+            val c = Room.Danger
+            drawLine(c, androidx.compose.ui.geometry.Offset(3f * k, 6f * k), androidx.compose.ui.geometry.Offset(21f * k, 6f * k), st.width, androidx.compose.ui.graphics.StrokeCap.Round)
+            val lid = androidx.compose.ui.graphics.Path().apply { moveTo(8f * k, 6f * k); lineTo(8f * k, 4f * k); quadraticTo(8f * k, 2f * k, 10f * k, 2f * k); lineTo(14f * k, 2f * k); quadraticTo(16f * k, 2f * k, 16f * k, 4f * k); lineTo(16f * k, 6f * k) }
+            drawPath(lid, c, style = st)
+            val can = androidx.compose.ui.graphics.Path().apply { moveTo(19f * k, 6f * k); lineTo(19f * k, 20f * k); quadraticTo(19f * k, 22f * k, 17f * k, 22f * k); lineTo(7f * k, 22f * k); quadraticTo(5f * k, 22f * k, 5f * k, 20f * k); lineTo(5f * k, 6f * k) }
+            drawPath(can, c, style = st)
+            drawLine(c, androidx.compose.ui.geometry.Offset(10f * k, 11f * k), androidx.compose.ui.geometry.Offset(10f * k, 17f * k), st.width, androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(c, androidx.compose.ui.geometry.Offset(14f * k, 11f * k), androidx.compose.ui.geometry.Offset(14f * k, 17f * k), st.width, androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
 }

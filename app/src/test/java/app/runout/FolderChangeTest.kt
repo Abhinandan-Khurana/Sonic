@@ -77,7 +77,7 @@ class FolderChangeTest {
             assertTrue(b in held())
             assertTrue(a in held())
         } finally {
-            resolver.persistedUriPermissions.forEach { runCatching { resolver.releasePersistableUriPermission(it.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+            resolver.persistedUriPermissions.toList().forEach { runCatching { resolver.releasePersistableUriPermission(it.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
             scope.cancel()
         }
     }

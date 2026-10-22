@@ -280,6 +280,8 @@ interface RoomActions : DeckActions {
     fun analyzeStorage() {}
     /** Empties Sonic's cache (not covers, not the library). */
     fun clearCache() {}
+    /** Deletes a record's folder from the phone (Settings › Storage, after the warning). */
+    fun deleteRecordFolder(record: app.runout.library.RecordUsage) {}
     /** Stops the music in so many minutes; null turns the timer off. */
     fun setSleepTimer(minutes: Int?) {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}

@@ -578,6 +578,32 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `a record's delete key warns in the other theme's colours, and only delete deletes`() {
+        portrait()
+        val deleted = mutableListOf<String>()
+        val actions = object : RecordingActions() { override fun deleteRecordFolder(record: app.runout.library.RecordUsage) { deleted += record.title } }
+        val night = app.runout.library.RecordUsage("Night Drive", "Vela Park", 128_000_000, "content://x/Night", "a-night", deletable = true)
+        val usage = app.runout.library.FolderUsage("/Music", 128_000_000, 2, 2, 1, mapOf(app.runout.library.StorageKind.FLAC_HI_RES to 128_000_000L), listOf(night))
+        val report = app.runout.library.StorageReport(null, usage, null, downloadsInMusic = true, app = app.runout.library.AppUsage(0, 0, 0), at = 0L)
+        try {
+            Room.dark = true
+            compose.setContent { RoomScreen(state().copy(storage = app.runout.library.StorageState.Done(report)), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.STORAGE) }
+            compose.onNodeWithTag("delete:Night Drive").performScrollTo().performClick()
+            compose.onNodeWithTag("delete-warning").assertExists()
+            compose.onNodeWithText("your album will be deleted.").assertExists()
+            compose.onRoot().captureRoboImage("build/outputs/roborazzi/storage_delete_warning_dark.png")
+            compose.onNodeWithTag("delete-keep").performClick()
+            compose.onNodeWithTag("delete-warning").assertDoesNotExist()
+            assertTrue("keeping it deletes nothing", deleted.isEmpty())
+            compose.onNodeWithTag("delete:Night Drive").performScrollTo().performClick()
+            compose.onNodeWithTag("delete-confirm").performClick()
+            assertEquals(listOf("Night Drive"), deleted)
+        } finally {
+            Room.dark = false
+        }
+    }
+
+    @Test
     fun `soulseek settings grey out how you share until sharing is on`() {
         portrait()
         val calls = mutableListOf<String>()

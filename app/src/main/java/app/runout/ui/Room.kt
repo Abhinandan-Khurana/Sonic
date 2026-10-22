@@ -52,6 +52,9 @@ object Room {
     val Danger: Color get() = palette.danger
     /** Behind every panel and dialog. */
     val Scrim: Color get() = palette.scrim
+    /** The other theme's red and body grey, for what's set on an ink fill (the delete warning). */
+    val InverseDanger: Color get() = (if (dark) Palette.Light else Palette.Dark).danger
+    val InverseBody: Color get() = (if (dark) Palette.Light else Palette.Dark).body
 
     /** The two palettes. Dark is true black for OLED: lit pixels are only type, rules and signal. */
     private class Palette(
