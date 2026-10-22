@@ -101,15 +101,20 @@ class SignalAndSheetsTest {
         assertTrue(actions.log.contains("crackle"))
     }
 
-    @Test fun `the signal heads the Settings list, and Sound starts at output with crackle first`() {
-        val actions = RecordingActions()
-        compose.setContent { RoomScreen(room, actions, initialPanel = Panel.SETTINGS) }
+    @Test fun `the signal chain is what the LED opens, with its verdict and the track's format`() {
+        compose.setContent { RoomScreen(room, RecordingActions(), initialPanel = Panel.SIGNAL) }
         compose.onNodeWithTag("signal-path").assertExists()
         compose.onNodeWithTag("signal-verdict").assertTextEquals("lossless, resampled to 48 khz")
         compose.onNodeWithTag("spec:Track").assertExists()
-        // The signal stands above the four rows.
-        assertTrue(compose.onNodeWithTag("signal-path").getBoundsInRoot().bottom <= compose.onNodeWithTag("settings:SOUND").getBoundsInRoot().top)
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/35_settings_signal.png")
+    }
+
+    @Test fun `Settings is the rows and the way to storage, and Sound starts at output with crackle first`() {
+        val actions = RecordingActions()
+        compose.setContent { RoomScreen(room, actions, initialPanel = Panel.SETTINGS) }
+        // No signal chain here any more (the LED opens it): the rows, then the two-finger hint under them.
+        compose.onNodeWithTag("signal-path").assertDoesNotExist()
+        assertTrue(compose.onNodeWithTag("settings:ABOUT").getBoundsInRoot().bottom <= compose.onNodeWithTag("storage-hint").getBoundsInRoot().top)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/35_settings_list.png")
         compose.onNodeWithTag("settings:SOUND").performScrollTo().performClick()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/36_sound_output.png")
         compose.onNodeWithTag("panel:sound").assertExists()

@@ -796,11 +796,8 @@ class ListeningRoomUiTest {
         compose.setContent { RoomScreen(state(sound = actions.sound), actions) }
         compose.onNodeWithTag("nav:SETTINGS").performClick()
         compose.onNodeWithTag("panel-title").assertTextContains("SETTINGS")
-        // A plain list first; Sound is one row of it.
-        // The signal chain heads the list: the file, Runout's path, and where it goes out.
-        compose.onNodeWithTag("signal-path").assertExists()
-        compose.onNodeWithTag("spec:Track").assertTextContains("24-bit · 96 khz", ignoreCase = true)
-        compose.onNodeWithTag("spec:Sonic").assertTextContains("32-bit float", substring = true, ignoreCase = true)
+        // A plain list first; Sound is one row of it, and the storage page is a two-finger swipe away.
+        compose.onNodeWithTag("storage-hint").assertExists()
         compose.onNodeWithTag("settings:SOUND").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("settings:SOUND").performClick()
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()

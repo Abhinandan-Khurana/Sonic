@@ -1,5 +1,17 @@
 package app.runout.ui.settings
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
 import android.content.Intent
@@ -109,10 +121,10 @@ private val VERSION = BuildConfig.VERSION_NAME.removeSuffix(".0")
 internal const val CREDITS_URL = "https://somm.tf"
 
 /**
- * Settings, as the TE · Settings boards. [section] null is the list: the signal section (verdict,
- * then track / runout / output and the tip) at the head of the page, and five numbered rows
- * standing at its foot, above the faint SONIC. wordmark and the build line. Each row opens its own
- * page (the head shows its name), which starts with "← settings".
+ * Settings, as the TE · Settings boards. [section] null is the list: the numbered rows, a quiet line
+ * with two fingers saying the storage page is a swipe away, and the faint SONIC. wordmark at the foot.
+ * Each row opens its own page (the head shows its name), which starts with "← settings". A page
+ * rises from below into place; going back it drops away and the list settles in again.
  */
 @Composable
 fun SettingsPanel(
@@ -124,37 +136,75 @@ fun SettingsPanel(
     onSetup: () -> Unit,
     onOffline: () -> Unit,
 ) {
-    if (section == null) {
-        var help by remember { mutableStateOf<TeHelp?>(null) }
-        val found = rememberTick(HapticFeedbackType.GestureThresholdActivate)
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .fillPageHeight()
-                // Two fingers up or down the page: the storage page, kept off the list.
-                .twoFingerSwipe { found(); onSection(SettingsSection.STORAGE) }
-                .testTag("panel:settings"),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
-        ) {
-            // What reaches your ears right now, moved here from Settings › Sound.
-            PageSection("01 signal") {
-                SignalChain(signalPath(state.output, state.sound), onVerdictHelp = { help = SoundHelp.VERDICT })
+    AnimatedContent(
+        targetState = section,
+        transitionSpec = {
+            if (initialState == null && targetState != null) {
+                (slideInVertically(tween(340, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(240))) togetherWith
+                    (slideOutVertically(tween(340, easing = FastOutSlowInEasing)) { -it / 8 } + fadeOut(tween(180)))
+            } else {
+                (slideInVertically(tween(300, easing = FastOutSlowInEasing)) { -it / 8 } + fadeIn(tween(240))) togetherWith
+                    (slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 3 } + fadeOut(tween(180)))
             }
-            Spacer(Modifier.weight(1f))
-            Column(Modifier.fillMaxWidth()) {
-                LISTED_SECTIONS.forEachIndexed { i, s ->
-                    TeRow("%02d".format(i + 1), s.label.lowercase(), summary(s, state), { onSection(s) }, Modifier.testTag("settings:${s.name}"))
-                }
-            }
-            // The wordmark set huge and faint underneath, like a manual's back page.
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                BrandText(brandMark(Room.HairlineSoft), Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), Modifier.clearAndSetSemantics {})
-                BasicText("$VERSION · ${state.look.deckFor(Room.dark).label} · flac only", style = Room.LabelQuiet)
+        },
+        label = "settings-page",
+    ) { shown ->
+        if (shown == null) SettingsHome(state, onSection)
+        else SettingsPage(state, actions, shown, onSection, onDownloads, onSetup, onOffline)
+    }
+}
+
+/** The list: the five rows, the way to the storage page, and the wordmark set faint at the foot. */
+@Composable
+private fun SettingsHome(state: RoomState, onSection: (SettingsSection?) -> Unit) {
+    val found = rememberTick(HapticFeedbackType.GestureThresholdActivate)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillPageHeight()
+            // Two fingers up or down the page: the storage page, kept off the list.
+            .twoFingerSwipe { found(); onSection(SettingsSection.STORAGE) }
+            .testTag("panel:settings"),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            LISTED_SECTIONS.forEachIndexed { i, s ->
+                TeRow("%02d".format(i + 1), s.label.lowercase(), summary(s, state), { onSection(s) }, Modifier.testTag("settings:${s.name}"))
             }
         }
-        TeHelpSheet(help) { help = null }
-        return
+        StorageHint()
+        Spacer(Modifier.weight(1f))
+        // The wordmark set huge and faint underneath, like a manual's back page.
+        BrandText(brandMark(Room.HairlineSoft), Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), Modifier.clearAndSetSemantics {})
     }
+}
+
+/** Two fingers rising and settling, and what they open. */
+@Composable
+private fun StorageHint() {
+    val bob = rememberInfiniteTransition(label = "storage-hint")
+    val lift by bob.animateFloat(0f, -1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "lift")
+    Row(
+        Modifier.fillMaxWidth().testTag("storage-hint").semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        Canvas(Modifier.size(20.dp)) { drawTwoFingerSwipe(Room.Quiet, lift) }
+        BasicText("swipe up with two fingers to see what your music takes up", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
+    }
+}
+
+/** A section's own page, under "← settings". */
+@Composable
+private fun SettingsPage(
+    state: RoomState,
+    actions: RoomActions,
+    section: SettingsSection,
+    onSection: (SettingsSection?) -> Unit,
+    onDownloads: () -> Unit,
+    onSetup: () -> Unit,
+    onOffline: () -> Unit,
+) {
     BackHandler { onSection(null) }
     PageStep { onSection(null) }
     Column(
