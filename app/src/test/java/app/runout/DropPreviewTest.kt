@@ -35,7 +35,8 @@ import java.time.LocalDate
 /** A drop's 30 s listen: the track rows follow what the player reports, not what was tapped. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w892dp-h412dp-land-xhdpi", application = android.app.Application::class)
+// Upright: Drops is one of the places that wait for the phone upright.
+@Config(sdk = [35], qualifiers = "w412dp-h892dp-port-xhdpi", application = android.app.Application::class)
 class DropPreviewTest {
     @get:Rule val compose = createComposeRule()
 
