@@ -3,6 +3,10 @@ package app.runout
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import app.runout.ui.DeckSkin
+import app.runout.ui.Look
+import app.runout.ui.Room
+import app.runout.ui.ThemeMode
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
@@ -469,6 +473,41 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("toggle:Find missing covers online").performScrollTo().performClick()
         assertEquals(listOf("pick-download", "covers:true"), calls)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_library.png")
+    }
+
+    @Test
+    fun `the look follows the phone and the theme until pinned`() {
+        val look = Look()
+        assertEquals(true, look.dark(phoneDark = true))
+        assertEquals(DeckSkin.DARK, look.deckFor(dark = true))
+        assertEquals(DeckSkin.WHITE_TEAL, look.deckFor(dark = false))
+        assertEquals(false, look.copy(theme = ThemeMode.LIGHT).dark(phoneDark = true))
+        assertEquals(true, look.copy(theme = ThemeMode.DARK).dark(phoneDark = false))
+        assertEquals(DeckSkin.MONO_WHITE, look.copy(deck = DeckSkin.MONO_WHITE).deckFor(dark = true))
+        // Each pinned colourway is a model that ships.
+        DeckSkin.entries.mapNotNull { it.asset }.forEach { Fixtures.context.assets.open(it).close() }
+    }
+
+    @Test
+    fun `Flags sets the theme and the deck, and the dark room is true black`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setTheme(theme: ThemeMode) { calls += "theme:$theme" }
+            override fun setDeckSkin(deck: DeckSkin) { calls += "deck:$deck" }
+        }
+        try {
+            Room.dark = true
+            assertEquals(androidx.compose.ui.graphics.Color.Black, Room.Background)
+            assertEquals(androidx.compose.ui.graphics.Color.White, Room.Ink)
+            compose.setContent { RoomScreen(state().copy(look = Look(ThemeMode.DARK)), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.FLAGS) }
+            compose.onNodeWithTag("theme:LIGHT").performScrollTo().performClick()
+            compose.onNodeWithTag("deck:MONO_WHITE").performScrollTo().performClick()
+            assertEquals(listOf("theme:LIGHT", "deck:MONO_WHITE"), calls)
+            compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_flags_dark.png")
+        } finally {
+            Room.dark = false
+        }
     }
 
     @Test

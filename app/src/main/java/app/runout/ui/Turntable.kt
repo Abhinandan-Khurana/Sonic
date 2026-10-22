@@ -1,7 +1,7 @@
 /*
  * THE VINYL PLAYER — the turntable in the room.
  *
- * It's a 3D model (assets/deck/turntable.glb, the Runout RG-1 v3 in white + teal), drawn by Filament
+ * It's a 3D model (assets/deck/turntable_<colourway>.glb, the RG-1 v3 in white / teal, mono white or dark), drawn by Filament
  * in ui/deck/DeckRenderer.kt. This file is the Compose side: the deck's physics (platter spin-up and
  * wind-down, the tonearm's travel), touch (drag the arm, tap the record to flip it, hold it to slow
  * it, the keys on the right: prev, next, START/STOP and eject), what the deck shows (the red LED
@@ -61,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -216,6 +217,8 @@ fun Turntable(
     onRecordDragged: (() -> Unit)? = null,
     /** The record being taken off the platter for another, 0 to 1: it rises out of the deck. */
     liftOff: () -> Float = { 0f },
+    /** Which RG-1 stands here (Settings › Flags › deck), already resolved from the theme. */
+    skin: DeckSkin = DeckSkin.WHITE_TEAL,
 ) {
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
@@ -351,6 +354,8 @@ fun Turntable(
     // The status lamp, the LED strip and the deck's own screen.
     val playing = deck.album != null && deck.needleDown && !deck.held
     LaunchedEffect(renderer, playing) { renderer?.setStatusLamp(playing) }
+    val darkRoom = Room.dark
+    LaunchedEffect(renderer, darkRoom) { renderer?.setGroundShadow(!darkRoom) }
     val stripStep = if (deck.album == null) 0 else (deck.fraction * 64).toInt()
     LaunchedEffect(renderer, stripStep, playing) { renderer?.setStrip(stripStep / 64f, playing) }
     // While the record turns over the LED reads FLIP (then the new side's code); EJECT while it flies home.
@@ -366,7 +371,8 @@ fun Turntable(
     // A frame drawn by Filament shows once the room redraws around it.
     var frames by remember { mutableIntStateOf(0) }
     // Until the 3D deck's first frames are through, the flat deck stands in for it.
-    var shown3d by remember { mutableStateOf(false) }
+    // The flat deck stands in again while another colourway loads.
+    var shown3d by remember(skin) { mutableStateOf(false) }
     LaunchedEffect(renderer) {
         renderer?.onFrame = { frames++ }
         renderer?.onReady = { shown3d = true }
@@ -440,28 +446,33 @@ fun Turntable(
                         }
                     },
             ) {
-                if (use3d) {
+                // Another colourway is another model: a fresh view and renderer, and the effects
+                // keyed on [renderer] hand it the record, arm, keys and screen again.
+                if (use3d) key(skin) {
                     AndroidView(
                         factory = { ctx ->
                             TextureView(ctx).also { tv ->
-                                runCatching { DeckRenderer(ctx, tv).also { it.resume() } }
-                                    .onSuccess { renderer = it }
+                                runCatching { DeckRenderer(ctx, tv, skin.asset ?: DeckSkin.WHITE_TEAL.asset!!).also { it.resume() } }
+                                    .onSuccess { tv.tag = it; renderer = it }
                                     .onFailure { e ->
                                         android.util.Log.w("RunoutDeck", "3D deck unavailable, using the flat deck", e)
                                         use3d = false
                                     }
                             }
                         },
-                        onRelease = {
-                            renderer?.destroy()
-                            renderer = null
+                        // Each view lets go of its own renderer only: on a change of colourway the
+                        // new one may already be in place.
+                        onRelease = { tv ->
+                            val own = tv.tag as? DeckRenderer
+                            own?.destroy()
+                            if (renderer === own) renderer = null
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
                 // The JVM tests have no GPU, and a phone takes a moment to get the 3D deck going: a
                 // flat stand-in in the same places.
-                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, flip = { flipT.value }, liftOff = liftOff)
+                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, FlatColours.of(skin), flip = { flipT.value }, liftOff = liftOff)
                 // The drop target over the model. Reading [frames] here redraws the room each time
                 // Filament finishes a frame, so the TextureView's newest picture is what shows.
                 Canvas(Modifier.fillMaxSize()) {
@@ -611,6 +622,20 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(c
     drawPath(path, colour.copy(alpha = 0.85f), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))))
 }
 
+/** The flat deck's paint for each colourway, after the models' own materials. */
+private class FlatColours(val plinth: Color, val panel: Color, val platter: Color, val pivot: Color, val arm: Color, val key: Color, val start: Color) {
+    companion object {
+        private val WhiteTeal = FlatColours(Color(0xFFEEF0F0), Color(0xFFE9ECEC), Color(0xFF3F5D5A), Color(0xFFDDE3E5), Color(0xFFB9C2C6), Color(0xFF86A6A1), Color(0xFFD0805F))
+        private val MonoWhite = FlatColours(Color(0xFFEDECE6), Color(0xFFE6E5DE), Color(0xFF3D4244), Color(0xFFDDE0DE), Color(0xFFB9C2C6), Color(0xFFC4C7C3), Color(0xFFD0805F))
+        private val Dark = FlatColours(Color(0xFF30353B), Color(0xFF2B3035), Color(0xFF1C2124), Color(0xFF6B7378), Color(0xFFAAB5B8), Color(0xFF555D64), Color(0xFFD0805F))
+        fun of(skin: DeckSkin) = when (skin) {
+            DeckSkin.MONO_WHITE -> MonoWhite
+            DeckSkin.DARK -> Dark
+            else -> WhiteTeal
+        }
+    }
+}
+
 /** The room's preference for the flat (top-down) view of the deck. */
 private const val FLAT_VIEW_KEY = "deck_flat"
 
@@ -621,7 +646,7 @@ private const val FLAT_VIEW_KEY = "deck_flat"
  * touch lands in the same places.
  */
 @Composable
-private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer, flip: () -> Float = { 0f }, liftOff: () -> Float = { 0f }) {
+private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer, colours: FlatColours, flip: () -> Float = { 0f }, liftOff: () -> Float = { 0f }) {
     val look = remember(deck.album) { discLookFor(deck.album) }
     val labelFallback = remember(deck.album) { fallbackColor(deck.album) }
     Canvas(Modifier.fillMaxSize()) {
@@ -630,12 +655,12 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
             moveTo(pts[0].x, pts[0].y); pts.drop(1).forEach { lineTo(it.x, it.y) }; close()
         }
         val top = 0.468f
-        drawPath(outline(top, -2.5725f, 0.5625f, -1.34f, 1.76f), Color(0xFFEEF0F0))
-        drawPath(outline(top, 0.5725f, 2.5725f, -1.34f, 1.76f), Color(0xFFE9ECEC))
+        drawPath(outline(top, -2.5725f, 0.5625f, -1.34f, 1.76f), colours.plinth)
+        drawPath(outline(top, 0.5725f, 2.5725f, -1.34f, 1.76f), colours.panel)
         listOf(DeckModel.titleWindow, DeckModel.timeWindow).forEach { (a, b) -> drawPath(outline(top, a.x, b.x, a.z, b.z), Color(0xFF1A0A08)) }
         val c = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
         val ppu = cam.pixelsPerUnit(DeckModel.platterCentre)
-        drawCircle(Color(0xFF3F5D5A), ppu * DeckModel.PLATTER_R, c)
+        drawCircle(colours.platter, ppu * DeckModel.PLATTER_R, c)
         if (deck.album != null) {
             // Turning over: squashed to a line on its horizontal axis halfway, then open again.
             val squash = kotlin.math.abs(kotlin.math.cos(flip() * PI.toFloat())).coerceAtLeast(0.02f)
@@ -648,11 +673,11 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
         }
         val pivot = cam.project(V3(DeckModel.pivot.x, 0.84f, DeckModel.pivot.z))
         val stylus = DeckModel.stylus(armAngle).let { cam.project(V3(it.x, 0.70f, it.z)) }
-        drawCircle(Color(0xFFDDE3E5), ppu * 0.36f, cam.project(V3(DeckModel.pivot.x, 0.58f, DeckModel.pivot.z)))
-        drawLine(Color(0xFFB9C2C6), pivot, stylus, ppu * 0.05f)
+        drawCircle(colours.pivot, ppu * 0.36f, cam.project(V3(DeckModel.pivot.x, 0.58f, DeckModel.pivot.z)))
+        drawLine(colours.arm, pivot, stylus, ppu * 0.05f)
         DeckModel.keys.forEach { k ->
             val a = k.centre
-            drawPath(outline(a.y, a.x - k.width / 2, a.x + k.width / 2, a.z - k.depth / 2, a.z + k.depth / 2), if (k == DeckModel.startStop) Color(0xFFD0805F) else Color(0xFF86A6A1))
+            drawPath(outline(a.y, a.x - k.width / 2, a.x + k.width / 2, a.z - k.depth / 2, a.z + k.depth / 2), if (k == DeckModel.startStop) colours.start else colours.key)
         }
     }
 }

@@ -146,11 +146,14 @@ fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
     // when it's there, else the drawn ones.
     val ownSleeve = rememberOnboardingPicture("intro-sleeve", 360.dp)
     val ownDisc = rememberOnboardingPicture("intro-disc", 360.dp)
+    // The deck's renders: the dark RG-1's (assets/onboarding/deck-*-dark) in the dark theme once
+    // they're rendered, else the white / teal ones built in.
+    val darkDeck = rememberOnboardingPictures(remember { DARK_DECK }, 600.dp).takeIf { Room.dark && it.all { p -> p != null } }
     val art = IntroArt(
-        ImageBitmap.imageResource(R.drawable.onboarding_deck_empty),
-        ImageBitmap.imageResource(R.drawable.onboarding_deck_loaded),
-        ImageBitmap.imageResource(R.drawable.onboarding_deck_playing),
-        ImageBitmap.imageResource(R.drawable.onboarding_deck_arm),
+        darkDeck?.get(0) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_empty),
+        darkDeck?.get(1) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_loaded),
+        darkDeck?.get(2) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_playing),
+        darkDeck?.get(3) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_arm),
         ownSleeve ?: ImageBitmap.imageResource(R.drawable.onboarding_sleeve),
         ownDisc ?: ImageBitmap.imageResource(R.drawable.onboarding_disc),
         label = ownDisc,
@@ -371,3 +374,6 @@ private fun DrawScope.drawGrooveLight(c: Offset, rx: Float, ry: Float, ms: Float
         }
     }
 }
+
+/** The dark RG-1's onboarding renders in assets/onboarding, in [IntroArt]'s order. */
+internal val DARK_DECK = listOf("deck-empty-dark", "deck-loaded-dark", "deck-playing-dark", "deck-arm-dark")

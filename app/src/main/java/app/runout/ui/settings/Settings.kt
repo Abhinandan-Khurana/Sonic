@@ -134,7 +134,7 @@ fun SettingsPanel(
             // The wordmark set huge and faint underneath, like a manual's back page.
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 BrandText(brandMark(Room.HairlineSoft), Room.Display.copy(fontSize = 66.sp, color = Room.HairlineSoft), Modifier.clearAndSetSemantics {})
-                BasicText("$VERSION · white / teal · flac only", style = Room.LabelQuiet)
+                BasicText("$VERSION · ${state.look.deckFor(Room.dark).label} · flac only", style = Room.LabelQuiet)
             }
         }
         TeHelpSheet(help) { help = null }
@@ -177,7 +177,7 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
     SettingsSection.LIBRARY -> "${recordCount(state.albums.size)} · ${if (state.hasFolder) "1 folder" else "no folder"}"
     SettingsSection.FLAGS -> listOfNotNull(
         "auto-flip".takeIf { state.deckFlags.autoFlip }, "auto-play".takeIf { state.deckFlags.autoPlay }, "sleep".takeIf { state.deckFlags.sleepMode },
-    ).joinToString(" · ").ifEmpty { "all off" }
+    ).joinToString(" · ").ifEmpty { "all off" } + (if (state.look.theme != ThemeMode.PHONE) " · ${state.look.theme.label}" else "")
     SettingsSection.ABOUT -> "sonic $VERSION · rg-1"
 }
 

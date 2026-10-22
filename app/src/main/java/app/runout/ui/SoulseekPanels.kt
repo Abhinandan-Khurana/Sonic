@@ -439,8 +439,8 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
             ) {
-                BasicText("+", style = Room.Title.copy(color = Color.White, lineHeight = 22.sp))
-                BasicText("new", style = Room.Label.copy(color = Color.White))
+                BasicText("+", style = Room.Title.copy(color = Room.OnInk, lineHeight = 22.sp))
+                BasicText("new", style = Room.Label.copy(color = Room.OnInk))
             }
             if (newChat) NewChat(onDismiss = { newChat = false }) { name, friend ->
                 if (friend) actions.addSoulseekContact(name)
@@ -486,7 +486,7 @@ private fun LocalMessagesNote() {
 @Composable
 private fun Avatar(name: String, online: Boolean?, size: Dp, lit: Boolean = false) {
     Box(Modifier.size(size).background(if (lit) Room.Ink else Room.Surface).border(1.dp, Room.Ink), contentAlignment = Alignment.Center) {
-        BasicText(name.take(1).uppercase(), style = Room.Strong.copy(fontSize = if (size >= 56.dp) 16.sp else 12.sp, color = if (lit) Color.White else Room.Ink))
+        BasicText(name.take(1).uppercase(), style = Room.Strong.copy(fontSize = if (size >= 56.dp) 16.sp else 12.sp, color = if (lit) Room.OnInk else Room.Ink))
         if (online != null) Box(
             Modifier
                 .align(Alignment.BottomEnd)
@@ -598,7 +598,7 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
                     } else BasicText(
                         // Yours solid black with white 10/400; theirs solid orange with black.
                         message.text,
-                        style = Room.Label.copy(color = if (message.outgoing) Color.White else Room.Ink),
+                        style = Room.Label.copy(color = if (message.outgoing) Room.OnInk else Room.Ink),
                         modifier = Modifier
                             .widthIn(max = 300.dp)
                             .background(if (message.outgoing) Room.Ink else Room.Signal)
@@ -698,7 +698,7 @@ private fun SquareKey(
             .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(glyphSize)) { glyph(if (filled) Color.White else Room.Ink) }
+        Canvas(Modifier.size(glyphSize)) { glyph(if (filled) Room.OnInk else Room.Ink) }
     }
 }
 

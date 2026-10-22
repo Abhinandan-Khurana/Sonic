@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.compose.ui.graphics.toArgb
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +66,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        immerse()
+        // The theme before the first frame, so a dark room never opens white.
+        val phoneDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        applyTheme(graph.look.look.value.dark(phoneDark))
         if (savedInstanceState == null) handleIncoming(intent)
 
         val graph = graph
@@ -89,6 +92,9 @@ class MainActivity : ComponentActivity() {
             val claimed by graph.drops.claimed.collectAsStateWithLifecycle()
             val newDrop by graph.drops.newDrop.collectAsStateWithLifecycle()
             val deckFlags by graph.deck.flags.collectAsStateWithLifecycle()
+            val look by graph.look.look.collectAsStateWithLifecycle()
+            val dark = look.dark(androidx.compose.foundation.isSystemInDarkTheme())
+            LaunchedEffect(dark) { applyTheme(dark) }
             val sleepAt by graph.deck.sleepAt.collectAsStateWithLifecycle()
             val listening by previewState.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
@@ -215,6 +221,8 @@ class MainActivity : ComponentActivity() {
                     override fun setAutoFlip(on: Boolean) = graph.deck.setAutoFlip(on)
                     override fun setAutoPlay(on: Boolean) = graph.deck.setAutoPlay(on)
                     override fun setSleepMode(on: Boolean) = graph.deck.setSleepMode(on)
+                    override fun setTheme(theme: app.runout.ui.ThemeMode) = graph.look.setTheme(theme)
+                    override fun setDeckSkin(deck: app.runout.ui.DeckSkin) = graph.look.setDeck(deck)
                     override fun setSleepTimer(minutes: Int?) = graph.deck.setSleepTimer(minutes)
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {
@@ -328,6 +336,7 @@ class MainActivity : ComponentActivity() {
                     turtleMode = turtleMode,
                     newDrop = newDrop,
                     deckFlags = deckFlags,
+                    look = look,
                     sleepAt = sleepAt,
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,
@@ -360,9 +369,16 @@ class MainActivity : ComponentActivity() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             if (sideways) hide(WindowInsetsCompat.Type.systemBars())
             else { show(WindowInsetsCompat.Type.statusBars()); hide(WindowInsetsCompat.Type.navigationBars()) }
-            isAppearanceLightStatusBars = true
+            isAppearanceLightStatusBars = !app.runout.ui.Room.dark
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    /** Light or dark (OLED black): the room's palette, the window behind it and the bar icons. */
+    private fun applyTheme(dark: Boolean) {
+        app.runout.ui.Room.dark = dark
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(app.runout.ui.Room.Background.toArgb()))
+        immerse()
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {

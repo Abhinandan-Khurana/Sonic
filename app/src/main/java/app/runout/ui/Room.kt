@@ -1,6 +1,9 @@
 package app.runout.ui
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -10,34 +13,65 @@ import androidx.compose.ui.unit.sp
 import app.runout.R
 
 /**
- * The room's palette and type, after Teenage Engineering's catalogue: black ink on white, hairline
- * rules, square corners, no shadows, and one dot-matrix face for every word. Colour is a signal,
+ * The room's palette and type, after Teenage Engineering's catalogue: black ink on white (or white
+ * on true black in the dark theme), hairline rules, square corners, no shadows, and one dot-matrix
+ * face for every word. Colour is a signal,
  * never a fill: orange for what's playing, blue for links, green for online, amber for warnings,
  * red for errors. The 3D deck is the only rich object on screen.
  */
 object Room {
-    val Background = Color(0xFFFFFFFF)
-    val Surface = Color(0xFFF5F5F5)
-    val Ink = Color(0xFF000000)
-    val NearBlack = Color(0xFF0F0E12)
-    val Body = Color(0xFF4D4D4D)
-    val Quiet = Color(0xFF767676)
-    val Faint = Color(0xFFB2B2B2)
-    val Hairline = Color(0xFFCCCCCC)
-    val HairlineSoft = Color(0xFFE5E5E5)
-    val Chrome = Hairline
+    /**
+     * Dark (OLED) or light. Every colour below reads it, so the room repaints when the theme
+     * changes; MainActivity sets it from Settings › Flags › theme and the phone's own setting.
+     */
+    var dark by mutableStateOf(false)
+
+    private val palette: Palette get() = if (dark) Palette.Dark else Palette.Light
+
+    val Background: Color get() = palette.background
+    val Surface: Color get() = palette.surface
+    val Ink: Color get() = palette.ink
+    /** What sits on an ink fill (a black key, a toast): white in light, black in dark. */
+    val OnInk: Color get() = palette.background
+    val NearBlack: Color get() = palette.nearBlack
+    val Body: Color get() = palette.body
+    val Quiet: Color get() = palette.quiet
+    val Faint: Color get() = palette.faint
+    val Hairline: Color get() = palette.hairline
+    val HairlineSoft: Color get() = palette.hairlineSoft
+    val Chrome: Color get() = Hairline
 
     /** Links and information. */
-    val Accent = Color(0xFF0071BB)
-    /** What's playing or active: Teenage Engineering orange. */
+    val Accent: Color get() = palette.accent
+    /** What's playing or active: Teenage Engineering orange, the same in both themes. */
     val Signal = Color(0xFFF05A24)
     val SignalLight = Color(0xFFF7A07F)
     val SignalDark = Color(0xFFB8421A)
-    val Online = Color(0xFF006837)
+    val Online: Color get() = palette.online
     val Warning = Color(0xFFFAB413)
-    val Danger = Color(0xFFB81D13)
+    val Danger: Color get() = palette.danger
     /** Behind every panel and dialog. */
-    val Scrim = Color(0x99767676)
+    val Scrim: Color get() = palette.scrim
+
+    /** The two palettes. Dark is true black for OLED: lit pixels are only type, rules and signal. */
+    private class Palette(
+        val background: Color, val surface: Color, val ink: Color, val nearBlack: Color,
+        val body: Color, val quiet: Color, val faint: Color, val hairline: Color, val hairlineSoft: Color,
+        val accent: Color, val online: Color, val danger: Color, val scrim: Color,
+    ) {
+        companion object {
+            val Light = Palette(
+                background = Color(0xFFFFFFFF), surface = Color(0xFFF5F5F5), ink = Color(0xFF000000), nearBlack = Color(0xFF0F0E12),
+                body = Color(0xFF4D4D4D), quiet = Color(0xFF767676), faint = Color(0xFFB2B2B2), hairline = Color(0xFFCCCCCC), hairlineSoft = Color(0xFFE5E5E5),
+                accent = Color(0xFF0071BB), online = Color(0xFF006837), danger = Color(0xFFB81D13), scrim = Color(0x99767676),
+            )
+            val Dark = Palette(
+                background = Color(0xFF000000), surface = Color(0xFF111111), ink = Color(0xFFFFFFFF), nearBlack = Color(0xFFF2F1F5),
+                body = Color(0xFFB3B3B3), quiet = Color(0xFF8C8C8C), faint = Color(0xFF4D4D4D), hairline = Color(0xFF333333), hairlineSoft = Color(0xFF1A1A1A),
+                accent = Color(0xFF4DA6FF), online = Color(0xFF2FBF71), danger = Color(0xFFFF5040), scrim = Color(0xCC000000),
+            )
+        }
+    }
 
     /** The grotesk, kept for the stickers printed on sleeves. */
     val Inter = FontFamily(

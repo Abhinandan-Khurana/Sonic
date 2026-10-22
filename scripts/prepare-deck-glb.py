@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Prepares the 3D turntable for the app.
 
-    python3 scripts/prepare-deck-glb.py <runout_turntable_*.glb> [<runout_record.glb>]
+    python3 scripts/prepare-deck-glb.py <runout_turntable_*.glb>... [<runout_record.glb>]
 
-Writes app/src/main/assets/deck/turntable.glb (and record.glb when given). The source is the Runout
-RG-1 v3 model (runout_turntable_white_teal.glb and its siblings, built in Blender by
+Writes app/src/main/assets/deck/turntable_<colourway>.glb for each runout_turntable_<colourway>.glb
+(white_teal, mono_white, dark: Settings › Flags › deck), and record.glb when given. The source is the
+Runout RG-1 v3 model (runout_turntable_white_teal.glb and its siblings, built in Blender by
 scripts/deck-v3 from Hermes' v2), whose node names, origins and measurements are described in
 docs/design/deck-v3-spec.json.
 
@@ -19,11 +20,12 @@ Two changes are made:
 Geometry and every other material are copied byte for byte.
 """
 import json
+import os
 import shutil
 import struct
 import sys
 
-DECK_OUT = "app/src/main/assets/deck/turntable.glb"
+DECK_DIR = "app/src/main/assets/deck"
 RECORD_OUT = "app/src/main/assets/deck/record.glb"
 DRAWN = ("Screen_Mat", "LED_Strip_Mat")
 
@@ -46,7 +48,14 @@ def write(path, gltf, rest):
     print(f"{path}: {12 + len(body)} bytes")
 
 
-def main(deck, record=None):
+def deck_out(source):
+    name = os.path.basename(source)
+    if not name.startswith("runout_turntable_") or not name.endswith(".glb"):
+        sys.exit(f"{source}: expected runout_turntable_<colourway>.glb")
+    return os.path.join(DECK_DIR, "turntable_" + name[len("runout_turntable_"):])
+
+
+def prepare(deck):
     gltf, rest = read(deck)
     materials = {m["name"]: m for m in gltf.get("materials", [])}
     screen = materials.get("Screen_Mat")
@@ -68,13 +77,19 @@ def main(deck, record=None):
         if "KHR_materials_unlit" not in used:
             used.append("KHR_materials_unlit")
         print("Prints_Mat: unlit")
-    write(DECK_OUT, gltf, rest)
-    if record:
-        shutil.copyfile(record, RECORD_OUT)
-        print(f"{RECORD_OUT}: copied")
+    write(deck_out(deck), gltf, rest)
+
+
+def main(sources):
+    for source in sources:
+        if os.path.basename(source).startswith("runout_record"):
+            shutil.copyfile(source, RECORD_OUT)
+            print(f"{RECORD_OUT}: copied")
+        else:
+            prepare(source)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (2, 3):
+    if len(sys.argv) < 2:
         sys.exit(__doc__)
-    main(*sys.argv[1:])
+    main(sys.argv[1:])

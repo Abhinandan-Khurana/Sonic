@@ -1,5 +1,6 @@
 package app.runout.ui.deck
 
+import app.runout.ui.DeckSkin
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -35,7 +36,7 @@ import com.google.android.filament.gltfio.Gltfio
  * only when something changed, and the frame callback is only armed while there is something to
  * draw, so a still deck costs no work per vsync. Everything here runs on the main thread.
  */
-class DeckRenderer(private val context: Context, textureView: TextureView) : Choreographer.FrameCallback {
+class DeckRenderer(private val context: Context, textureView: TextureView, model: String = DeckSkin.WHITE_TEAL.asset!!) : Choreographer.FrameCallback {
     private val engine = FilamentShared.engine
     private val renderer: Renderer = engine.createRenderer()
     private val scene: Scene = engine.createScene()
@@ -46,7 +47,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private val displayHelper = DisplayHelper(context)
     private var swapChain: SwapChain? = null
 
-    private val deck: FilamentAsset = FilamentShared.load(context, "deck/turntable.glb")
+    private val deck: FilamentAsset = FilamentShared.load(context, model)
     private val record: FilamentAsset = FilamentShared.load(context, "deck/record.glb")
     private val platter = deck.getFirstEntityByName(DeckModel.PLATTER)
     private val tonearm = deck.getFirstEntityByName(DeckModel.TONEARM)
@@ -226,6 +227,16 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
 
     fun setKey(key: DeckKey, pressed: Float) {
         if (keyPress[key] != pressed) { keyPress[key] = pressed; invalidate() }
+    }
+
+    /**
+     * The baked shadow under the deck. On the dark room's true black its grey would glow round the
+     * plinth rather than shade the floor, so there it's taken out of the scene.
+     */
+    fun setGroundShadow(visible: Boolean) {
+        val e = deck.getFirstEntityByName("Shadow_Plane").takeIf { it != 0 } ?: return
+        if (visible) scene.addEntity(e) else scene.removeEntity(e)
+        invalidate()
     }
 
     /** The orange lamp by START/STOP: lit while a record plays. */

@@ -30,7 +30,7 @@ data class V3(val x: Float, val y: Float, val z: Float) {
 data class DeckKey(val node: String, val centre: V3, val width: Float, val depth: Float, val zoneMin: Pair<Float, Float>, val zoneMax: Pair<Float, Float>)
 
 /**
- * The Runout RG-1 turntable (assets/deck/turntable.glb), in model units, from its spec
+ * The Runout RG-1 turntable (assets/deck/turntable_*.glb, one per colourway), in model units, from its spec
  * (docs/design/deck-v3-spec.json). Moving parts are separate nodes whose origins sit where they turn:
  * the platter on its spindle axis, the tonearm on its bearing, each key at the top of its cap. The
  * record (assets/deck/record.glb) is a disc whose top face is at its origin.

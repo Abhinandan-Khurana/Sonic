@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The phone in dark mode: the window opens true black (OLED) with light bar icons, as the room does. -->
+<resources>
+    <color name="room">#FF000000</color>
+    <color name="ink">#FFFFFFFF</color>
+
+    <style name="Theme.Runout" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/room</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

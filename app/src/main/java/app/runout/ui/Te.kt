@@ -152,8 +152,8 @@ fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifi
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Canvas(Modifier.size(20.dp)) { drawRoomIcon(Color.White) }
-                BasicText("room", style = Room.Label.copy(color = Color.White))
+                Canvas(Modifier.size(20.dp)) { drawRoomIcon(Room.OnInk) }
+                BasicText("room", style = Room.Label.copy(color = Room.OnInk))
             }
         }
         // Sideways the room is for listening: the places wait until the phone is upright again.
@@ -163,7 +163,7 @@ fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifi
         }
         NAV.forEach { p ->
             val on = p == active
-            val ink = if (on) Color.White else Room.Ink
+            val ink = if (on) Room.OnInk else Room.Ink
             Column(
                 Modifier
                     .weight(1f)

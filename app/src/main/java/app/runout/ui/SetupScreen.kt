@@ -174,7 +174,7 @@ private fun StepKey(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) Canvas(Modifier.size(16.dp)) { icon() }
-        BasicText(text, style = Room.Text.copy(color = Color.White), maxLines = 1)
+        BasicText(text, style = Room.Text.copy(color = Room.OnInk), maxLines = 1)
     }
 }
 
@@ -695,8 +695,9 @@ private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
         ) {
             if (deck == null) {
+                val darkDeck = rememberOnboardingPicture(DARK_DECK[0], 600.dp).takeIf { Room.dark }
                 Image(
-                    painterResource(R.drawable.onboarding_deck_empty),
+                    darkDeck?.let { androidx.compose.ui.graphics.painter.BitmapPainter(it) } ?: painterResource(R.drawable.onboarding_deck_empty),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().height(212.dp),

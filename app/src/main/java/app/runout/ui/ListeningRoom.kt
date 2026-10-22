@@ -201,6 +201,8 @@ data class RoomState(
     val deckFlags: app.runout.playback.DeckFlags = app.runout.playback.DeckFlags(),
     /** When the sleep timer stops the music; null when it isn't running. */
     val sleepAt: Long? = null,
+    /** Settings › Flags › look: the theme and the deck. */
+    val look: Look = Look(),
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -269,6 +271,8 @@ interface RoomActions : DeckActions {
     fun setAutoFlip(on: Boolean) {}
     fun setAutoPlay(on: Boolean) {}
     fun setSleepMode(on: Boolean) {}
+    fun setTheme(theme: ThemeMode) {}
+    fun setDeckSkin(deck: DeckSkin) {}
     /** Stops the music in so many minutes; null turns the timer off. */
     fun setSleepTimer(minutes: Int?) {}
     fun downloadSoulseek(result: SoulseekSearchResult) {}
@@ -588,6 +592,7 @@ fun RoomScreen(
                     },
                     onRecordDragged = { useEject = true },
                     liftOff = { swapLift.value },
+                    skin = state.look.deckFor(Room.dark),
                 )
             }
             val crate = @Composable { m: Modifier, geometry: CrateGeometry ->
@@ -923,7 +928,7 @@ fun RoomScreen(
                     // A white wash rather than layer alpha: a translucent layer under the 3D overlay drops out.
                     .drawWithContent {
                         drawContent()
-                        drawRect(Color.White.copy(alpha = 0.55f * (proximity * 3f).coerceIn(0f, 1f)))
+                        drawRect(Room.Background.copy(alpha = 0.55f * (proximity * 3f).coerceIn(0f, 1f)))
                     }
                     .offset { IntOffset((s.rect.left - rootOrigin.x).roundToInt(), (s.rect.top - rootOrigin.y).roundToInt()) }
                     .size(s.size)
@@ -1263,7 +1268,7 @@ private fun TeToast(text: String, lamp: Color, modifier: Modifier, action: (@Com
         horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
         Box(Modifier.size(8.dp).background(lamp))
-        BasicText(text, style = Room.Label.copy(color = Color.White, lineHeight = 15.sp), modifier = Modifier.weight(1f))
+        BasicText(text, style = Room.Label.copy(color = Room.OnInk, lineHeight = 15.sp), modifier = Modifier.weight(1f))
         action?.invoke()
     }
 }
@@ -1303,10 +1308,10 @@ private fun DownloadsAddedPop(count: Int, stamp: Long, modifier: Modifier, onVie
         Canvas(Modifier.size(16.dp)) { drawDownloadGlyph(Room.Signal) }
         BasicText(
             "${if (count == 1) "1 track" else "$count tracks"} added to downloads",
-            style = Room.Label.copy(color = Color.White, lineHeight = 15.sp),
+            style = Room.Label.copy(color = Room.OnInk, lineHeight = 15.sp),
             modifier = Modifier.weight(1f),
         )
-        TeLink("view", onView, tag = "downloads-added-view", color = Color.White)
+        TeLink("view", onView, tag = "downloads-added-view", color = Room.OnInk)
     }
 }
 
@@ -1422,10 +1427,10 @@ private fun TiltHint(modifier: Modifier, onDone: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            Canvas(Modifier.size(28.dp)) { drawTwoFingerSwipe(Color.White, demo) }
+            Canvas(Modifier.size(28.dp)) { drawTwoFingerSwipe(Room.OnInk, demo) }
             BasicText(
                 "two fingers: swipe down to see the deck from above, up to tilt it back.",
-                style = Room.Label.copy(color = Color.White, lineHeight = 14.sp),
+                style = Room.Label.copy(color = Room.OnInk, lineHeight = 14.sp),
                 modifier = Modifier.weight(1f, fill = false).widthIn(max = 220.dp),
             )
             TeLink("got it", onDone, tag = "tilt-hint-done", arrow = "", color = Room.Signal)

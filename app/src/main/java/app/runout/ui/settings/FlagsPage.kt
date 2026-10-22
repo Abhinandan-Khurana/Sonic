@@ -98,15 +98,30 @@ private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
     "when the time is up the music fades out over a few seconds and the needle lifts.",
 ))
 
-/** Settings › Flags: the deck's habits, each a switch. */
+/**
+ * Settings › Flags: 01 the deck's habits, each a switch; 02 the theme (the phone's, or light or
+ * dark pinned); 03 which RG-1 stands in the room (the theme's, or one of the three pinned).
+ */
 @Composable
 internal fun FlagsPage(state: RoomState, actions: RoomActions) {
     var help by remember { mutableStateOf<TeHelp?>(null) }
     val f = state.deckFlags
-    Column(Modifier.fillMaxWidth().testTag("panel:flags")) {
-        HelpToggle("Auto-flip", "Side A over, side B plays.", f.autoFlip, actions::setAutoFlip) { help = HelpAutoFlip }
-        HelpToggle("Auto-play", "A record on the platter starts playing.", f.autoPlay, actions::setAutoPlay) { help = HelpAutoPlay }
-        HelpToggle("Sleep mode", "A moon in the room for the sleep timer.", f.sleepMode, actions::setSleepMode) { help = HelpSleep }
+    Column(Modifier.fillMaxWidth().testTag("panel:flags"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        PageSection("01 habits") {
+            Column(Modifier.fillMaxWidth()) {
+                HelpToggle("Auto-flip", "Side A over, side B plays.", f.autoFlip, actions::setAutoFlip) { help = HelpAutoFlip }
+                HelpToggle("Auto-play", "A record on the platter starts playing.", f.autoPlay, actions::setAutoPlay) { help = HelpAutoPlay }
+                HelpToggle("Sleep mode", "A moon in the room for the sleep timer.", f.sleepMode, actions::setSleepMode) { help = HelpSleep }
+            }
+        }
+        PageSection("02 theme") {
+            BasicText("phone follows your phone's dark mode. dark is true black, easy on an oled screen.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+            Segments(ThemeMode.entries, state.look.theme, { it.label }, tag = { "theme:${it.name}" }, onSelect = actions::setTheme)
+        }
+        PageSection("03 deck") {
+            BasicText("theme puts the dark deck in a dark room and white / teal in a light one.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+            Segments(DeckSkin.entries, state.look.deck, { it.label }, tag = { "deck:${it.name}" }, onSelect = actions::setDeckSkin)
+        }
     }
     TeHelpSheet(help) { help = null }
 }

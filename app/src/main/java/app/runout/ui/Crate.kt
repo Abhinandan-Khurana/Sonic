@@ -238,7 +238,7 @@ fun Crate(
                     Modifier.wrapContentHeight(Alignment.Top, unbounded = true).requiredSize(sleeve).graphicsLayer { scaleY = -1f },
                     showSticker = false,
                 )
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.2f), 0.9f to Color.White)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Room.Background.copy(alpha = 0.2f), 0.9f to Room.Background)))
             }
             // The sleeves' contact shadow: soft and widest under the front sleeve, falling on the floor.
             Canvas(Modifier.fillMaxSize().zIndex(0.5f)) {

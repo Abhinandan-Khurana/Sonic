@@ -77,7 +77,7 @@ internal fun Wordmark(
 ) {
     val measurer = rememberTextMeasurer()
     val style = Room.Display.copy(fontSize = fontSize)
-    val full = remember(fontSize) { measurer.measure(brandMark(), style) }
+    val full = remember(fontSize, Room.dark) { measurer.measure(brandMark(), style) }
     val density = LocalDensity.current
     val fontPx = with(density) { fontSize.toPx() }
     // The board's cursor: 10 × 30 beside 33 sp type, a hair after the last letter.
@@ -203,8 +203,12 @@ private fun DrawScope.drawCover(cover: ImageBitmap, o: Offset, c: Float) {
 internal fun rememberOnboardingPictures(names: List<String>, maxSide: Dp): List<ImageBitmap?> {
     val assets = LocalContext.current.assets
     val px = with(LocalDensity.current) { maxSide.roundToPx() }
-    val pictures by produceState(List<ImageBitmap?>(names.size) { null }, names, px) {
-        value = withContext(Dispatchers.IO) { names.map { decodeOnboardingPicture(assets, it, px) } }
+    val dark = Room.dark
+    val pictures by produceState(List<ImageBitmap?>(names.size) { null }, names, px, dark) {
+        // In the dark theme, "<name>-dark" when the owner has drawn one; the light picture until then.
+        value = withContext(Dispatchers.IO) {
+            names.map { (if (dark) decodeOnboardingPicture(assets, "$it-dark", px) else null) ?: decodeOnboardingPicture(assets, it, px) }
+        }
     }
     return pictures
 }

@@ -220,7 +220,7 @@ private fun PresetGrid(s: SoundSettings, actions: RoomActions, enabled: Boolean)
                             .padding(vertical = 11.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        BasicText(name.lowercase(), style = Room.Label.copy(color = if (on) Color.White else Room.Ink), maxLines = 1)
+                        BasicText(name.lowercase(), style = Room.Label.copy(color = if (on) Room.OnInk else Room.Ink), maxLines = 1)
                     }
                 }
             }
@@ -243,7 +243,7 @@ private fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, on
                     .padding(vertical = 11.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText(label(o), style = Room.Label.copy(color = if (on) Color.White else Room.Ink), maxLines = 1)
+                BasicText(label(o), style = Room.Label.copy(color = if (on) Room.OnInk else Room.Ink), maxLines = 1)
             }
         }
     }

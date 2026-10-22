@@ -180,14 +180,14 @@ private fun SearchKey(searching: Boolean, enabled: Boolean, onSearch: () -> Unit
         Canvas(Modifier.size(20.dp)) {
             if (searching) {
                 val s = size.width * 0.5f
-                drawRect(Color.White, Offset((size.width - s) / 2, (size.height - s) / 2), Size(s, s))
-            } else drawNavIcon(Panel.DIG, Color.White)
+                drawRect(Room.OnInk, Offset((size.width - s) / 2, (size.height - s) / 2), Size(s, s))
+            } else drawNavIcon(Panel.DIG, Room.OnInk)
         }
     }
 }
 
 /**
- * A row of equal cells in a 1 dp ink outline; the chosen one is black with white 10/400 type. With
+ * A row of equal cells in a 1 dp ink outline; the chosen one is ink with paper-coloured 10/400 type. With
  * [colour], each cell has its own: the chosen one filled with it, the others lettered in it.
  */
 @Composable
@@ -213,7 +213,8 @@ internal fun <T> Segments(
                     .padding(vertical = 11.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText(label(o), style = Room.Label.copy(color = if (on) Color.White else colour(o)), maxLines = 1)
+                // On ink, the paper colour; on a signal colour, white in either theme.
+                BasicText(label(o), style = Room.Label.copy(color = if (!on) colour(o) else if (colour(o) == Room.Ink) Room.OnInk else Color.White), maxLines = 1)
             }
         }
     }
@@ -455,8 +456,8 @@ private fun FiltersKey(modifier: Modifier, onClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
     ) {
-        Canvas(Modifier.size(20.dp)) { drawNavIcon(Panel.SETTINGS, Color.White) }
-        BasicText("sort", style = Room.Label.copy(color = Color.White))
+        Canvas(Modifier.size(20.dp)) { drawNavIcon(Panel.SETTINGS, Room.OnInk) }
+        BasicText("sort", style = Room.Label.copy(color = Room.OnInk))
     }
 }
 

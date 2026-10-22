@@ -98,7 +98,7 @@ fun TeButton(
             .padding(horizontal = 22.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(text, style = Room.Text.copy(color = if (kind == KeyKind.FILLED) Color.White else Room.Ink), maxLines = 1)
+        BasicText(text, style = Room.Text.copy(color = if (kind == KeyKind.FILLED) Room.OnInk else Room.Ink), maxLines = 1)
     }
 }
 
@@ -252,7 +252,7 @@ internal fun TeKey(
     val tick = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.VirtualKey)
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val ink = if (selected) Color.White else Room.Ink
+    val ink = if (selected) Room.OnInk else Room.Ink
     Box(
         modifier
             .alpha(if (enabled) 1f else 0.4f)
