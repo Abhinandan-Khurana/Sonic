@@ -97,10 +97,10 @@ orange under a glass coat, engraved labels, and a small dot-matrix screen. The p
 slowly, with strobe dots that stand still at speed. Records always play at the speed they were
 recorded.
 
-Long-press any record to send it, see its details and licence, or remove it.
+Long-press any record to see its details, licence and running time, share them as a picture, or remove it.
 
 <p align="center">
-  <img src="docs/images/screens/record-menu.png" width="250" alt="A record pulled from the crate, with its menu: Put back, Send with audio, Details" />
+  <img src="docs/images/screens/record-menu.png" width="250" alt="A record's details: its running order by side, the total running time, put back and a share key" />
   &nbsp;
   <img src="docs/images/screens/settings-sound.png" width="250" alt="Sound settings: Pure and Hi-res toggles, EQ presets as small hardware keys, and a 10-band EQ with orange slider caps" />
 </p>
