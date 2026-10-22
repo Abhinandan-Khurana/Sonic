@@ -175,6 +175,21 @@ object DeckModel {
         )
     }
 
+    /**
+     * The record taken off the platter, [t] from 0 to 1: it rises straight up out of the deck and
+     * draws away (smaller), still turned [degrees] with the platter.
+     */
+    fun liftOffTransform(degrees: Float, t: Float): FloatArray {
+        val f = t.coerceIn(0f, 1f)
+        val m = placeTurned(V3(platterOrigin.x, RECORD_Y + LIFT_OFF_H * f, platterOrigin.z), -degrees * PI.toFloat() / 180f)
+        val k = 1f - 0.35f * f
+        for (i in 0..10) if (i % 4 != 3) m[i] *= k
+        return m
+    }
+
+    /** How high the record rises as it's taken off: out of the deck's view. */
+    const val LIFT_OFF_H = 2.4f
+
     /** The air under the record's lowest edge at the top of the flip, above the spindle. */
     const val FLIP_CLEAR = 0.12f
 

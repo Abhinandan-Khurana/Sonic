@@ -208,6 +208,8 @@ fun Turntable(
     ledOverride: String? = null,
     /** The record on the platter was dragged, as if to take it off: the room points to Eject. */
     onRecordDragged: (() -> Unit)? = null,
+    /** The record being taken off the platter for another, 0 to 1: it rises out of the deck. */
+    liftOff: () -> Float = { 0f },
 ) {
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
@@ -278,6 +280,10 @@ fun Turntable(
     LaunchedEffect(renderer) {
         val r = renderer ?: return@LaunchedEffect
         snapshotFlow { flipT.value }.collect { r.setFlip(it) }
+    }
+    LaunchedEffect(renderer) {
+        val r = renderer ?: return@LaunchedEffect
+        snapshotFlow { liftOff() }.collect { r.setLiftOff(it) }
     }
 
     // The record's face, painted once per record and side, then turned by the platter in 3D.
@@ -378,7 +384,7 @@ fun Turntable(
                 }
                 // The JVM tests have no GPU, and a phone takes a moment to get the 3D deck going: a
                 // flat stand-in in the same places.
-                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, flip = { flipT.value })
+                if (!use3d || !shown3d) FlatDeck(cam, deck, rotation, armAngle, cover, boundaries, textMeasurer, flip = { flipT.value }, liftOff = liftOff)
                 // The drop target over the model. Reading [frames] here redraws the room each time
                 // Filament finishes a frame, so the TextureView's newest picture is what shows.
                 Canvas(Modifier.fillMaxSize()) {
@@ -524,7 +530,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(c
  * touch lands in the same places.
  */
 @Composable
-private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer, flip: () -> Float = { 0f }) {
+private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle: Float, cover: ImageBitmap?, boundaries: List<Float>, textMeasurer: TextMeasurer, flip: () -> Float = { 0f }, liftOff: () -> Float = { 0f }) {
     val look = remember(deck.album) { discLookFor(deck.album) }
     val labelFallback = remember(deck.album) { fallbackColor(deck.album) }
     Canvas(Modifier.fillMaxSize()) {
@@ -542,8 +548,11 @@ private fun FlatDeck(cam: DeckCamera, deck: DeckState, rotation: Float, armAngle
         if (deck.album != null) {
             // Turning over: squashed to a line on its horizontal axis halfway, then open again.
             val squash = kotlin.math.abs(kotlin.math.cos(flip() * PI.toFloat())).coerceAtLeast(0.02f)
-            scale(1f, squash, pivot = c) {
-                drawRecord(c, ppu * DeckModel.RECORD_R, rotation, look, cover, labelFallback, boundaries, null, null)
+            // Taken off: it rises up out of the deck and draws away.
+            val off = liftOff().coerceIn(0f, 1f)
+            val lifted = Offset(c.x, c.y - off * ppu * DeckModel.LIFT_OFF_H)
+            scale(1f - 0.35f * off, squash * (1f - 0.35f * off), pivot = lifted) {
+                drawRecord(lifted, ppu * DeckModel.RECORD_R, rotation, look, cover, labelFallback, boundaries, null, null)
             }
         }
         val pivot = cam.project(V3(DeckModel.pivot.x, 0.84f, DeckModel.pivot.z))

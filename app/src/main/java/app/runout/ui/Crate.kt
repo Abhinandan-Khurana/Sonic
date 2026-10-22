@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -223,8 +224,8 @@ fun Crate(
                 Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = top + sleeve)
-                    // A third of a sleeve deep, or what's left of the crate under the floor line.
-                    .size(sleeve, minOf(sleeve * 0.326f, (crateHeight - top - sleeve).coerceAtLeast(0.dp)))
+                    // A fifth of a sleeve deep, or what's left of the crate under the floor line.
+                    .size(sleeve, minOf(sleeve * 0.2f, (crateHeight - top - sleeve).coerceAtLeast(0.dp)))
                     .clipToBounds()
                     .graphicsLayer { alpha = 0.3f * (1f - (abs(center - frontIndex) * 2f).coerceIn(0f, 1f)) },
             ) {
@@ -235,6 +236,18 @@ fun Crate(
                     showSticker = false,
                 )
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.2f), 0.9f to Color.White)))
+            }
+            // The sleeves' contact shadow: soft and widest under the front sleeve, falling on the floor.
+            Canvas(Modifier.fillMaxSize().zIndex(0.5f)) {
+                val y = top.toPx() + sleevePx
+                val rx = sleevePx * 0.95f
+                val ry = 9.dp.toPx()
+                val c = Offset(size.width / 2f, y)
+                clipRect(top = y) {
+                    scale(1f, ry / rx, pivot = c) {
+                        drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.2f), Color.Transparent), center = c, radius = rx), radius = rx, center = c)
+                    }
+                }
             }
         }
     }

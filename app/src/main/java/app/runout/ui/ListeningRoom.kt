@@ -79,6 +79,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -88,6 +90,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -336,6 +339,12 @@ fun RoomScreen(
     var occupied by remember { mutableStateOf(false) }
     // The record on the platter was dragged as if to take it off by hand.
     var useEject by remember { mutableStateOf(false) }
+    // A record held over a busy platter: the deck shakes and buzzes for a second (SWAP on the LED),
+    // then the record on it is taken off and the one in hand lands.
+    var holdingOverBusy by remember { mutableStateOf(false) }
+    var swapping by remember { mutableStateOf(false) }
+    var shakeX by remember { mutableFloatStateOf(0f) }
+    val swapLift = remember { Animatable(0f) }
     val current by rememberUpdatedState(state)
     var menuFor by remember { mutableStateOf<String?>(null) }
     // The record in front of the crate, for the caption under it.
@@ -351,6 +360,7 @@ fun RoomScreen(
     val pickUp = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate)
     val landed = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
     val refused = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Reject)
+    val buzz = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
     // The deck's Eject key, with the flight home when the 3D record can make it; otherwise at once.
     val deckActions = remember(actions) {
         object : DeckActions by actions {
@@ -459,12 +469,17 @@ fun RoomScreen(
                     dropBlocked = state.deck.album != null && state.deck.album.id != pulledId,
                     onPlatterPlaced = { c, r -> platterCenter = c; platterRadius = r },
                     actions = deckActions,
-                    modifier = m,
+                    modifier = m.graphicsLayer { translationX = shakeX },
                     contentAlignment = alignment,
                     link = deckLink,
                     onScreenLongPress = { panel = Panel.SIGNAL; pulledId = null },
-                    ledOverride = if (ejecting != null) "EJECT" else null,
+                    ledOverride = when {
+                        ejecting != null || swapLift.value > 0f -> "EJECT"
+                        holdingOverBusy -> "SWAP"
+                        else -> null
+                    },
                     onRecordDragged = { useEject = true },
+                    liftOff = { swapLift.value },
                 )
             }
             val crate = @Composable { m: Modifier, geometry: CrateGeometry ->
@@ -587,6 +602,66 @@ fun RoomScreen(
             val dDp = with(density) { d.toDp() }
             val restPos = s.rect.center - rootOrigin + pullOut(s)
 
+            // Onto the platter: lined up with where it stopped, a thud and a short squash as it seats.
+            suspend fun land(target: Offset) = coroutineScope {
+                launch { lift.animateTo(1f, tween(180)) }
+                // Turn to where the platter has stopped, so the 3D record lands lined up.
+                val p = deckLink.platterDegrees
+                launch { spin.animateTo(p + 360f * kotlin.math.round((spin.value - p) / 360f), tween(200)) }
+                disc.animateTo(target - rootOrigin, tween(200, easing = FastOutSlowInEasing))
+                landed()
+                actions.discLanded()
+                lift.animateTo(0.95f, tween(70))
+                lift.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 700f))
+                actions.load(pulled)
+                // Hold the 3D record until the deck's own is drawn under it.
+                if (use3dNow) delay(HANDOVER_MS)
+                pulledId = null
+            }
+
+            // The swap: the record in hand steps back off the platter, the one on it rises out of
+            // the deck (EJECT on the LED), and the one in hand lands in its place.
+            suspend fun swapRecords() = coroutineScope {
+                val target = platterCenter ?: return@coroutineScope
+                swapping = true
+                dragging = false
+                occupied = false
+                launch { disc.animateTo(target - rootOrigin + Offset(platterRadius * 0.45f, platterRadius * 0.6f), tween(320, easing = FastOutSlowInEasing)) }
+                if (current.deck.needleDown) { actions.liftNeedle(); delay(300) }
+                swapLift.snapTo(0f)
+                swapLift.animateTo(1f, tween(420, easing = FastOutLinearInEasing))
+                actions.eject()
+                // The deck lets go of the old record before it drops back to the mat.
+                withTimeoutOrNull(500) { snapshotFlow { current.deck.album }.first { it == null } }
+                delay(50)
+                swapLift.snapTo(0f)
+                land(target)
+                swapping = false
+            }
+
+            // Held over a busy platter for a second: the deck shakes, harder as it goes, with a tick
+            // per shake, then the records swap. Letting go or moving off before then stops it.
+            val overBusy = dragging && !swapping && pc != null && dist < platterRadius * 0.95f &&
+                state.deck.album?.id?.let { it != pulled.id } == true
+            LaunchedEffect(overBusy) {
+                if (!overBusy) return@LaunchedEffect
+                val motion = android.provider.Settings.Global.getFloat(appContext.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+                val px = with(density) { 1.dp.toPx() }
+                holdingOverBusy = true
+                try {
+                    repeat(SWAP_SHAKES) { i ->
+                        val a = px * (1.5f + 2f * i / (SWAP_SHAKES - 1))
+                        if (motion) shakeX = if (i % 2 == 0) a else -a
+                        buzz()
+                        delay(SWAP_HOLD_MS / SWAP_SHAKES)
+                    }
+                } finally {
+                    shakeX = 0f
+                    holdingOverBusy = false
+                }
+                scope.launch { swapRecords() }
+            }
+
             if (use3d) {
                 // The 3D record counts as shown once its first frames are up and its face is on, so
                 // a bare black disc never flashes.
@@ -671,9 +746,11 @@ fun RoomScreen(
                             },
                             onDrag = { change, amount ->
                                 change.consume()
-                                scope.launch { disc.snapTo(disc.value + amount) }
+                                if (!swapping) scope.launch { disc.snapTo(disc.value + amount) }
                             },
-                            onDragEnd = {
+                            onDragEnd = onDragEnd@{
+                                // Mid-swap the record is already on its way to the platter.
+                                if (swapping) return@onDragEnd
                                 dragging = false
                                 val target = platterCenter
                                 val onPlatter = target != null && (disc.value + rootOrigin - target).getDistance() < platterRadius * 0.95f
@@ -689,27 +766,15 @@ fun RoomScreen(
                                         disc.animateTo(s.rect.center - rootOrigin, tween(200, easing = FastOutSlowInEasing))
                                         pulledId = null
                                     } else if (onPlatter && target != null) {
-                                        launch { lift.animateTo(1f, tween(180)) }
-                                        // Turn to where the platter has stopped, so the 3D record lands lined up.
-                                        val p = deckLink.platterDegrees
-                                        launch { spin.animateTo(p + 360f * kotlin.math.round((spin.value - p) / 360f), tween(200)) }
-                                        disc.animateTo(target - rootOrigin, tween(200, easing = FastOutSlowInEasing))
-                                        // The thud: a short squash as it seats on the spindle.
-                                        landed()
-                                        actions.discLanded()
-                                        lift.animateTo(0.95f, tween(70))
-                                        lift.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 700f))
-                                        actions.load(pulled)
-                                        // Hold the 3D record until the deck's own is drawn under it.
-                                        if (use3dNow) delay(HANDOVER_MS)
-                                        pulledId = null
+                                        land(target)
                                     } else {
                                         launch { lift.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 400f)) }
                                         disc.animateTo(restPos, spring(dampingRatio = 0.8f, stiffness = 300f))
                                     }
                                 }
                             },
-                            onDragCancel = {
+                            onDragCancel = onDragCancel@{
+                                if (swapping) return@onDragCancel
                                 dragging = false
                                 scope.launch { lift.animateTo(1f) }
                                 scope.launch { disc.animateTo(restPos, spring(dampingRatio = 0.8f, stiffness = 300f)) }
@@ -919,7 +984,7 @@ fun RoomScreen(
         // Platter occupied: the error toast for 4 s, with "eject →" (the put-back).
         if (occupied && !setupOpen) {
             LaunchedEffect(Unit) { delay(4_000); occupied = false }
-            TeToast("first, remove the current record from the platter.", Room.Danger, toastAt.zIndex(21f).testTag("platter-occupied")) {
+            TeToast("first, remove the current record from the platter, or hold the new one there to swap.", Room.Danger, toastAt.zIndex(21f).testTag("platter-occupied")) {
                 TeLink("eject", { occupied = false; deckActions.eject() }, tag = "occupied-eject", color = Color.White)
             }
         }
@@ -1120,17 +1185,17 @@ private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> U
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f).testTag("side-indicator").semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Lamp(if (deck.album != null) Room.Signal else null)
+            if (deck.isPlaying) PlayLamp() else Lamp(if (deck.album != null) Room.Signal else null)
             BasicText(
                 when {
-                    side != null -> "side ${side.letter.lowercaseChar()}"
+                    side != null -> "side ${side.letter.uppercaseChar()}"
                     state.albums.isEmpty() -> "no record"
                     else -> "platter empty"
                 },
                 style = Room.Strong,
                 maxLines = 1,
             )
-            if (side != null) BasicText("${deck.trackCode.lowercase()} · ${deck.trackIndex + 1} / ${side.tracks.size}", style = Room.LabelQuiet, maxLines = 1)
+            if (side != null) BasicText("${deck.trackCode.uppercase()} · ${deck.trackIndex + 1} / ${side.tracks.size}", style = Room.LabelQuiet, maxLines = 1)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (scanText != null) BasicText(scanText, style = Room.LabelQuiet, maxLines = 1)
@@ -1153,6 +1218,14 @@ private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> U
             )
             BasicText("${state.albums.size} rec", style = Room.Label, maxLines = 1, modifier = Modifier.semantics { contentDescription = recordCount(state.albums.size) })
         }
+    }
+}
+
+/** Playing: a green play triangle in the lamp's 8 dp box. */
+@Composable
+private fun PlayLamp() {
+    Canvas(Modifier.size(8.dp).semantics { contentDescription = "Playing" }) {
+        drawPath(Path().apply { moveTo(0f, 0f); lineTo(size.width, size.height / 2f); lineTo(0f, size.height); close() }, Room.Online)
     }
 }
 
@@ -1192,7 +1265,8 @@ private fun bandCaption(state: RoomState, landscape: Boolean): String {
 @Composable
 private fun AlbumCaption(album: Album, portrait: Boolean) {
     Column(
-        Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = if (portrait) 11.dp else 0.dp),
+        // Pulled up towards the crate's floor, over the end of the reflection.
+        Modifier.fillMaxWidth().offset(y = if (portrait) (-12).dp else 0.dp).padding(start = 22.dp, end = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(if (portrait) 6.dp else 4.dp),
     ) {
@@ -1357,3 +1431,7 @@ internal fun TextAction(text: String, onClick: () -> Unit, tag: String = "action
 
 /** How long the 3D record stays over the platter after landing, until the deck draws its own. */
 private const val HANDOVER_MS = 350L
+
+/** How long a record is held over a busy platter before the swap, and how many shakes that is. */
+private const val SWAP_HOLD_MS = 1_000L
+private const val SWAP_SHAKES = 24

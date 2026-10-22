@@ -68,6 +68,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
 
     private var platterDegrees = 0f
     private var flip = 0f
+    private var liftOff = 0f
     private var armAngle = DeckModel.angleRest
     private var armDrop = 0f
     private val keyPress = DeckModel.keys.associateWith { 0f }.toMutableMap()
@@ -180,6 +181,13 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     fun setFlip(t: Float) {
         if (t == flip) return
         flip = t
+        dirty = true
+    }
+
+    /** The record being taken off the platter, 0 to 1 (see [DeckModel.liftOffTransform]). */
+    fun setLiftOff(t: Float) {
+        if (t == liftOff) return
+        liftOff = t
         dirty = true
     }
 
@@ -372,7 +380,10 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         if (platter != 0) tm.setTransform(tm.getInstance(platter), DeckModel.platterTransform(platterDegrees))
         if (tonearm != 0) tm.setTransform(tm.getInstance(tonearm), DeckModel.armTransform(armAngle, armDrop))
         keyEntities.forEach { (key, e) -> if (e != 0) tm.setTransform(tm.getInstance(e), DeckModel.keyTransform(key, keyPress[key] ?: 0f)) }
-        tm.setTransform(tm.getInstance(record.root), DeckModel.flipTransform(platterDegrees, flip))
+        tm.setTransform(
+            tm.getInstance(record.root),
+            if (liftOff > 0f) DeckModel.liftOffTransform(platterDegrees, liftOff) else DeckModel.flipTransform(platterDegrees, flip),
+        )
     }
 
     private fun materialOf(node: String): MaterialInstance? {

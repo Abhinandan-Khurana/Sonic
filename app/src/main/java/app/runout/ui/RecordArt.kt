@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.model.Album
@@ -261,24 +263,23 @@ fun DrawScope.drawRecord(
 }
 
 /**
- * An album sleeve: the cover (or a typographic sleeve if none was found), the shrink-wrap sheen and
- * its stickers, drawn to the board's 151 dp front sleeve and scaled with the sleeve: a round orange
- * HI-RES sticker tilted 10° at the top right, and a black label tab tilted −3° at the bottom left
- * ([label]: ON THE PLATTER, PULL UP · DRAG, SLEEVE · EMPTY).
+ * An album sleeve: the cover (or a plain sleeve in the album's colour if none was found), the
+ * shrink-wrap sheen and, on the crate's sleeves, the hi-res sticker and nothing else. The title,
+ * artist and [label] (on the platter, pull up · drag, sleeve · empty) are spoken, not printed.
  */
 @Composable
 fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true, label: String? = null) {
     val cover by rememberCover(album)
-    BoxWithConstraints(modifier.clipToBounds().background(fallbackColor(album))) {
+    BoxWithConstraints(
+        modifier
+            .clipToBounds()
+            .background(fallbackColor(album))
+            .semantics { if (album != null) contentDescription = listOfNotNull(album.title, album.artist, label).joinToString(" / ") },
+    ) {
         val k = maxWidth / BOARD_SLEEVE
         val bitmap = cover
         if (bitmap != null) {
-            Image(bitmap = bitmap, contentDescription = album?.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        } else if (album != null) {
-            Column(Modifier.fillMaxSize().padding(11.dp * k), verticalArrangement = Arrangement.SpaceBetween) {
-                BasicText(album.title.uppercase(), style = Room.Album.copy(fontSize = (18 * k).sp), maxLines = 4)
-                BasicText(album.artist.lowercase(), style = Room.Label.copy(fontSize = (10 * k).sp, color = Room.Ink.copy(alpha = 0.6f)), maxLines = 2)
-            }
+            Image(bitmap = bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
         // Shrink-wrap
         Box(
@@ -292,12 +293,9 @@ fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean
                 ),
             ),
         )
-        // Stickers only where they'd be legible: the crate's sleeves, not the small thumbnails.
-        if (k >= 0.55f) {
-            if (showSticker && album?.quality?.isHiRes == true) {
-                HiResSticker(album.quality.shortLabel, k, Modifier.align(Alignment.TopEnd).padding(top = 6.dp * k, end = 4.dp * k))
-            }
-            if (label != null) LabelSticker(label, k, Modifier.align(Alignment.BottomStart).padding(start = 6.8.dp * k, bottom = 2.dp * k))
+        // The sticker only where it'd be legible: the crate's sleeves, not the small thumbnails.
+        if (k >= 0.55f && showSticker && album?.quality?.isHiRes == true) {
+            HiResSticker(album.quality.shortLabel, k, Modifier.align(Alignment.TopEnd).padding(top = 6.dp * k, end = 4.dp * k))
         }
     }
 }
@@ -327,20 +325,4 @@ fun HiResSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
         Box(Modifier.padding(vertical = 2.dp * k).size(22.dp * k, 0.75.dp * k).background(Color.White))
         BasicText(text, style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(6.5), lineHeight = sp(7.0)))
     }
-}
-
-/** The label tab, printed rather than stuck on: black, a thin white keyline, small white caps, straight. */
-@Composable
-fun LabelSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
-    val d = LocalDensity.current
-    BasicText(
-        text.uppercase(),
-        style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = with(d) { (6.5.dp * k).toSp() }, letterSpacing = with(d) { (1.1.dp * k).toSp() }),
-        maxLines = 1,
-        modifier = modifier
-            .background(Room.Ink)
-            .padding(1.5.dp * k)
-            .border(0.75.dp * k, Color.White)
-            .padding(horizontal = 6.dp * k, vertical = 3.dp * k),
-    )
 }
