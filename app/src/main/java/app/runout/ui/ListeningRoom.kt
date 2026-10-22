@@ -221,6 +221,8 @@ interface RoomActions : DeckActions {
     fun importAutoEq() {}
 
     fun share(album: Album) {}
+    /** Sends a picture (a PNG under cache/share) to another app, [title] naming it. */
+    fun shareImage(file: java.io.File, title: String) {}
     fun removeRecord(album: Album) {}
     fun shareMyCard() {}
     fun rename(name: String) {}
@@ -418,7 +420,6 @@ fun RoomScreen(
     var shakeX by remember { mutableFloatStateOf(0f) }
     val swapLift = remember { Animatable(0f) }
     val current by rememberUpdatedState(state)
-    var menuFor by remember { mutableStateOf<String?>(null) }
     // The record in front of the crate, for the caption under it.
     var frontId by remember { mutableStateOf<String?>(null) }
     // First time in the room: the three "?" helps show until a record first lands on the platter.
@@ -569,7 +570,7 @@ fun RoomScreen(
                     onPull = { pulledId = it.id },
                     onPutBack = { pulledId = null },
                     onFrontSlot = { slot = it },
-                    onMenu = { menuFor = it.id },
+                    onMenu = { detailsFor = it.id },
                     modifier = m,
                     geometry = geometry,
                     label = { if (it.id == state.deck.album?.id) "on the platter" else null },
@@ -819,7 +820,7 @@ fun RoomScreen(
                         clip = false
                     }
                     .pointerInput(pulled.id) {
-                        detectTapGestures(onLongPress = { menuFor = pulled.id })
+                        detectTapGestures(onLongPress = { detailsFor = pulled.id })
                     }
                     .pointerInput(pulled.id) {
                         detectDragGestures(
@@ -896,7 +897,7 @@ fun RoomScreen(
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onLongClick = { menuFor = pulled.id },
+                        onLongClick = { detailsFor = pulled.id },
                         // Put back: the disc slides down into its sleeve before the sleeve goes back.
                         onClick = {
                             scope.launch {
@@ -909,24 +910,26 @@ fun RoomScreen(
             )
         }
 
-        // Long-press a sleeve or a disc: what you can do with that record.
-        state.albums.firstOrNull { it.id == menuFor }?.let { record ->
-            RecordMenu(
+        // Long-press a sleeve or a disc: that record's details, with what you can do with it.
+        state.albums.firstOrNull { it.id == detailsFor }?.let { record ->
+            RecordDetails(
                 record = record,
-                pulled = record.id == pulledId,
                 backdrop = roomBackdrop,
-                onPutBack = { pulledId = null; menuFor = null },
-                onSend = { actions.share(record); menuFor = null },
-                onRemove = { removeId = record.id; menuFor = null },
-                onDetails = { detailsFor = record.id; menuFor = null },
-                onDismiss = { menuFor = null },
+                onDismiss = { detailsFor = null },
+                pulled = record.id == pulledId,
+                onPutBack = { pulledId = null; detailsFor = null },
                 missing = missingBy[record.id] ?: 0,
                 // Off to Downloads, where its rows say what Runout is doing.
-                onFetchMissing = { actions.fetchMissingTracks(record.id); menuFor = null; panel = Panel.DOWNLOADS },
+                onFetchMissing = { actions.fetchMissingTracks(record.id); detailsFor = null; panel = Panel.DOWNLOADS },
+                onRemove = { removeId = record.id; detailsFor = null },
+                onSharePicture = { sheet ->
+                    val file = java.io.File(appContext.cacheDir, "share/${record.id.replace(Regex("[^A-Za-z0-9._-]"), "_")}.png")
+                    scope.launch {
+                        val written = withContext(Dispatchers.IO) { runCatching { writeRecordPicture(sheet, density.density, file) }.getOrNull() }
+                        if (written != null) actions.shareImage(written, record.title)
+                    }
+                },
             )
-        }
-        state.albums.firstOrNull { it.id == detailsFor }?.let { record ->
-            RecordDetails(record, roomBackdrop, onDismiss = { detailsFor = null })
         }
 
         // What each place holds. Every numbered place is a page under the nav; Audio quality is a panel.
@@ -1597,7 +1600,7 @@ private val HELP_CRATE = TeHelp(
     listOf(
         "flick left or right to browse. tap a sleeve or pull it up to take the record out.",
         "drag the record onto the platter to play it. tap it to flip the side, hold it to slow it down.",
-        "long-press a sleeve for the record menu: details, put back, remove.",
+        "long-press a sleeve for its details: the running order, put back, remove.",
     ),
 )
 private val HELP_WHEEL = TeHelp(

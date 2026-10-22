@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
                     override fun importAutoEq() = autoEqPicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream"))
 
                     override fun share(album: Album) = shareAlbum(album)
+                    override fun shareImage(file: File, title: String) = sharePicture(file, title)
                     override fun removeRecord(album: Album) = remove(album)
                     override fun shareMyCard() = shareCard()
                     override fun rename(name: String) = graph.social.rename(name)
@@ -430,6 +431,19 @@ class MainActivity : ComponentActivity() {
             }
             launchShare(file, "Send your friend card")
         }
+    }
+
+    /** A record's details as a PNG, to any app that takes a picture. */
+    private fun sharePicture(file: File, title: String) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            clipData = android.content.ClipData.newRawUri(title, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, "Share “$title”"))
     }
 
     private fun launchShare(file: File, title: String) {

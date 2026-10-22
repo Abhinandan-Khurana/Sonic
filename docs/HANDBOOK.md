@@ -104,8 +104,8 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 - **Friends:** Your account and handle, search people by username, open their profiles and shelves.
 - **Sound:** Pure mode, hi-res output, EQ, ReplayGain, limiter, warmth.
 
-### Sending a Record
-Pull a record out of the crate and press **"Send with audio"** (for your own music or Creative Commons) or **"Send as a card"** (anything else). Android's share sheet opens: Quick Share, Telegram, WhatsApp, Drive. Your friend taps the file and the record lands on their shelf.
+### A Record's Details
+Long-press a sleeve or a pulled record to open its details: format, licence, the running order by side and the total running time. The share key in the corner sends the details as a picture; Android's share sheet opens (Quick Share, Telegram, WhatsApp, Drive). Under the details: put back, fetch missing tracks, and remove record (not for music from your folder).
 
 ---
 
