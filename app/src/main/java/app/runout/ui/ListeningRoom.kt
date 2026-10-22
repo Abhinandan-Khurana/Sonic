@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.safeDrawing
@@ -683,7 +684,7 @@ fun RoomScreen(
             RecordDetails(record, roomBackdrop, onDismiss = { detailsFor = null })
         }
 
-        // What each place holds. Dig and Friends get their own full page; the rest slide up as glass.
+        // What each place holds. Every numbered place is a page under the nav; Audio quality is a panel.
         val panelContent = @Composable { shown: Panel ->
             when (shown) {
                 Panel.DIG -> {
@@ -707,13 +708,12 @@ fun RoomScreen(
             }
         }
 
-        // Sheets
+        // The Audio quality panel: up from the foot over the grey scrim, 83 % of the height.
         val open = panel?.takeIf { !it.fullPage }
         val sheetWidth = (screenW * 0.46f).coerceIn(340.dp, 520.dp)
         Box(Modifier.fillMaxSize().zIndex(10f)) {
             AnimatedVisibility(open != null, enter = fadeIn(), exit = fadeOut()) {
-                // Only catches taps while a sheet is open: during its fade-out the room's tabs must
-                // take the next tap straight away.
+                // Only catches taps while a panel is open: during its fade-out the room must take the next tap.
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -727,37 +727,50 @@ fun RoomScreen(
             AnimatedVisibility(
                 visible = open != null,
                 enter = if (portrait) slideInVertically { it } + fadeIn() else slideInHorizontally { it } + fadeIn(),
-                // A quick exit, so the room's tabs are clear almost at once after Close.
                 exit = if (portrait) slideOutVertically(tween(180)) { it } + fadeOut(tween(160)) else slideOutHorizontally(tween(180)) { it } + fadeOut(tween(160)),
                 modifier = Modifier.align(if (portrait) Alignment.BottomCenter else Alignment.CenterEnd),
             ) {
-                var shown by remember { mutableStateOf(open ?: Panel.SETTINGS) }
+                var shown by remember { mutableStateOf(open ?: Panel.SIGNAL) }
                 if (open != null) shown = open
                 PanelSheet(
                     title = shown.title,
                     backdrop = roomBackdrop,
                     portrait = portrait,
                     width = sheetWidth,
-                    height = screenH * 0.74f,
+                    height = screenH * 0.83f,
                     onClose = { closePanel() },
                     catchTaps = open != null,
                 ) { panelContent(shown) }
             }
         }
 
-        // Full pages
+        // Full pages, above the room and under the nav bar.
         val page = panel?.takeIf { it.fullPage }
         AnimatedVisibility(
             visible = page != null,
-            enter = slideInVertically { it / 10 } + fadeIn(),
-            exit = slideOutVertically { it / 10 } + fadeOut(),
+            enter = fadeIn(tween(160)),
+            exit = fadeOut(tween(140)),
             modifier = Modifier.zIndex(11f),
         ) {
             var shown by remember { mutableStateOf(page ?: Panel.DIG) }
             if (page != null) shown = page
-            // Both pages scroll their own lists.
-            FullPage(shown.title, onClose = { closePanel() }) { panelContent(shown) }
+            val title = if (shown == Panel.SETTINGS) settings?.label ?: shown.title else shown.title
+            // Dig and Friends scroll their own lists; the rest scroll as one page.
+            FullPage(shown.index, title, onClose = { closePanel() }, scroll = shown != Panel.DIG && shown != Panel.FRIENDS) { panelContent(shown) }
         }
+
+        // One nav bar for the room and every page, the open page's cell in black.
+        // In landscape it sits at the foot of the room's column, beside the deck.
+        if (!setupOpen) TeNavBar(
+            active = page,
+            badges = navBadges(state),
+            onOpen = { if (it == Panel.SETTINGS) settings = null; panel = if (panel == it) null else it; pulledId = null },
+            modifier = Modifier
+                .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
+                .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
+                .zIndex(11.5f)
+                .windowInsetsPadding(WindowInsets.navigationBars),
+        )
 
         // Onboarding: its own full screen, on first launch or when Soulseek setup is asked for again.
         // Finishing drops you into the room, which pops in behind the fading greeting.
@@ -904,10 +917,14 @@ private fun emptyDetail(state: RoomState): String = when {
     else -> "Tap to pick another folder"
 }
 
+/**
+ * The TE panel: white, a 2 dp ink rule along the top, 22 dp in (33 at the foot), the 22/700 title
+ * and "close ×" on one line, 16 dp between parts.
+ */
 @Composable
 private fun PanelSheet(
     title: String,
-    backdrop: Backdrop,
+    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop,
     portrait: Boolean,
     width: Dp,
     height: Dp,
@@ -919,56 +936,65 @@ private fun PanelSheet(
     catchTaps: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val sheet = if (portrait) Modifier.fillMaxWidth().height(height)
-    else Modifier.width(width).fillMaxHeight()
+    val sheet = if (portrait) Modifier.fillMaxWidth().height(height) else Modifier.width(width).fillMaxHeight()
     Column(
         sheet
-            // A flat white panel ruled in ink along its open edge, after the TE catalogue.
             .background(Room.Background)
-            .then(if (portrait) Modifier.hairlineTop(Room.Ink) else Modifier.border(1.dp, Room.Ink))
-            // Taps inside the sheet stay inside it (without turning the whole sheet into one button for TalkBack).
+            .hairlineTop(Room.Ink, 2.dp)
+            // Taps inside the panel stay inside it (without turning it into one button for TalkBack).
             .then(if (catchTaps) Modifier.pointerInput(Unit) { detectTapGestures { } } else Modifier)
-            .padding(start = 22.dp, end = 22.dp, top = 18.dp),
+            .padding(start = 22.dp, end = 22.dp, top = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(title, style = Room.Title.copy(fontSize = 18.sp), modifier = Modifier.weight(1f).testTag("panel-title"))
-            if (onClose != null) TextAction("Close", onClose, color = Room.Ink)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(title.uppercase(), style = Room.Title, modifier = Modifier.weight(1f).testTag("panel-title"))
+            if (onClose != null) CloseKey(onClose)
         }
-        // The glass keeps its size; its contents shrink above the keyboard.
+        // The panel keeps its size; its contents shrink above the keyboard.
         val body = Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime)
-        Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
+        Column(if (scroll) body.verticalScroll(rememberScrollState()).padding(bottom = 33.dp) else body, content = content)
     }
 }
 
 /**
- * A place with its own whole screen (Dig, Friends): the room's light, a title and Close at the top,
- * and the content filling the rest above the keyboard.
+ * A place with its own page: the TE screen head ("02 / dig", "close ×", the 44/700 title), then the
+ * body 11 dp below it and 22 dp in, above the keyboard and the nav bar.
  */
 @Composable
-private fun FullPage(title: String, onClose: () -> Unit, scroll: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+private fun FullPage(index: String, title: String, onClose: () -> Unit, scroll: Boolean = false, navRoom: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     val sheets = remember { PageSheetHost() }
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
-        RoomBackground(Modifier.fillMaxSize(), portrait = true)
         Column(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .windowInsetsPadding(WindowInsets.ime)
-                .padding(horizontal = 20.dp)
-                .padding(top = 8.dp),
+                .padding(bottom = if (navRoom) NAV_HEIGHT else 0.dp),
         ) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                BasicText(title, style = Room.Title.copy(fontSize = 24.sp, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f).testTag("panel-title"))
-                TextAction("Close", onClose, color = Room.Ink)
-            }
+            TeScreenHead(index, title, onClose)
             val body = Modifier.fillMaxWidth().weight(1f)
             CompositionLocalProvider(LocalPageSheetHost provides sheets) {
-                Column(if (scroll) body.verticalScroll(rememberScrollState()) else body, content = content)
+                Column(
+                    (if (scroll) body.verticalScroll(rememberScrollState()) else body).padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = 22.dp),
+                    content = content,
+                )
             }
         }
         // Sheets opened by the page's content cover the whole page, edge to edge.
         PageSheetLayer(sheets)
     }
+}
+
+/** The room's column in landscape: 412.5 of 892 on the board, beside the deck's band. */
+internal const val LANDSCAPE_ROOM = 0.4625f
+
+/** The nav bar's height: 11 + 20 icon + 8 + a 10 sp line + 11. */
+internal val NAV_HEIGHT = 62.dp
+
+/** A new Friday Drop, or an unread message: an orange square on that place's cell. */
+internal fun navBadges(state: RoomState): Set<Panel> = buildSet {
+    if (state.drops is DropState.Ready && state.claimed.size < DropsRepository.CLAIMS_PER_WEEK) add(Panel.DROPS)
+    if (state.soulseekConversations.any { it.unread > 0 }) add(Panel.FRIENDS)
 }
 
 /** Plain white paper: the deck and the sleeves carry all the colour. */
@@ -1033,15 +1059,12 @@ private fun CornerLabels(
             StatusDot("", connectionColor(state.soulseekSession), "open-account", onAccount, description = connectionLabel(state.soulseekSession))
         }
 
-        val nav = @Composable { m: Modifier -> TabBar(backdrop, badges, onOpen, m) }
         if (portrait) {
-            Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = NAV_HEIGHT), horizontalAlignment = Alignment.CenterHorizontally) {
                 BasicText(nowSpinning, style = Room.LabelQuiet, maxLines = 1)
-                nav(Modifier)
             }
         } else {
             // Landscape mirrors portrait: the same top bar, the line and the tabs at the foot.
-            nav(Modifier.align(Alignment.BottomEnd).widthIn(max = screenW * 0.42f))
             BasicText(nowSpinning, style = Room.LabelQuiet, modifier = Modifier.align(Alignment.BottomStart).widthIn(max = screenW * 0.48f), maxLines = 1)
         }
     }

@@ -83,13 +83,17 @@ import kotlin.math.roundToInt
  * The room's places. Those [inStrip] get a tab; Downloads opens from the ↓ count. [fullPage] ones
  * take the whole screen; the rest slide up as glass sheets.
  */
-enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true, val fullPage: Boolean = false) {
-    DIG("Dig", "Dig", fullPage = true),
-    DROPS("Friday Drops", "Drops"),
-    FRIENDS("Friends", "Friends", fullPage = true),
-    SETTINGS("Settings", "Settings"),
-    DOWNLOADS("Downloads", "Downloads", inStrip = false),
-    SIGNAL("Audio quality", "Audio", inStrip = false),
+/**
+ * The room's places. Each numbered one is a full page under the nav bar, headed "02 / dig" and so
+ * on (the room is 01); Audio quality is a panel over the room.
+ */
+enum class Panel(val title: String, val nav: String, val index: String, val inStrip: Boolean = true, val fullPage: Boolean = true) {
+    DIG("Dig", "Dig", "02 / dig"),
+    DROPS("Drops", "Drops", "03 / friday drops"),
+    FRIENDS("Friends", "Friends", "04 / friends"),
+    SETTINGS("Settings", "Settings", "05 / settings"),
+    DOWNLOADS("Downloads", "Downloads", "06 / downloads", inStrip = false),
+    SIGNAL("Audio quality", "Audio", "", inStrip = false, fullPage = false),
 }
 
 /** The sections of the Settings sheet. */
