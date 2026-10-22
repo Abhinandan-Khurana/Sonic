@@ -75,8 +75,11 @@ private const val INTRO_MS = 3000
 private const val HOLD_MS = 1000
 /** The storyboard plays this much slower than its timings above: unhurried, about 7 s in all. */
 private const val PACE = 1.8f
-/** The record's printed label, as a share of its diameter (the deck renders' label, and the art's). */
-private const val LABEL = 0.35f
+/**
+ * The owner's record's printed label, as a share of its diameter (intro-disc's is 39 %); drawn over
+ * the deck renders' own (35 %), which it covers.
+ */
+private const val LABEL = 0.39f
 
 /** The renders' pixel grid: every position below is in these units. */
 private const val SRC_W = 2064f

@@ -20,6 +20,7 @@ Intro (the first screen: a sleeve slides in, its record flies to the deck):
   intro-sleeve   the sleeve, square, edge to edge (no background), 1024 x 1024
   intro-disc     the record from straight above, black vinyl with a printed paper label, on a
                  TRANSPARENT background (PNG), the record touching all four edges, 1024 x 1024.
-                 Its label must be 35 % of the record's diameter, centred: Runout lays that same
-                 label over the deck's own once the record lands.
+                 Its label is 39 % of the record's diameter, centred (Intro.kt LABEL; at least 35 %
+                 so it covers the deck's own): Runout lays that same label over the deck's once the
+                 record lands.
 Missing either, the intro uses its built-in sleeve and disc.
