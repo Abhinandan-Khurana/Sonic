@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -31,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -160,7 +164,10 @@ fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
         }
     }
     val lineIn by remember { derivedStateOf { phase(clock.value, 2900f, 3200f) } }
-    Box(
+    // Over the room the deck is drawn exactly where the room's is, so it is already in its place
+    // when you arrive; on its own, as wide as the screen and 132 dp down.
+    val spot = LocalDeckSpot.current
+    BoxWithConstraints(
         modifier
             .fillMaxSize()
             .background(Room.Background)
@@ -172,14 +179,21 @@ fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
             }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { finish() },
     ) {
-        Canvas(Modifier.fillMaxSize()) { drawNeedleDrop(art, clock.value, deckTop = 132.dp.toPx()) }
+        val roomDeck = spot?.rect
+        Canvas(Modifier.fillMaxSize()) {
+            val deck = roomDeck ?: Rect(Offset(0f, 132.dp.toPx()), Size(size.width, size.width * SRC_H / SRC_W))
+            drawNeedleDrop(art, clock.value, deck)
+        }
+        // In landscape the room's deck is on the left band: the wordmark goes in the room's column beside it.
+        val beside = roomDeck != null && maxWidth > maxHeight
+        val besideStart = with(LocalDensity.current) { roomDeck?.right?.toDp() } ?: 0.dp
         // The wordmark block of TE · Onboarding · Intro: 44 / 22 / 33 / 22 in, 16 apart.
         Column(
             Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-                .padding(start = 22.dp, end = 22.dp, top = 44.dp, bottom = 33.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + if (beside) WindowInsetsSides.End else WindowInsetsSides.Horizontal))
+                .padding(start = 22.dp + if (beside) besideStart else 0.dp, end = 22.dp, top = 44.dp, bottom = 33.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Wordmark(66.sp, letters = letters, cursor = cursor, reserveCursor = true)
@@ -207,12 +221,15 @@ private fun arrive(t: Float, a: Float, b: Float): Float {
 private fun lerp(a: Float, b: Float, f: Float) = a + (b - a) * f
 private fun lerp(a: Offset, b: Offset, f: Float) = Offset(lerp(a.x, b.x, f), lerp(a.y, b.y, f))
 
-/** Draws the intro at [ms], the deck's top edge [deckTop] px down, the deck as wide as the screen. */
-private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, deckTop: Float) {
-    val k = size.width / SRC_W
-    fun at(p: Offset) = Offset(p.x * k, deckTop + p.y * k)
-    val deckOffset = IntOffset(0, deckTop.roundToInt())
-    val deckSize = IntSize(size.width.roundToInt(), (SRC_H * k).roundToInt())
+/**
+ * Draws the intro at [ms], the renders filling [frame] (whose shape is theirs, and the room's deck
+ * view's: 1.72 to 1).
+ */
+private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, frame: Rect) {
+    val k = frame.width / SRC_W
+    fun at(p: Offset) = Offset(frame.left + p.x * k, frame.top + p.y * k)
+    val deckOffset = IntOffset(frame.left.roundToInt(), frame.top.roundToInt())
+    val deckSize = IntSize(frame.width.roundToInt(), (SRC_H * k).roundToInt())
     fun deck(image: ImageBitmap, alpha: Float) {
         if (alpha > 0f) drawImage(image, dstOffset = deckOffset, dstSize = deckSize, alpha = alpha.coerceIn(0f, 1f))
     }
