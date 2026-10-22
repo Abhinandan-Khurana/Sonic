@@ -456,8 +456,8 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
 
 /**
  * Soulseek keeps no message history on its servers, so chats live only in Runout's database:
- * a 1 dp amber outline, 11 in, an 8 dp amber lamp beside two 10/400 lines, like setup's public
- * folder warning. Read as one sentence by TalkBack.
+ * a 1 dp amber outline, 11 in, an 8 dp amber lamp beside one 10/400 line, like setup's public
+ * folder warning.
  */
 @Composable
 private fun LocalMessagesNote() {
@@ -469,13 +469,15 @@ private fun LocalMessagesNote() {
             .semantics(mergeDescendants = true) { }
             .testTag("messages-local-note"),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Level with the first line's capitals.
-        Box(Modifier.padding(top = 3.dp).size(8.dp).background(Room.Warning))
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            BasicText("messages are kept only on this phone.", style = Room.Label)
-            BasicText("uninstalling sonic deletes them.", style = Room.Label)
-        }
+        Box(Modifier.size(8.dp).background(Room.Warning))
+        BasicText(
+            "messages stay on this phone; uninstalling sonic deletes them.",
+            style = Room.Label,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 

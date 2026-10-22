@@ -986,8 +986,7 @@ class ListeningRoomUiTest {
         portrait()
         compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), RecordingActions(), initialPanel = Panel.FRIENDS) }
         compose.onNodeWithTag("messages-local-note").assertIsDisplayed()
-        compose.onNodeWithText("messages are kept only on this phone.").assertIsDisplayed()
-        compose.onNodeWithText("uninstalling sonic deletes them.").assertIsDisplayed()
+        compose.onNodeWithText("messages stay on this phone; uninstalling sonic deletes them.").assertIsDisplayed()
         compose.onNodeWithTag("friend:maya").performClick()
         compose.onNodeWithTag("messages-local-note").assertDoesNotExist()
     }
