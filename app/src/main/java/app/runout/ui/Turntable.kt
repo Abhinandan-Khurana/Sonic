@@ -403,6 +403,8 @@ fun Turntable(
     LaunchedEffect(renderer) {
         renderer?.onFrame = { frames++ }
         renderer?.onReady = { shown3d = true }
+        // Ready before anyone was listening: shown already.
+        if (renderer?.ready == true) shown3d = true
     }
 
     BoxWithConstraints(modifier, contentAlignment = contentAlignment) {

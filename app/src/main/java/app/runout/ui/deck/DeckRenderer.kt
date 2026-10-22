@@ -419,8 +419,9 @@ class DeckRenderer(private val context: Context, textureView: TextureView, model
         // No surface yet: onNativeWindowChanged asks for frames again when one arrives.
         val chain = swapChain ?: return
         if (dirty) { settle = maxOf(settle, SETTLE_FRAMES); dirty = false }
-        // Nothing to draw: the callback stays off until a setter asks again.
-        if (settle <= 0) return
+        // Nothing to draw: the callback stays off until a setter asks again. Not before it's shown,
+        // though: a still deck's few settling frames can end while Filament is still skipping.
+        if (settle <= 0 && ready) return
         if (!uiHelper.isReadyToRender) { requestFrame(); return }
         applyTransforms()
         if (renderer.beginFrame(chain, frameTimeNanos)) {
@@ -433,8 +434,11 @@ class DeckRenderer(private val context: Context, textureView: TextureView, model
         }
         // Request a Compose redraw even when Filament skips a frame.
         onFrame?.invoke()
-        if (settle > 0) requestFrame()
+        if (settle > 0 || !ready) requestFrame()
     }
+
+    /** Frames are reaching the screen ([onReady] has been called, or would have been). */
+    val ready: Boolean get() = drawn >= READY_FRAMES
 
     private fun applyTransforms() {
         val tm = engine.transformManager
