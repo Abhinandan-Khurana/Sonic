@@ -344,6 +344,50 @@ class SoulseekRepositoryTest {
         val saved = folder.walkTopDown().filter { it.isFile && it.name.endsWith(".flac") }.toList()
         assertEquals(2, saved.size)
         assertEquals("both in one album folder", 1, saved.map { it.parentFile }.distinct().size)
+        // The record still names its first source, peer and folder together, for a record card.
+        val kept = repo.downloadAlbums.value.single()
+        assertEquals("maya" to "Music/Night Drive", kept.from to kept.remoteFolder)
+    }
+
+    @Test fun `a download keeps the peer's folder it came from`() = runBlocking {
+        login(); destination(); completeDownloads()
+        val opening = Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")
+        repo.download(SoulseekSearchResult("maya", "Shares\\Vela Park\\Night Drive\\01 Opening.flac", opening.size.toLong())).join()
+        await("on the shelf") { repo.downloadAlbums.value.singleOrNull()?.tracks?.size == 1 }
+        val album = repo.downloadAlbums.value.single()
+        assertEquals("Shares/Vela Park/Night Drive", album.remoteFolder)
+        // It survives the JSON round trip, and older JSON without it still loads.
+        val json = app.runout.library.AlbumJson.toJson(album)
+        assertEquals("Shares/Vela Park/Night Drive", app.runout.library.AlbumJson.fromJson(json).remoteFolder)
+        json.remove("remoteFolder")
+        assertNull(app.runout.library.AlbumJson.fromJson(json).remoteFolder)
+    }
+
+    @Test fun `a record card's folder opens by peer and folder name`() = runBlocking {
+        login()
+        repo.previewFolder("maya", "Artist/Album").join()
+        val browse = transport.commands.last { it.optString("op") == "browse" }
+        assertEquals("maya" to "Artist/Album", browse.getString("username") to browse.getString("directory"))
+        val files = JSONArray().put(JSONObject().put("path", "Artist\\Album\\01 First.flac").put("size", 100))
+        transport.emit(JSONObject().put("type", "browse_result").put("id", browse.getString("id")).put("username", "maya").put("directory", "Artist\\Album").put("files", files))
+        await("folder listed") { repo.folderPreview.value?.loading == false }
+        assertEquals(1, repo.folderPreview.value!!.files.size)
+        // Gone or offline: the preview says so (and offers a search instead).
+        repo.previewFolder("maya", "Artist/Gone").join()
+        val again = transport.commands.last { it.optString("op") == "browse" }.getString("id")
+        transport.emit(JSONObject().put("type", "error").put("id", again).put("error", "Peer is offline"))
+        await("folder error") { repo.folderPreview.value?.error == "Peer is offline" }
+    }
+
+    @Test fun `the sign-in prompt goes once you're signed in again`() = runBlocking {
+        login()
+        transport.emit(JSONObject().put("type", "session").put("state", "error").put("reasonCode", "AUTH_REJECTED").put("reason", "Signed in elsewhere"))
+        await("signed out") { !repo.session.value.signedIn }
+        repo.search("Vela Park").join()
+        assertEquals("Sign in with your Soulseek account to download and keep music.", repo.error.value)
+        repo.reconnect().join()
+        await("signed in again") { repo.session.value.signedIn }
+        await("prompt cleared") { repo.error.value == null }
     }
 
     @Test fun `a completed track whose file is gone downloads again, a present one does not`() = runBlocking {

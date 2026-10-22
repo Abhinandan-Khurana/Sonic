@@ -255,6 +255,7 @@ class MainActivity : ComponentActivity() {
                     override fun reconnectSoulseek() { graph.soulseek.reconnect() }
                     override fun disconnectSoulseek() { graph.soulseek.disconnectFromNotification() }
                     override fun previewSoulseekFolder(result: SoulseekSearchResult) { graph.soulseek.previewFolder(result) }
+                    override fun openSoulseekFolder(username: String, directory: String) { graph.soulseek.previewFolder(username, directory) }
                     override fun confirmSoulseekFolder() { graph.soulseek.confirmFolderDownload() }
                     override fun closeSoulseekFolder() { graph.soulseek.closeFolderPreview() }
                     override fun setSearchQuery(value: String) { graph.discovery.setQuery(value) }

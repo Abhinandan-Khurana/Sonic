@@ -593,7 +593,18 @@ internal fun FolderPreview(preview: SoulseekFolderPreview, state: RoomState, act
             }
         }
         if (preview.loading) WaitingMark("getting the full track list…", "Loading folder")
-        preview.error?.let { BasicText(it, style = Room.Label.copy(color = Room.Danger)) }
+        preview.error?.let {
+            BasicText(it, style = Room.Label.copy(color = Room.Danger))
+            // The folder is gone or its peer is away (a record card opens folders by name): look
+            // for the same record from anyone instead.
+            ArrowLink("search soulseek for it instead", {
+                val query = listOfNotNull(artist, album).joinToString(" ")
+                actions.closeSoulseekFolder()
+                actions.setSearchOptions(state.discovery.options.copy(source = SearchSource.SOULSEEK))
+                actions.setSearchQuery(query)
+                actions.searchSoulseek(query)
+            }, enabled = state.soulseekSession.signedIn, tag = "folder-search-instead", color = Room.Accent)
+        }
         if (preview.files.isNotEmpty()) LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth()) {
             itemsIndexed(preview.files, key = { _, f -> f.id }) { i, file ->
                 val (number, title) = cleanTrackName(file.fileName, folder, artist, i + 1)

@@ -371,7 +371,7 @@ private fun HelpToggle(
 
 /** A 10/400 action set as "pause →": no box, just the word and its arrow. */
 @Composable
-private fun ArrowLink(text: String, onClick: () -> Unit, enabled: Boolean = true, tag: String? = null, color: Color = Room.Ink) {
+internal fun ArrowLink(text: String, onClick: () -> Unit, enabled: Boolean = true, tag: String? = null, color: Color = Room.Ink) {
     BasicText(
         "$text →",
         style = Room.Label.copy(color = color),
@@ -595,6 +595,7 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 88.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                 if (!state.soulseekSession.signedIn) SignInNotice(onAccount)
                 NetworkNote(state, actions)
+                LocalMessagesNote()
                 val friends = state.soulseekContacts
                 if (friends.isNotEmpty()) {
                     BasicText("friends · ${friends.count { it.online }} online", style = Room.LabelQuiet)
@@ -674,6 +675,31 @@ fun SoulseekMessagesPanel(state: RoomState, actions: RoomActions, onAccount: () 
 }
 
 /**
+ * Soulseek keeps no message history on its servers, so chats live only in Runout's database:
+ * a 1 dp amber outline, 11 in, an 8 dp amber lamp beside two 10/400 lines, like setup's public
+ * folder warning. Read as one sentence by TalkBack.
+ */
+@Composable
+private fun LocalMessagesNote() {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, Room.Warning)
+            .padding(11.dp)
+            .semantics(mergeDescendants = true) { }
+            .testTag("messages-local-note"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Level with the first line's capitals.
+        Box(Modifier.padding(top = 3.dp).size(8.dp).background(Room.Warning))
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            BasicText("messages are kept only on this phone.", style = Room.Label)
+            BasicText("uninstalling runout deletes them.", style = Room.Label)
+        }
+    }
+}
+
+/**
  * A square initial outlined in ink (black with a white letter when there's something unread),
  * with a 9 dp status lamp in its corner: green online, white outlined offline, none for strangers.
  */
@@ -741,6 +767,11 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
     LaunchedEffect(peer, conversation?.unread) { actions.markSoulseekRead(peer) }
     val contact = state.soulseekContacts.firstOrNull { it.username == peer }
     var sharing by remember { mutableStateOf(false) }
+    // Only Soulseek downloads travel as cards: the card carries their peer and folder, so the
+    // other person gets that exact copy, not whatever a search turns up.
+    val sendable = remember(state.albums, state.soulseekTransfers) {
+        state.albums.mapNotNull { a -> shareSource(a, state.soulseekTransfers)?.let { a to it } }
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(
             Modifier.fillMaxWidth().hairlineBottom(Room.Ink).padding(bottom = 11.dp),
@@ -775,9 +806,14 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (card != null) RecordCardView(card, state, mine = message.outgoing) {
-                        actions.setSearchOptions(state.discovery.options.copy(source = app.runout.discovery.SearchSource.SOULSEEK))
-                        actions.setSearchQuery("${card.artist} ${card.album}")
-                        actions.searchSoulseek("${card.artist} ${card.album}")
+                        // The exact folder it came from when the card says; its preview offers
+                        // a search instead if that folder or its peer is gone. Older cards search.
+                        if (card.peer != null && card.folder != null && state.soulseekSession.signedIn) actions.openSoulseekFolder(card.peer, card.folder)
+                        else {
+                            actions.setSearchOptions(state.discovery.options.copy(source = app.runout.discovery.SearchSource.SOULSEEK))
+                            actions.setSearchQuery("${card.artist} ${card.album}")
+                            actions.searchSoulseek("${card.artist} ${card.album}")
+                        }
                         onDig()
                     } else BasicText(
                         // Yours solid black with white 10/400; theirs solid orange with black.
@@ -832,7 +868,7 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
                         }
                     },
                 )
-                SquareKey("Send a record", { sharing = true }, "share-record", enabled = state.soulseekSession.signedIn && state.albums.isNotEmpty(), filled = false, glyphSize = 22.dp) { c ->
+                SquareKey("Send a record", { sharing = true }, "share-record", enabled = state.soulseekSession.signedIn && sendable.isNotEmpty(), filled = false, glyphSize = 22.dp) { c ->
                     // A record: the rim, two grooves, the label disc and its spindle hole.
                     val w = size.width
                     drawCircle(c, w * 0.47f, center, style = Stroke(1.5.dp.toPx()))
@@ -851,10 +887,12 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
                 }
             }
             if (bytes > 4096) BasicText("messages must contain 1–4,096 bytes of text.", style = Room.Label.copy(color = Room.Danger))
+            if (state.soulseekSession.signedIn && sendable.isEmpty()) BasicText(SEND_RECORD_RULE, style = Room.LabelQuiet, modifier = Modifier.testTag("send-record-rule"))
         }
     }
-    if (sharing) RecordPicker(peer, state.albums, onDismiss = { sharing = false }) { album ->
-        actions.sendSoulseekMessage(peer, RecordCard.of(album).encode()) {}
+    if (sharing) RecordPicker(peer, sendable.map { it.first }, onDismiss = { sharing = false }) { album ->
+        val (from, folder) = sendable.first { it.first.id == album.id }.second
+        actions.sendSoulseekMessage(peer, RecordCard.of(album, from, folder).encode()) {}
         sharing = false
     }
 }
@@ -911,6 +949,7 @@ private fun RecordCardView(card: RecordCard, state: RoomState, mine: Boolean, on
             card.quality?.let { val (spec, hiRes) = specShort(it); TeTag(spec, color = if (hiRes) Room.Signal else Room.Ink) }
             if (!mine) {
                 if (local != null) BasicText("in your crate", style = Room.LabelQuiet, modifier = Modifier.testTag("find-record"))
+                else if (card.peer != null && card.folder != null) ArrowLink("open folder", onFind, tag = "open-record-folder", color = Room.Accent)
                 else ArrowLink("find on soulseek", onFind, tag = "find-record", color = Room.Accent)
             }
         }
@@ -927,6 +966,7 @@ private fun RecordPicker(peer: String, albums: List<app.runout.model.Album>, onD
     val chosen = albums.firstOrNull { it.id == pick }
     PageSheet("record-picker", onDismiss, title = "send a record") {
         BasicText("to $peer · from your crate · ${albums.size}", style = Room.LabelQuiet)
+        BasicText(SEND_RECORD_RULE, style = Room.LabelQuiet)
         Column(Modifier.heightIn(max = 330.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             albums.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -962,26 +1002,46 @@ private fun RecordPicker(peer: String, albums: List<app.runout.model.Album>, onD
 /**
  * A record sent in a Soulseek private message. It travels as ordinary text that any Soulseek
  * client shows sensibly ("♪ Album — Artist · FLAC 24/96"), plus a last line Runout recognises:
- * `runout:record?artist=…&album=…&q=…`, URL-encoded.
+ * `runout:record?artist=…&album=…&q=…&u=…&d=…`, URL-encoded. `u` and `d` are the Soulseek peer
+ * and folder you downloaded it from, so a tap opens that exact folder; older cards lack them.
  */
-internal data class RecordCard(val artist: String, val album: String, val quality: String?) {
+internal data class RecordCard(val artist: String, val album: String, val quality: String?, val peer: String? = null, val folder: String? = null) {
     fun encode(): String {
         fun e(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
         val q = quality?.let { "&q=${e(it)}" } ?: ""
-        return "♪ $album — $artist" + (quality?.let { " · $it" } ?: "") + "\nrunout:record?artist=${e(artist)}&album=${e(album)}$q"
+        val source = if (peer != null && folder != null) "&u=${e(peer)}&d=${e(folder)}" else ""
+        return "♪ $album — $artist" + (quality?.let { " · $it" } ?: "") + "\nrunout:record?artist=${e(artist)}&album=${e(album)}$q$source"
     }
 
     companion object {
-        private val line = Regex("runout:record\\?artist=([^&\\s]*)&album=([^&\\s]*)(?:&q=([^&\\s]*))?")
-        fun of(album: app.runout.model.Album) = RecordCard(album.artist, album.title, album.quality.label)
+        private val line = Regex("runout:record\\?artist=([^&\\s]*)&album=([^&\\s]*)(?:&q=([^&\\s]*))?(?:&u=([^&\\s]*))?(?:&d=([^&\\s]*))?")
+        fun of(album: app.runout.model.Album, peer: String? = null, folder: String? = null) = RecordCard(album.artist, album.title, album.quality.label, peer, folder)
         fun parse(text: String): RecordCard? {
             val m = line.find(text) ?: return null
             fun d(v: String) = runCatching { java.net.URLDecoder.decode(v, "UTF-8") }.getOrDefault(v)
+            fun group(i: Int) = m.groupValues.getOrNull(i)?.takeIf { it.isNotBlank() }?.let(::d)?.takeIf { it.isNotBlank() }
             val artist = d(m.groupValues[1]); val album = d(m.groupValues[2])
             if (artist.isBlank() || album.isBlank()) return null
-            return RecordCard(artist, album, m.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() }?.let(::d))
+            val peer = group(4); val folder = group(5)
+            // A peer without a folder (or the reverse) can't open anything: treat it as an old card.
+            val source = peer != null && folder != null && SoulseekPolicy.validUsername(peer)
+            return RecordCard(artist, album, group(3), peer.takeIf { source }, folder.takeIf { source })
         }
     }
+}
+
+private const val SEND_RECORD_RULE = "only records you downloaded on soulseek can be sent."
+
+/**
+ * Where a record can be sent from: the Soulseek peer and folder you downloaded it from, kept on
+ * the album, else read off its first finished download. Only Soulseek downloads have one.
+ */
+internal fun shareSource(album: app.runout.model.Album, transfers: List<SoulseekTransfer>): Pair<String, String>? {
+    if (album.source != app.runout.model.Source.SOULSEEK) return null
+    val from = album.from; val folder = album.remoteFolder
+    if (from != null && !folder.isNullOrBlank()) return from to folder
+    val done = transfers.firstOrNull { it.albumId == album.id && it.state == SoulseekTransferState.COMPLETED } ?: return null
+    return done.username to done.directory.ifBlank { return null }
 }
 
 /** Whether Android's "Background usage" is off for Runout. */

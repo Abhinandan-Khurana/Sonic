@@ -616,6 +616,49 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `Friends says messages live only on this phone, on its home and not inside a chat`() {
+        portrait()
+        compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("messages-local-note").assertIsDisplayed()
+        compose.onNodeWithText("messages are kept only on this phone.").assertIsDisplayed()
+        compose.onNodeWithText("uninstalling runout deletes them.").assertIsDisplayed()
+        compose.onNodeWithTag("friend:maya").performClick()
+        compose.onNodeWithTag("messages-local-note").assertDoesNotExist()
+    }
+
+    @Test
+    fun `only Soulseek downloads can be sent, and their card opens that exact folder`() {
+        portrait()
+        val actions = object : RecordingActions() {
+            override fun openSoulseekFolder(username: String, directory: String) { log += "openFolder:$username:$directory" }
+        }
+        // Nothing from Soulseek yet: the key is off and says why.
+        var s by mutableStateOf(state(contacts = listOf(SoulseekContact("maya", true))).copy(soulseekConversation = "maya"))
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("share-record").assertIsNotEnabled()
+        compose.onNodeWithTag("send-record-rule").assertIsDisplayed()
+        // One download from ro's share: the picker offers just that, and the card carries its folder.
+        val download = albums[0].copy(id = "slsk-1", source = Source.SOULSEEK, from = "ro", remoteFolder = "Music/Air/Moon Safari")
+        s = s.copy(albums = albums + download)
+        compose.waitForIdle()
+        compose.onNodeWithTag("send-record-rule").assertDoesNotExist()
+        compose.onNodeWithTag("share-record").performClick()
+        compose.onAllNodesWithTag("pick-record:slsk-1").assertCountEquals(1)
+        compose.onAllNodesWithTag("pick-record:${albums[0].id}").assertCountEquals(0)
+        compose.onNodeWithTag("send-record").performClick()
+        val sent = actions.log.single { it.startsWith("soulseekMessage:maya:") }.removePrefix("soulseekMessage:maya:")
+        val card = app.runout.ui.RecordCard.parse(sent)!!
+        assertEquals("ro" to "Music/Air/Moon Safari", card.peer to card.folder)
+        // A card sent to you names the folder: "open folder" lists it, then Dig shows it.
+        val received = app.runout.ui.RecordCard("Air", "Moon Safari", null, "ro", "Music/Air/Moon Safari").encode()
+        s = s.copy(albums = albums, soulseekConversations = listOf(SoulseekConversation("maya", listOf(SoulseekMessage("9", "maya", received, 1_792_540_000_000L, outgoing = false, state = SoulseekMessageState.RECEIVED, read = true)), 0)))
+        compose.waitForIdle()
+        compose.onNodeWithTag("open-record-folder").performClick()
+        assertTrue(actions.log.toString(), actions.log.contains("openFolder:ro:Music/Air/Moon Safari"))
+        assertTrue(actions.log.none { it.startsWith("soulseekSearch:") })
+    }
+
+    @Test
     fun `Settings sends you to the one sign-in, which checks the ID and always keeps you signed in`() {
         portrait()
         val actions = RecordingActions()
