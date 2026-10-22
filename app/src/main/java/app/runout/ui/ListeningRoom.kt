@@ -932,13 +932,15 @@ fun RoomScreen(
                 label = if (proximity > 0.05f || ejecting == pulled.id) "sleeve · empty" else "pull up · drag",
                 modifier = Modifier
                     .zIndex(if (dragging || proximity > 0.05f) 4f else 6f)
-                    // A white wash rather than layer alpha: a translucent layer under the 3D overlay drops out.
+                    .offset { IntOffset((s.rect.left - rootOrigin.x).roundToInt(), (s.rect.top - rootOrigin.y).roundToInt()) }
+                    .size(s.size)
+                    // A wash of the room's paper rather than layer alpha: a translucent layer under the
+                    // 3D overlay drops out. After the offset, so it lies on the sleeve and not in the
+                    // room's top-left corner (over the deck).
                     .drawWithContent {
                         drawContent()
                         drawRect(Room.Background.copy(alpha = 0.55f * (proximity * 3f).coerceIn(0f, 1f)))
                     }
-                    .offset { IntOffset((s.rect.left - rootOrigin.x).roundToInt(), (s.rect.top - rootOrigin.y).roundToInt()) }
-                    .size(s.size)
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
