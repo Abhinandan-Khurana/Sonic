@@ -1213,14 +1213,20 @@ private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> U
                     .touchHeight()
                     .padding(horizontal = 4.dp),
             ) { Lamp(if (c == Room.Quiet) null else c) }
-            BasicText(
-                "↓ ${transfers.size}",
-                style = Room.Label.copy(color = if (downloadsColor(transfers) == Room.Danger) Room.Danger else Room.Ink),
-                modifier = Modifier
+            // Downloads: a 16 dp download glyph (arrow into a tray) and the count, red when one needs you.
+            val downloadsInk = if (downloadsColor(transfers) == Room.Danger) Room.Danger else Room.Ink
+            Row(
+                Modifier
                     .testTag("open-downloads")
+                    .semantics(mergeDescendants = true) { contentDescription = "Downloads, ${transfers.size}" }
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onDownloads)
                     .touchHeight(),
-            )
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Canvas(Modifier.size(16.dp)) { drawDownloadGlyph(downloadsInk) }
+                BasicText("${transfers.size}", style = Room.Strong.copy(color = downloadsInk), maxLines = 1)
+            }
             BasicText("${state.albums.size} rec", style = Room.Label, maxLines = 1, modifier = Modifier.semantics { contentDescription = recordCount(state.albums.size) })
         }
     }
@@ -1232,6 +1238,21 @@ private fun PlayLamp() {
     Canvas(Modifier.size(8.dp).semantics { contentDescription = "Playing" }) {
         drawPath(Path().apply { moveTo(0f, 0f); lineTo(size.width, size.height / 2f); lineTo(0f, size.height); close() }, Room.Online)
     }
+}
+
+/** The download glyph in the nav icons' line: an arrow down into an open tray. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDownloadGlyph(ink: Color) {
+    val w = size.width
+    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+    val arrow = Path().apply {
+        moveTo(w * 0.5f, w * 0.1f); lineTo(w * 0.5f, w * 0.62f)
+        moveTo(w * 0.27f, w * 0.4f); lineTo(w * 0.5f, w * 0.63f); lineTo(w * 0.73f, w * 0.4f)
+    }
+    val tray = Path().apply {
+        moveTo(w * 0.1f, w * 0.62f); lineTo(w * 0.1f, w * 0.88f); lineTo(w * 0.9f, w * 0.88f); lineTo(w * 0.9f, w * 0.62f)
+    }
+    drawPath(arrow, ink, style = stroke)
+    drawPath(tray, ink, style = stroke)
 }
 
 /** An 8 dp square lamp: filled with [color], or hollow ink when there's nothing to say. */
