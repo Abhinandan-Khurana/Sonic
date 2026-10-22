@@ -22,6 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -229,8 +233,8 @@ internal fun SignalChain(path: SignalPath?, modifier: Modifier = Modifier, gap: 
             else -> Room.Warning
         }
         Verdict(path.verdict.lowercase(), lamp, onVerdictHelp)
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            StepRow("Track", path.track)
+        Column(Modifier.fillMaxWidth().padding(top = 11.dp)) {
+            StepRow("Track", path.track, first = true)
             StepRow("Sonic", path.runout)
             StepRow("Output", path.output, last = true)
         }
@@ -253,23 +257,38 @@ private fun Verdict(text: String, lamp: Color, onHelp: (() -> Unit)?) {
 }
 
 /**
- * One station: a 22 dp rail with a 12 dp square node (black, amber where quality changes) and a
- * 1 dp line down to the next, then the key, the 12/700 name, the 10/400 format and the grey detail.
+ * One station, compact: a 10 dp square node (black, amber where quality changes) on the line of the
+ * 12/700 name, the name 11 dp after it and the format at the right; under it the key and the grey
+ * detail. The nodes sit under the verdict's lamp and the text under its words, and a 1 dp rail runs
+ * through the nodes from the first station to the last.
  */
 @Composable
-private fun StepRow(kicker: String, step: SignalPath.Step, last: Boolean = false) {
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(Modifier.width(22.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(12.dp).background(if (step.ok) Room.Ink else Room.Warning))
-            if (!last) Box(Modifier.width(1.dp).heightIn(min = 90.dp).weight(1f).background(Room.Ink))
+private fun StepRow(kicker: String, step: SignalPath.Step, first: Boolean = false, last: Boolean = false) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 11.dp)) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            Box(Modifier.width(10.dp).fillMaxHeight().rail(top = !first, bottom = !last), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(10.dp).background(if (step.ok) Room.Ink else Room.Warning))
+            }
+            BasicText(step.title.lowercase(), style = Room.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            BasicText(step.spec.lowercase(), style = Room.Label, maxLines = 1, modifier = Modifier.testTag("spec:$kicker"))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            BasicText(kicker.lowercase(), style = Room.LabelQuiet)
-            BasicText(step.title.lowercase(), style = Room.Strong, maxLines = 1)
-            BasicText(step.spec.lowercase(), style = Room.Label, modifier = Modifier.testTag("spec:$kicker"))
-            BasicText(step.detail.lowercase(), style = Room.LabelQuiet.copy(lineHeight = 15.sp))
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            Box(Modifier.width(10.dp).fillMaxHeight().rail(top = !last, bottom = !last))
+            BasicText(
+                "${kicker.lowercase()} · ${step.detail.lowercase()}",
+                style = Room.LabelQuiet.copy(lineHeight = 15.sp),
+                modifier = Modifier.weight(1f).padding(top = 6.dp, bottom = if (last) 0.dp else 28.dp),
+            )
         }
     }
+}
+
+/** The 1 dp ink rail down the middle of a node's column: its top half, its bottom half, or both. */
+private fun Modifier.rail(top: Boolean, bottom: Boolean) = drawBehind {
+    val w = 1.dp.toPx()
+    val x = size.width / 2f - w / 2f
+    if (top) drawRect(Room.Ink, Offset(x, 0f), Size(w, size.height / 2f))
+    if (bottom) drawRect(Room.Ink, Offset(x, size.height / 2f), Size(w, size.height / 2f))
 }
 
 /**
