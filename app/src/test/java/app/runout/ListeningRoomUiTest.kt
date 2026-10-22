@@ -8,6 +8,7 @@ import app.runout.ui.Look
 import app.runout.ui.Room
 import app.runout.ui.ThemeMode
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -601,6 +602,72 @@ class ListeningRoomUiTest {
         } finally {
             Room.dark = false
         }
+    }
+
+    @Test
+    fun `the record on the platter stays on the deck - its sleeve gives up no disc`() {
+        portrait()
+        val cued = DeckState(album = albums[1], sides = SideSplitter.split(albums[1].tracks))
+        compose.setContent { RoomScreen(state(deck = cued), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+    }
+
+    @Test
+    fun `let go away from the platter and the record slides back into its sleeve`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialPulledId = "a2", initialCrateIndex = 1) }
+        compose.onNodeWithTag("pulled-disc").assertExists().performTouchInput {
+            down(center); repeat(4) { moveBy(androidx.compose.ui.geometry.Offset(30f, -6f)) }; up()
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+    }
+
+    @Test
+    fun `swiping the crate with a record out puts it back and digs on`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialPulledId = "a2", initialCrateIndex = 1) }
+        compose.onNodeWithText("NIGHT DRIVE").assertExists()
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+        compose.onNodeWithText("NIGHT DRIVE").assertDoesNotExist()
+    }
+
+    @Test
+    fun `held over a playing deck a record swaps in, and the music carries on`() {
+        portrait()
+        val monsoon = albums[0]
+        var deck by mutableStateOf(DeckState(album = monsoon, sides = SideSplitter.split(monsoon.tracks), needleDown = true, isPlaying = true))
+        val actions = object : RecordingActions() {
+            override fun load(album: Album) { super.load(album); deck = DeckState(album = album, sides = SideSplitter.split(album.tracks)) }
+            override fun eject() { super.eject(); deck = DeckState() }
+            override fun liftNeedle() { super.liftNeedle(); deck = deck.copy(needleDown = false, isPlaying = false) }
+            override fun needleDrop(fraction: Float) { super.needleDrop(fraction); deck = deck.copy(needleDown = true, isPlaying = true) }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(state(deck = deck), actions, initialPulledId = "a2", initialCrateIndex = 1) }
+        repeat(20) { compose.mainClock.advanceTimeBy(100) }
+        // Where the platter is: the deck's own camera over the turntable's box.
+        val box = compose.onNodeWithTag("turntable").getBoundsInRoot()
+        val d = compose.density.density
+        val cam = app.runout.ui.deck.DeckCamera((box.right - box.left).value * d, (box.bottom - box.top).value * d)
+        val c = cam.project(app.runout.ui.deck.V3(app.runout.ui.deck.DeckModel.platterCentre.x, app.runout.ui.deck.DeckModel.RECORD_Y, app.runout.ui.deck.DeckModel.platterCentre.z))
+        val platter = androidx.compose.ui.geometry.Offset(box.left.value * d + c.x, box.top.value * d + c.y)
+        val discBox = compose.onNodeWithTag("pulled-disc").getBoundsInRoot()
+        val discAt = androidx.compose.ui.geometry.Offset((discBox.left.value + discBox.right.value) / 2f * d, (discBox.top.value + discBox.bottom.value) / 2f * d)
+        val step = (platter - discAt) / 10f
+        compose.onNodeWithTag("pulled-disc").performTouchInput { down(center); repeat(10) { moveBy(step) } }
+        // Held there past the shakes: the swap runs with the finger still down.
+        repeat(12) { compose.mainClock.advanceTimeBy(100) }
+        compose.onRoot().performTouchInput { up() }
+        repeat(40) { compose.mainClock.advanceTimeBy(100) }
+        val log = actions.log.toList()
+        assertTrue(log.toString(), log.indexOf("eject") in 0 until log.indexOf("load:Night Drive"))
+        assertTrue("it plays on: $log", log.lastIndexOf("needleDrop") > log.indexOf("load:Night Drive"))
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
     }
 
     @Test

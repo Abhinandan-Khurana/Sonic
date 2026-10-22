@@ -461,6 +461,13 @@ fun RoomScreen(
     var swapping by remember { mutableStateOf(false) }
     var shakeX by remember { mutableFloatStateOf(0f) }
     val swapLift = remember { Animatable(0f) }
+    // The record a swap took off the deck, on its way back to the crate.
+    var homing by remember { mutableStateOf<Album?>(null) }
+    var homingFrom by remember { mutableStateOf(Offset.Zero) }
+    var homingTo by remember { mutableStateOf(Offset.Zero) }
+    val homingT = remember { Animatable(0f) }
+    // A record the deck couldn't read when it landed.
+    var cantPlay by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(state)
     // The record in front of the crate, for the caption under it.
     var frontId by remember { mutableStateOf<String?>(null) }
@@ -524,36 +531,47 @@ fun RoomScreen(
         LaunchedEffect(pulledId, slot != null, portrait) {
             val s = slot ?: return@LaunchedEffect
             if (pulledId == null) return@LaunchedEffect
+            // Mid-swap (the phone turned, say) the record in hand is on its way to the platter: leave it be.
+            if (swapping) return@LaunchedEffect
             val home = platterCenter
             if (ejecting != null && ejecting == pulledId && home != null) {
-                // Put back (TE storyboard, ~1.1 s): EJECT on the LED and the arm back to its rest;
-                // the 3D record takes the deck's place exactly and lifts off (1.0 → 1.06); it flies on
-                // a soft arc to the crate, shrinking to sleeve size, slides down into its sleeve, and
-                // seats with a tick.
-                if (current.deck.needleDown) { actions.liftNeedle(); delay(300) }
-                disc.snapTo(home - rootOrigin)
-                lift.snapTo(1f)
-                spin.snapTo(deckLink.platterDegrees)
-                withTimeoutOrNull(900) { snapshotFlow { heldReady }.first { it } }
-                actions.eject()
-                lift.animateTo(1.06f, tween(200, easing = FastOutSlowInEasing))
-                val above = s.rect.center - rootOrigin + pullOut(s)
-                launch { lift.animateTo(1f, tween(300)) }
-                launch { spin.animateTo(spin.value - 90f, tween(500, easing = FastOutSlowInEasing)) }
-                // The arc: a little higher than the straight line, at its middle.
-                val from = disc.value
-                val arc = Animatable(0f)
-                arc.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) {
-                    val t = value
-                    val lineY = from.y + (above.y - from.y) * t
-                    val p = Offset(from.x + (above.x - from.x) * t, lineY - kotlin.math.sin(t * Math.PI.toFloat()) * s.rect.height * 0.25f)
-                    scope.launch { disc.snapTo(p) }
+                val flying = ejecting
+                var ejected = false
+                try {
+                    // Put back (TE storyboard, ~1.1 s): EJECT on the LED and the arm back to its rest;
+                    // the 3D record takes the deck's place exactly and lifts off (1.0 → 1.06); it flies on
+                    // a soft arc to the crate, shrinking to sleeve size, slides down into its sleeve, and
+                    // seats with a tick.
+                    if (current.deck.needleDown) { actions.liftNeedle(); delay(300) }
+                    disc.snapTo(home - rootOrigin)
+                    lift.snapTo(1f)
+                    spin.snapTo(deckLink.platterDegrees)
+                    withTimeoutOrNull(900) { snapshotFlow { heldReady }.first { it } }
+                    actions.eject()
+                    ejected = true
+                    lift.animateTo(1.06f, tween(200, easing = FastOutSlowInEasing))
+                    val above = s.rect.center - rootOrigin + pullOut(s)
+                    launch { lift.animateTo(1f, tween(300)) }
+                    launch { spin.animateTo(spin.value - 90f, tween(500, easing = FastOutSlowInEasing)) }
+                    // The arc: a little higher than the straight line, at its middle.
+                    val from = disc.value
+                    val arc = Animatable(0f)
+                    arc.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) {
+                        val t = value
+                        val lineY = from.y + (above.y - from.y) * t
+                        val p = Offset(from.x + (above.x - from.x) * t, lineY - kotlin.math.sin(t * Math.PI.toFloat()) * s.rect.height * 0.25f)
+                        scope.launch { disc.snapTo(p) }
+                    }
+                    disc.animateTo(s.rect.center - rootOrigin, tween(200, easing = FastOutSlowInEasing))
+                    landed()
+                } finally {
+                    // However the flight ends (landed, a page opened, Back, the phone turned), the
+                    // record is off the deck and in its sleeve, and the room lets go of the flight.
+                    if (!ejected) actions.eject()
+                    ejecting = null
+                    crateTarget = null
+                    if (pulledId == flying) pulledId = null
                 }
-                disc.animateTo(s.rect.center - rootOrigin, tween(200, easing = FastOutSlowInEasing))
-                landed()
-                pulledId = null
-                ejecting = null
-                crateTarget = null
                 return@LaunchedEffect
             }
             val start = s.rect.center - rootOrigin
@@ -564,6 +582,32 @@ fun RoomScreen(
             disc.animateTo(start + pullOut(s), spring(dampingRatio = 0.58f, stiffness = 260f))
         }
 
+        // The old record of a swap, sent home: toward its side of the crate, where its sleeve stands.
+        fun flyHome(album: Album, from: Offset) {
+            val sl = slot ?: return
+            val at = current.albums.indexOfFirst { it.id == album.id }
+            val front = current.albums.indexOfFirst { it.id == frontId }
+            val side = if (at in 0 until front) -1f else 1f
+            homing = album
+            homingFrom = from - rootOrigin
+            homingTo = sl.rect.center - rootOrigin + Offset(side * sl.rect.width * 0.85f, 0f)
+            scope.launch {
+                homingT.snapTo(0f)
+                homingT.animateTo(1f, tween(620, easing = FastOutSlowInEasing))
+                homing = null
+            }
+        }
+
+        // The record in hand slides back down into its sleeve (not while it flies home or swaps).
+        suspend fun putBackPulled() {
+            if (ejecting != null || swapping) return
+            val sl = slot
+            if (sl != null && pulledId != null) coroutineScope {
+                launch { lift.animateTo(1f, tween(160)) }
+                disc.animateTo(sl.rect.center - rootOrigin, tween(260, easing = FastOutSlowInEasing))
+            }
+            pulledId = null
+        }
         // After onboarding the room comes in around the deck: everything but the deck rises into
         // place and fades up as the greeting goes, while the deck the greeting showed stays put.
         val rise = Modifier.graphicsLayer {
@@ -604,7 +648,7 @@ fun RoomScreen(
                         holdingOverBusy -> "SWAP"
                         else -> null
                     },
-                    onRecordDragged = { useEject = true },
+                    onRecordDragged = { occupied = false; useEject = true },
                     liftOff = { swapLift.value },
                     skin = state.look.deckFor(Room.dark),
                 )
@@ -613,8 +657,9 @@ fun RoomScreen(
                 Crate(
                     albums = state.albums,
                     pulledId = pulledId,
-                    onPull = { pulledId = it.id },
-                    onPutBack = { pulledId = null },
+                    // The record on the platter has no disc in its sleeve to pull.
+                    onPull = { if (it.id == state.deck.album?.id) refused() else pulledId = it.id },
+                    onPutBack = { scope.launch { putBackPulled() } },
                     onFrontSlot = { slot = it },
                     onMenu = { detailsFor = it.id },
                     modifier = m,
@@ -624,16 +669,7 @@ fun RoomScreen(
                     initialIndex = initialCrateIndex,
                     scrollTo = crateTarget,
                     missing = { missingBy[it.id] ?: 0 },
-                    putBack = {
-                        val s = slot
-                        if (s != null && pulledId != null && ejecting == null) {
-                            coroutineScope {
-                                launch { lift.animateTo(1f, tween(160)) }
-                                disc.animateTo(s.rect.center - rootOrigin, tween(260, easing = FastOutSlowInEasing))
-                            }
-                        }
-                        pulledId = null
-                    },
+                    putBack = { putBackPulled() },
                 )
             }
             val front = state.albums.firstOrNull { it.id == frontId } ?: state.albums.firstOrNull()
@@ -739,7 +775,12 @@ fun RoomScreen(
                 actions.discLanded()
                 lift.animateTo(0.95f, tween(70))
                 lift.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 700f))
-                actions.load(pulled)
+                if (current.deck.album?.id != pulled.id) {
+                    actions.load(pulled)
+                    // The deck turns away a record it can't read: say so rather than let it vanish.
+                    val record = pulled.id
+                    scope.launch { if (withTimeoutOrNull(1_500) { snapshotFlow { current.deck.album?.id }.first { it == record } } == null) cantPlay = true }
+                }
                 // Hold the 3D record until the deck's own is drawn under it.
                 if (use3dNow) delay(HANDOVER_MS)
                 pulledId = null
@@ -748,21 +789,36 @@ fun RoomScreen(
             // The swap: the record in hand steps back off the platter, the one on it rises out of
             // the deck (EJECT on the LED), and the one in hand lands in its place.
             suspend fun swapRecords() = coroutineScope {
-                val target = platterCenter ?: return@coroutineScope
+                val target = platterCenter
+                if (target == null) { swapping = false; return@coroutineScope }
                 swapping = true
                 dragging = false
                 occupied = false
-                launch { disc.animateTo(target - rootOrigin + Offset(platterRadius * 0.45f, platterRadius * 0.6f), tween(320, easing = FastOutSlowInEasing)) }
-                if (current.deck.needleDown) { actions.liftNeedle(); delay(300) }
-                swapLift.snapTo(0f)
-                swapLift.animateTo(1f, tween(420, easing = FastOutLinearInEasing))
-                actions.eject()
-                // The deck lets go of the old record before it drops back to the mat.
-                withTimeoutOrNull(500) { snapshotFlow { current.deck.album }.first { it == null } }
-                delay(50)
-                swapLift.snapTo(0f)
-                land(target)
-                swapping = false
+                useEject = false
+                val old = current.deck.album
+                val wasPlaying = current.deck.needleDown
+                try {
+                    launch { disc.animateTo(target - rootOrigin + Offset(platterRadius * 0.45f, platterRadius * 0.6f), tween(320, easing = FastOutSlowInEasing)) }
+                    if (wasPlaying) { actions.liftNeedle(); delay(300) }
+                    swapLift.snapTo(0f)
+                    swapLift.animateTo(1f, tween(420, easing = FastOutLinearInEasing))
+                    actions.eject()
+                    // The old record goes home to the crate while the new one comes down.
+                    old?.let { flyHome(it, target) }
+                    // The deck lets go of the old record before it drops back to the mat.
+                    withTimeoutOrNull(500) { snapshotFlow { current.deck.album }.first { it == null } }
+                    delay(50)
+                    swapLift.snapTo(0f)
+                    land(target)
+                    // Music was playing: it carries on, on the new record (auto-play may already have).
+                    if (wasPlaying) {
+                        val on = withTimeoutOrNull(1_000) { snapshotFlow { current.deck.album?.id }.first { it == pulled.id } } != null
+                        if (on && !current.deck.needleDown) actions.needleDrop(0f)
+                    }
+                } finally {
+                    swapping = false
+                    if (swapLift.value != 0f) scope.launch { swapLift.snapTo(0f) }
+                }
             }
 
             // Held over a busy platter for about two thirds of a second: the deck shakes, harder as it
@@ -786,6 +842,8 @@ fun RoomScreen(
                     shakeX = 0f
                     holdingOverBusy = false
                 }
+                // At once, so a release in this same frame doesn't also bounce the record back.
+                swapping = true
                 scope.launch { swapRecords() }
             }
 
@@ -877,18 +935,20 @@ fun RoomScreen(
                     }
                     .pointerInput(pulled.id) {
                         detectDragGestures(
-                            onDragStart = {
+                            onDragStart = onDragStart@{
+                                // Flying home from the deck, it isn't in your hand.
+                                if (ejecting != null || swapping) return@onDragStart
                                 dragging = true
                                 pickUp()
                                 scope.launch { lift.animateTo(1.06f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
                             },
                             onDrag = { change, amount ->
                                 change.consume()
-                                if (!swapping) scope.launch { disc.snapTo(disc.value + amount) }
+                                if (dragging && !swapping && ejecting == null) scope.launch { disc.snapTo(disc.value + amount) }
                             },
                             onDragEnd = onDragEnd@{
                                 // Mid-swap the record is already on its way to the platter.
-                                if (swapping) return@onDragEnd
+                                if (swapping || !dragging) return@onDragEnd
                                 dragging = false
                                 val target = platterCenter
                                 val onPlatter = target != null && (disc.value + rootOrigin - target).getDistance() < platterRadius * 0.95f
@@ -897,6 +957,7 @@ fun RoomScreen(
                                     if (onPlatter && busy) {
                                         // Platter occupied: the disc doesn't land. It bounces back along its
                                         // path (0.4 s, a small overshoot) with a double buzz and slides into its sleeve.
+                                        useEject = false
                                         occupied = true
                                         launch { refused(); delay(90); refused() }
                                         launch { lift.animateTo(1f, tween(400)) }
@@ -906,16 +967,21 @@ fun RoomScreen(
                                     } else if (onPlatter && target != null) {
                                         land(target)
                                     } else {
+                                        // Let go anywhere else: it glides back down into its own sleeve.
                                         launch { lift.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 400f)) }
-                                        disc.animateTo(restPos, spring(dampingRatio = 0.8f, stiffness = 300f))
+                                        disc.animateTo(s.rect.center - rootOrigin, tween(320, easing = FastOutSlowInEasing))
+                                        pulledId = null
                                     }
                                 }
                             },
                             onDragCancel = onDragCancel@{
-                                if (swapping) return@onDragCancel
+                                if (swapping || !dragging) return@onDragCancel
                                 dragging = false
-                                scope.launch { lift.animateTo(1f) }
-                                scope.launch { disc.animateTo(restPos, spring(dampingRatio = 0.8f, stiffness = 300f)) }
+                                scope.launch {
+                                    launch { lift.animateTo(1f) }
+                                    disc.animateTo(s.rect.center - rootOrigin, tween(320, easing = FastOutSlowInEasing))
+                                    pulledId = null
+                                }
                             },
                         )
                     },
@@ -945,25 +1011,17 @@ fun RoomScreen(
                     // A wash of the room's paper rather than layer alpha: a translucent layer under the
                     // 3D overlay drops out. After the offset, so it lies on the sleeve and not in the
                     // room's top-left corner (over the deck).
+                    // Only a picture: taps, long presses and swipes fall through to the crate's own front
+                    // sleeve underneath, which puts the record back, opens its details or digs on.
                     .drawWithContent {
                         drawContent()
                         drawRect(Room.Background.copy(alpha = 0.55f * (proximity * 3f).coerceIn(0f, 1f)))
-                    }
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onLongClick = { detailsFor = pulled.id },
-                        // Put back: the disc slides down into its sleeve before the sleeve goes back.
-                        onClick = {
-                            scope.launch {
-                                launch { lift.animateTo(1f, tween(160)) }
-                                disc.animateTo(s.rect.center - rootOrigin, tween(280, easing = FastOutSlowInEasing))
-                                pulledId = null
-                            }
-                        },
-                    ),
+                    },
             )
         }
+
+        // A record a swap took off the deck, flying back to the crate on a low arc and slipping in.
+        homing?.let { h -> HomingDisc(h, homingFrom, homingTo, platterRadius * 2f, (slot?.rect?.width ?: 0f) * 0.9f) { homingT.value } }
 
         // Long-press a sleeve or a disc: that record's details, with what you can do with it.
         state.albums.firstOrNull { it.id == detailsFor }?.let { record ->
@@ -1194,6 +1252,12 @@ fun RoomScreen(
             TeToast("use the eject key to put the record back.", Room.Accent, toastAt.zIndex(21f).testTag("use-eject")) {
                 TeLink("eject", { useEject = false; deckActions.eject() }, tag = "use-eject-key", color = Color.White)
             }
+        }
+
+        // The deck turned a record away (unreadable since it was scanned): say so, and where to look.
+        if (cantPlay && !setupOpen) {
+            LaunchedEffect(Unit) { delay(4_000); cantPlay = false }
+            TeToast("that record couldn't be read. repair local albums in settings › library.", Room.Danger, toastAt.zIndex(21f).testTag("cant-play"))
         }
 
         // Something joined the downloads queue (from Dig, a missing track, a retry): a pop that says
@@ -1765,3 +1829,32 @@ private const val HANDOVER_MS = 350L
 /** How long a record is held over a busy platter before the swap, and how many shakes that is. */
 private const val SWAP_HOLD_MS = 650L
 private const val SWAP_SHAKES = 16
+
+/**
+ * The record a swap took off the deck, on its way home: from the platter on a low arc toward its
+ * side of the crate, shrinking to a sleeve's size, turning back a little and fading as it slips in.
+ */
+@Composable
+private fun HomingDisc(album: Album, from: Offset, to: Offset, fromD: Float, toD: Float, progress: () -> Float) {
+    val cover by rememberCover(album)
+    val look = remember(album.id) { discLookFor(album) }
+    val fallback = remember(album.id) { fallbackColor(album) }
+    Canvas(Modifier.fillMaxSize().zIndex(4.95f).testTag("homing-disc")) {
+        val t = progress()
+        val arc = kotlin.math.sin(t * Math.PI.toFloat()) * fromD * 0.35f
+        val at = Offset(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t - arc)
+        val d = fromD + (toD - fromD) * t
+        val fade = 1f - ((t - 0.7f) / 0.3f).coerceIn(0f, 1f)
+        if (fade > 0f) drawIntoLayerAlpha(fade) {
+            drawRecord(at, d / 2f, -120f * t, look, cover, fallback, emptyList(), null, null)
+        }
+    }
+}
+
+/** Draws [block] at [alpha], as one layer so the record's own parts don't show through each other. */
+private inline fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntoLayerAlpha(alpha: Float, block: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit) {
+    val paint = androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha }
+    drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), paint)
+    block()
+    drawContext.canvas.restore()
+}

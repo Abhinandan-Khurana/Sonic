@@ -1,5 +1,9 @@
 package app.runout.ui
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Brush
@@ -110,6 +114,14 @@ fun Crate(
     val scope = rememberCoroutineScope()
     val pos = remember { Animatable(initialIndex.toFloat()) }
     val decay = rememberSplineBasedDecay<Float>()
+    val currentPulled by rememberUpdatedState(pulledId)
+    val currentPutBack by rememberUpdatedState(putBack)
+    // The record in front stays in front when the list changes under it (a download arriving).
+    var frontKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(albums) {
+        val i = albums.indexOfFirst { it.id == frontKey }
+        if (i >= 0 && i != pos.value.roundToInt()) pos.snapTo(i.toFloat())
+    }
 
     LaunchedEffect(scrollTo) {
         val i = albums.indexOfFirst { it.id == scrollTo }
@@ -123,7 +135,7 @@ fun Crate(
     LaunchedEffect(Unit) { snapshotFlow { pos.value.roundToInt() }.drop(1).collect { detent() } }
     val frontIndex = pos.value.roundToInt().coerceIn(0, (albums.size - 1).coerceAtLeast(0))
     val front = albums.getOrNull(frontIndex)
-    LaunchedEffect(front?.id) { onFront(front) }
+    LaunchedEffect(front?.id) { frontKey = front?.id; onFront(front) }
 
     BoxWithConstraints(modifier.clipToBounds()) {
         val sleeve = min(maxWidth.value * geometry.sleeveOfWidth, maxHeight.value * geometry.sleeveOfHeight).dp
@@ -141,11 +153,15 @@ fun Crate(
                     val cy = origin.y + with(density) { top.toPx() } + sleevePx / 2f
                     onFrontSlot(SleeveSlot(Rect(Offset(cx, cy), sleevePx / 2f), sleeve))
                 }
-                .pointerInput(albums.size, pulledId) {
-                    if (albums.isEmpty() || pulledId != null) return@pointerInput
+                .pointerInput(albums.size) {
+                    if (albums.isEmpty()) return@pointerInput
                     val tracker = VelocityTracker()
                     detectHorizontalDragGestures(
-                        onDragStart = { tracker.resetTracking() },
+                        onDragStart = {
+                            tracker.resetTracking()
+                            // A record out of its sleeve goes back in as the crate starts to move.
+                            if (currentPulled != null) scope.launch { currentPutBack() }
+                        },
                         onHorizontalDrag = { change, dx ->
                             tracker.addPosition(change.uptimeMillis, change.position)
                             change.consume()
@@ -211,11 +227,11 @@ fun Crate(
                                 onLongClick = { onMenu(album) },
                             ) {
                                 if (isFront) {
-                                    if (pulledId == album.id) onPutBack() else onPull(album)
+                                    if (currentPulled == album.id) onPutBack() else onPull(album)
                                 } else {
                                     // A record still out of its sleeve goes back first, then the crate slides.
                                     scope.launch {
-                                        if (pulledId != null) putBack()
+                                        if (currentPulled != null) currentPutBack()
                                         pos.animateTo(i.toFloat(), spring(dampingRatio = 0.86f, stiffness = 160f))
                                     }
                                 }
