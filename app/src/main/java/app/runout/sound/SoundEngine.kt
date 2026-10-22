@@ -51,6 +51,8 @@ data class OutputDevice(
     val mixerRate: Int = 0,
     val type: Int = 0,
     val id: Int = 0,
+    /** Android's Spatial Audio would reshape music played here into 3D sound (Android 12L+). */
+    val spatial: Boolean = false,
 ) {
     val label: String get() = if (name != null) "${kind.label} · $name" else kind.label
 }
@@ -151,6 +153,13 @@ class SoundEngine(private val context: Context?) {
             }, Handler(Looper.getMainLooper()))
         }
         if (Build.VERSION.SDK_INT >= 31) runCatching { am.addOnModeChangedListener(io) { refreshDevice() } }
+        // Spatial Audio switched on or off for the headphones in Android's settings.
+        if (Build.VERSION.SDK_INT >= 32) runCatching {
+            am.spatializer.addOnSpatializerStateChangedListener(io, object : android.media.Spatializer.OnSpatializerStateChangedListener {
+                override fun onSpatializerEnabledChanged(spat: android.media.Spatializer, enabled: Boolean) = refreshDevice()
+                override fun onSpatializerAvailableChanged(spat: android.media.Spatializer, available: Boolean) = refreshDevice()
+            })
+        }
         // Before Android 13 the media route is only told through MediaRouter.
         if (Build.VERSION.SDK_INT < 33) runCatching {
             ctx.getSystemService(MediaRouter::class.java)?.addCallback(MediaRouter.ROUTE_TYPE_LIVE_AUDIO, object : MediaRouter.SimpleCallback() {
@@ -365,8 +374,21 @@ object OutputDevices {
         // The reported rate belongs to the phone's own (primary) output; a USB, Bluetooth or HDMI
         // path runs at its own rate, which Android doesn't tell apps.
         val rate = if (kind == OutputKind.SPEAKER || kind == OutputKind.WIRED) am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0 else 0
-        OutputDevice(kind, name, rate, device?.type ?: if (routeName != null) AudioDeviceInfo.TYPE_BLUETOOTH_A2DP else 0, device?.id ?: 0)
+        OutputDevice(kind, name, rate, device?.type ?: if (routeName != null) AudioDeviceInfo.TYPE_BLUETOOTH_A2DP else 0, device?.id ?: 0, spatial(am))
     }.getOrDefault(OutputDevice())
+
+    // Whether Android would spatialize stereo music on the current route; Pure opts Runout out.
+    private val stereo = AudioFormat.Builder()
+        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+        .setSampleRate(48_000)
+        .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+        .build()
+
+    private fun spatial(am: AudioManager): Boolean = Build.VERSION.SDK_INT >= 32 && runCatching {
+        val sp = am.spatializer
+        sp.immersiveAudioLevel != android.media.Spatializer.SPATIALIZER_IMMERSIVE_LEVEL_NONE &&
+            sp.isAvailable && sp.isEnabled && sp.canBeSpatialized(media, stereo)
+    }.getOrDefault(false)
 
     private fun byRouteOrder(outputs: List<AudioDeviceInfo>, withBluetooth: Boolean): AudioDeviceInfo? =
         outputs.filter { val k = kindOf(it.type); k != OutputKind.OTHER && (withBluetooth || k != OutputKind.BLUETOOTH) }

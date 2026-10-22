@@ -74,6 +74,10 @@ object PlayerFactory {
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    // Pure means nothing is done to the sound: Android's Spatial Audio stays out too.
+                    .setSpatializationBehavior(
+                        if (engine.settings.value.pure) C.SPATIALIZATION_BEHAVIOR_NEVER else C.SPATIALIZATION_BEHAVIOR_AUTO,
+                    )
                     .build(),
                 handleAudioFocus,
             )

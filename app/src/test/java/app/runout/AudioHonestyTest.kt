@@ -8,6 +8,7 @@ import androidx.media3.common.Metadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
+import androidx.test.core.app.ApplicationProvider
 import app.runout.library.AudioInfo
 import app.runout.library.FlacPolicy
 import app.runout.library.LibraryScanner
@@ -21,6 +22,7 @@ import app.runout.sound.OutputDevice
 import app.runout.sound.OutputDevices
 import app.runout.sound.OutputKind
 import app.runout.sound.OutputStatus
+import app.runout.sound.PlayerFactory
 import app.runout.sound.ReplayGainMode
 import app.runout.sound.SoundEngine
 import app.runout.sound.SoundSettings
@@ -317,6 +319,26 @@ class AudioHonestyTest {
         assertFalse(gained.runout.detail.contains("limiter"))
         // Pure leaves crackle out.
         assertEquals("Lossless", signalPath(OutputStatus(16, 44_100, device = speaker, crackle = true), SoundSettings(pure = true))!!.verdict)
+    }
+
+    @Test fun `Android's Spatial Audio is named, and Pure keeps Runout out of it`() {
+        val xm5 = OutputDevice(OutputKind.BLUETOOTH, "WH-1000XM5", type = AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, spatial = true)
+        val bt = signalPath(OutputStatus(24, 192_000, floatPath = true, device = xm5), SoundSettings())!!
+        assertEquals("Lossy over Bluetooth, spatialized by Android", bt.verdict)
+        assertTrue(bt.output.detail.contains("Spatial Audio"))
+        val pureBt = signalPath(OutputStatus(24, 192_000, floatPath = true, device = xm5), SoundSettings(pure = true))!!
+        assertEquals("Lossy over Bluetooth", pureBt.verdict)
+
+        val wired = OutputDevice(OutputKind.WIRED, mixerRate = 48_000, spatial = true)
+        val w = signalPath(OutputStatus(16, 48_000, device = wired), SoundSettings(replayGain = ReplayGainMode.OFF))!!
+        assertEquals("Lossless source, spatialized by Android", w.verdict)
+        assertFalse(w.output.ok)
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        fun behavior(pure: Boolean) = PlayerFactory.create(context, SoundEngine(null).apply { update { it.copy(pure = pure) } }, handleAudioFocus = false)
+            .let { p -> p.audioAttributes.spatializationBehavior.also { p.release() } }
+        assertEquals(C.SPATIALIZATION_BEHAVIOR_NEVER, behavior(pure = true))
+        assertEquals(C.SPATIALIZATION_BEHAVIOR_AUTO, behavior(pure = false))
     }
 
     // ------------------------------------------------------------------ what this phone can decode

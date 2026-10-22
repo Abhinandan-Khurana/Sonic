@@ -115,12 +115,15 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
     }
 
     val d = o.device
+    // Pure asks Android not to spatialize, so only outside Pure does Spatial Audio touch the sound.
+    val spatial = d.spatial && !s.pure
+    val spatialNote = if (spatial) " Android's Spatial Audio also reshapes it into 3D sound: turn it off for this output in Android's settings, or switch Pure on." else ""
     val mixer = d.mixerRate
     val resampled = mixer > 0 && mixer != o.sampleRate
     val bitPerfect = o.bitPerfect == BitPerfect.ON && d.kind == OutputKind.USB && s.pure && !folded
-    val output = when {
+    val routed = when {
         // Bluetooth first: nothing that goes over it is bit-perfect or lossless.
-        bluetooth -> SignalPath.Step(d.label, if (hiResFile) "Lossy · resampled by Android" else "Lossy", bluetoothDetail(d.type), ok = false)
+        bluetooth -> SignalPath.Step(d.label, if (hiResFile) "Lossy · resampled by Android" else "Lossy", bluetoothDetail(d.type) + spatialNote, ok = false)
         bitPerfect -> SignalPath.Step(d.label, source, "Bit-perfect: the DAC gets the file's own samples.")
         d.kind == OutputKind.USB -> SignalPath.Step(
             d.label,
@@ -141,10 +144,13 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
         )
     }
 
+    val output = if (spatial && !bluetooth) routed.copy(detail = routed.detail + spatialNote, ok = false) else routed
+
     val lossless = if (processed) "Lossless source, processed" else "Lossless"
     val verdict = when {
-        bluetooth -> "Lossy over Bluetooth"
+        bluetooth -> if (spatial) "Lossy over Bluetooth, spatialized by Android" else "Lossy over Bluetooth"
         bitPerfect -> "Bit-perfect"
+        spatial -> "Lossless source, spatialized by Android"
         folded -> "Cut to 16-bit"
         d.kind == OutputKind.OTHER -> "Through Android's mixer"
         resampled -> "$lossless, resampled to ${rate(mixer)}"
