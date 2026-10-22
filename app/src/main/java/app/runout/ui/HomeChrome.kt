@@ -1,6 +1,7 @@
 package app.runout.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -41,10 +42,6 @@ import app.runout.soulseek.SoulseekSession
 import app.runout.soulseek.SoulseekTransfer
 import app.runout.soulseek.SoulseekTransferState
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 
 /** A light tick for keys, tabs and toggles: the room is meant to feel like hardware. */
 @Composable
@@ -70,12 +67,9 @@ internal fun TabBar(
             .widthIn(max = 420.dp)
             .fillMaxWidth()
             .height(58.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { RoundedCornerShape(22.dp) },
-                effects = { vibrancy(); blur(6.dp.toPx()); lens(10.dp.toPx(), 18.dp.toPx()) },
-                onDrawSurface = { drawRect(Color.White.copy(alpha = 0.55f)) },
-            ),
+            // Flat and ruled, like the footer of a TE manual page.
+            .background(Room.Background)
+            .hairlineTop(Room.Ink),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -95,10 +89,10 @@ internal fun TabBar(
                 Box {
                     Canvas(Modifier.size(22.dp)) { drawTabIcon(p, Room.Ink) }
                     if (p in badges) Canvas(Modifier.size(7.dp).align(Alignment.TopEnd)) {
-                        drawCircle(Room.Signal)
+                        drawRect(Room.Signal)
                     }
                 }
-                BasicText(p.nav, style = Room.Label.copy(fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp))
+                BasicText(p.nav.lowercase(), style = Room.Label.copy(fontSize = 9.sp, letterSpacing = 0.3.sp))
             }
         }
     }
@@ -184,20 +178,23 @@ internal fun connectionColor(session: SoulseekSession): Color = when (session.st
     else -> Room.Quiet
 }
 
-/** A coloured status dot followed by a quiet label, tappable as one. */
+/** A square status lamp followed by a quiet label, tappable as one; [description] reads it out when there's no label. */
 @Composable
-internal fun StatusDot(text: String, color: Color, tag: String, onClick: () -> Unit) {
+internal fun StatusDot(text: String, color: Color, tag: String, onClick: () -> Unit, description: String? = null) {
     Row(
         Modifier
             .testTag(tag)
-            .semantics(mergeDescendants = true) {}
+            .semantics(mergeDescendants = true) { if (description != null) contentDescription = description }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
             .touchHeight()
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Canvas(Modifier.size(7.dp)) { drawCircle(color) }
-        BasicText(text, style = Room.LabelQuiet.copy(fontSize = 10.sp, color = if (color == Room.Quiet) Room.Quiet else Room.Ink))
+        // A square lamp: filled when something's live, hollow when idle.
+        Canvas(Modifier.size(8.dp)) {
+            if (color == Room.Quiet) drawRect(Room.Ink, style = Stroke(1.dp.toPx())) else drawRect(color)
+        }
+        if (text.isNotEmpty()) BasicText(text, style = Room.Label.copy(color = if (color == Room.Quiet) Room.Quiet else Room.Ink))
     }
 }

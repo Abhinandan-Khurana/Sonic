@@ -203,6 +203,23 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `turning the record over lifts it edge-on at halfway and lands it back on the mat`() {
+        for (degrees in listOf(0f, 73f)) {
+            val flat = DeckModel.recordTransform(degrees)
+            assertTrue(DeckModel.flipTransform(degrees, 0f).contentEquals(flat))
+            assertTrue(DeckModel.flipTransform(degrees, 1f).contentEquals(flat))
+            // Halfway it's highest and stands on edge: its up axis (column 1) lies flat.
+            val mid = DeckModel.flipTransform(degrees, 0.4999f)
+            assertEquals(DeckModel.RECORD_Y + DeckModel.FLIP_LIFT, mid[13], 1e-3f)
+            assertEquals(0f, mid[5], 2e-3f)
+            // The roll restarts from the other edge, so either side of halfway is the same edge-on pose.
+            val after = DeckModel.flipTransform(degrees, 0.5001f)
+            assertEquals(kotlin.math.abs(mid[6]), kotlin.math.abs(after[6]), 2e-3f)
+            assertEquals(mid[13], after[13], 1e-3f)
+        }
+    }
+
+    @Test
     fun `the LED windows show the track, its code and the time`() {
         assertEquals(DeckLeds("DROP A RECORD", null, null), ledLines(DeckState()))
         deck.load(album())

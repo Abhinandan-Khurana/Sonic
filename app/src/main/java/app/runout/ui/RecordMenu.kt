@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.draw.rotate
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,10 +35,6 @@ import androidx.compose.ui.zIndex
 import app.runout.model.Album
 import app.runout.model.Source
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 
 /** A small glass card over the room; Back or a tap outside dismisses it. */
 @Composable
@@ -49,7 +46,7 @@ private fun GlassCard(backdrop: Backdrop, tag: String, onDismiss: () -> Unit, co
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.10f))
+                .background(Room.Scrim)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
         )
         Column(
@@ -57,12 +54,8 @@ private fun GlassCard(backdrop: Backdrop, tag: String, onDismiss: () -> Unit, co
                 .padding(24.dp)
                 .widthIn(max = 380.dp)
                 .fillMaxWidth()
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RoundedCornerShape(24.dp) },
-                    effects = { vibrancy(); blur(20.dp.toPx()); lens(12.dp.toPx(), 24.dp.toPx()) },
-                    onDrawSurface = { drawRect(Color.White.copy(alpha = 0.9f)) },
-                )
+                .background(Room.Background)
+                .border(1.dp, Room.Ink)
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(vertical = 14.dp)
                 .testTag(tag),
@@ -135,16 +128,16 @@ internal fun RecordDetails(record: Album, backdrop: Backdrop, onDismiss: () -> U
     }
 }
 
-/** A tiny printed spec label, Teenage Engineering style: hairline box, caps, wide tracking. */
+/** The spec as a label sticker: a black tab, white Inter caps, stuck on a few degrees off true. */
 @Composable
 internal fun SpecTag(text: String, modifier: Modifier = Modifier) {
     BasicText(
         text.uppercase(),
-        style = Room.Label.copy(fontSize = 8.5.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Medium, color = Room.Ink.copy(alpha = 0.72f)),
+        style = androidx.compose.ui.text.TextStyle(fontFamily = Room.Inter, fontSize = 8.5.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.SemiBold, color = Color.White),
         maxLines = 1,
         modifier = modifier
-            .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
-            .border(0.8.dp, Room.Ink.copy(alpha = 0.35f), RoundedCornerShape(3.dp))
-            .padding(horizontal = 5.dp, vertical = 2.dp),
+            .rotate(3f)
+            .background(Room.Ink)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }

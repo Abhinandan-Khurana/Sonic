@@ -76,21 +76,22 @@ class SignalAndSheetsTest {
         assertNull(signalPath(OutputStatus(), SoundSettings()))
     }
 
-    @Test fun `the home screen shows the chain as a chip that opens the Audio quality sheet`() {
+    @Test fun `a long press on the deck's screen opens the Audio quality sheet`() {
         compose.setContent { RoomScreen(room, RecordingActions()) }
-        compose.onNodeWithTag("signal-chip").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("signal-chip").assertDoesNotExist()
+        compose.onNodeWithTag("deck:screen").performTouchInput { longClick() }
         compose.onNodeWithTag("panel:signal").assertIsDisplayed()
         compose.onNodeWithTag("signal-verdict").assertTextEquals("Lossless, resampled to 48 kHz")
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/30_audio_quality.png")
     }
 
-    @Test fun `Crackle on the home screen is a switch`() {
+    @Test fun `Crackle is a switch in Settings › Sound, not on the home screen`() {
         val actions = RecordingActions()
-        compose.setContent { RoomScreen(room, actions) }
-        compose.onNodeWithTag("toggle-crackle").assertIsDisplayed().assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Switch))
-        compose.onNodeWithTag("toggle-crackle").performClick()
+        compose.setContent { RoomScreen(room, actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.SOUND) }
+        compose.onNodeWithTag("toggle-crackle").assertDoesNotExist()
+        compose.onNodeWithTag("toggle:Crackle").performScrollTo().assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Switch))
+        compose.onNodeWithTag("toggle:Crackle").performClick()
         assertTrue(actions.log.contains("crackle"))
-        compose.onNodeWithText("Crackle on").assertDoesNotExist()
     }
 
     @Test fun `Settings › Library repairs local albums and lists the files it couldn't read`() {

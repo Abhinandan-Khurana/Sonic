@@ -67,6 +67,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
     private val pixelFont: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/silkscreen.ttf") }.getOrDefault(Typeface.MONOSPACE)
 
     private var platterDegrees = 0f
+    private var flip = 0f
     private var armAngle = DeckModel.angleRest
     private var armDrop = 0f
     private val keyPress = DeckModel.keys.associateWith { 0f }.toMutableMap()
@@ -173,6 +174,13 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
 
     fun setPlatter(degrees: Float) {
         if (degrees != platterDegrees) { platterDegrees = degrees; dirty = true }
+    }
+
+    /** The record turning over, 0 to 1 (see [DeckModel.flipTransform]); 0 lies on the mat. */
+    fun setFlip(t: Float) {
+        if (t == flip) return
+        flip = t
+        dirty = true
     }
 
     fun setArm(angle: Float, drop: Float) {
@@ -364,7 +372,7 @@ class DeckRenderer(private val context: Context, textureView: TextureView) : Cho
         if (platter != 0) tm.setTransform(tm.getInstance(platter), DeckModel.platterTransform(platterDegrees))
         if (tonearm != 0) tm.setTransform(tm.getInstance(tonearm), DeckModel.armTransform(armAngle, armDrop))
         keyEntities.forEach { (key, e) -> if (e != 0) tm.setTransform(tm.getInstance(e), DeckModel.keyTransform(key, keyPress[key] ?: 0f)) }
-        tm.setTransform(tm.getInstance(record.root), DeckModel.recordTransform(platterDegrees))
+        tm.setTransform(tm.getInstance(record.root), DeckModel.flipTransform(platterDegrees, flip))
     }
 
     private fun materialOf(node: String): MaterialInstance? {

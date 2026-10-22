@@ -1,5 +1,8 @@
 package app.runout.ui
 
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -258,11 +261,10 @@ fun DrawScope.drawRecord(
 @Composable
 fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true) {
     val cover by rememberCover(album)
-    val shape = RoundedCornerShape(3.dp)
+    // Square cut and flat: no drop shadow, the reflection on the floor does the grounding.
     Box(
         modifier
-            .shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.3f))
-            .clip(shape)
+            .clipToBounds()
             .background(fallbackColor(album)),
     ) {
         val bitmap = cover
@@ -295,15 +297,16 @@ fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean
     }
 }
 
+/** A round orange sticker slapped on the shrink-wrap, a little crooked: HI-RES over the spec, in Inter. */
 @Composable
 fun HiResSticker(text: String, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(34.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Room.Accent),
+        modifier.rotate(-10f).size(36.dp).clip(CircleShape).background(Room.Signal),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(
-            "HI-RES\n$text",
-            style = Room.Label.copy(color = Color.White, fontSize = 6.5.sp, lineHeight = 7.5.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center),
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BasicText("HI-RES", style = TextStyle(fontFamily = Room.Inter, color = Color.White, fontSize = 7.sp, lineHeight = 8.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp))
+            BasicText(text, style = TextStyle(fontFamily = Room.Inter, color = Color.White, fontSize = 6.sp, lineHeight = 7.sp, fontWeight = FontWeight.Medium))
+        }
     }
 }

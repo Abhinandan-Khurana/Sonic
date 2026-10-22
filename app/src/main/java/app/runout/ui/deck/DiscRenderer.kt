@@ -2,8 +2,6 @@ package app.runout.ui.deck
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.os.SystemClock
-import android.util.Log
 import android.view.Choreographer
 import android.view.Surface
 import android.view.TextureView
@@ -57,12 +55,6 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
 
     /** Called once the disc is on screen, so the 2D stand-in can step aside. */
     var onReady: (() -> Unit)? = null
-
-    // Spike timing: from creation to the first frames, and slow frames while the disc moves.
-    private val createdAt = SystemClock.elapsedRealtime()
-    private var lastFrameNanos = 0L
-    private var frames = 0
-    private var slowFrames = 0
 
     init {
         view.scene = scene
@@ -171,29 +163,17 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
         Choreographer.getInstance().postFrameCallback(this)
         val chain = swapChain ?: return
         if (dirty) { settle = maxOf(settle, SETTLE_FRAMES); dirty = false }
-        if (settle <= 0 || !uiHelper.isReadyToRender) {
-            lastFrameNanos = 0L
-            return
-        }
+        if (settle <= 0 || !uiHelper.isReadyToRender) return
         transform?.let { engine.transformManager.setTransform(engine.transformManager.getInstance(record.root), it) }
         if (renderer.beginFrame(chain, frameTimeNanos)) {
             renderer.render(view)
             renderer.endFrame()
             settle--
-            if (++drawn == READY_FRAMES) {
-                Log.i(TAG, "ready after ${SystemClock.elapsedRealtime() - createdAt} ms")
-                onReady?.invoke()
-            }
-            if (lastFrameNanos != 0L) {
-                frames++
-                if (frameTimeNanos - lastFrameNanos > SLOW_FRAME_NANOS) slowFrames++
-            }
-            lastFrameNanos = frameTimeNanos
+            if (++drawn == READY_FRAMES) onReady?.invoke()
         }
     }
 
     fun destroy() {
-        Log.i(TAG, "frames $frames, slow (>${SLOW_FRAME_NANOS / 1_000_000} ms) $slowFrames")
         pause()
         onReady = null
         uiHelper.detach()
@@ -209,10 +189,8 @@ class DiscRenderer(context: Context, textureView: TextureView) : Choreographer.F
     }
 
     private companion object {
-        const val TAG = "RunoutDisc"
         const val SETTLE_FRAMES = 3
         const val WARM_UP_FRAMES = 20
         const val READY_FRAMES = 2
-        const val SLOW_FRAME_NANOS = 20_000_000L
     }
 }

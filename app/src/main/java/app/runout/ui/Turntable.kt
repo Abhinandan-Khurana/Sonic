@@ -23,6 +23,9 @@
  */
 package app.runout.ui
 
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.Animatable
 import android.view.TextureView
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,6 +35,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -80,6 +84,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextLayoutResult
@@ -193,6 +198,10 @@ fun Turntable(
     modifier: Modifier = Modifier,
     contentAlignment: Alignment = Alignment.CenterStart,
     link: DeckLink? = null,
+    /** Long-press on the LED screen: what's reaching your ears (the Audio quality panel). */
+    onScreenLongPress: (() -> Unit)? = null,
+    /** A different record is already on: the ring turns red and the disc won't land. */
+    dropBlocked: Boolean = false,
 ) {
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
@@ -243,10 +252,32 @@ fun Turntable(
         snapshotFlow { (dragAngle ?: animAngle) to drop }.collect { (a, d) -> r.setArm(a, d) }
     }
 
+    // Turning the record over: in 3D it lifts, rolls towards you and settles; its face changes to
+    // the new side when it's edge-on. With animations off, or on the flat deck, the side just changes.
+    var faceSideIndex by remember(deck.album?.id) { mutableIntStateOf(deck.sideIndex) }
+    val flipT = remember { Animatable(0f) }
+    val thud = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+    LaunchedEffect(deck.album?.id, deck.sideIndex) {
+        if (deck.sideIndex == faceSideIndex) return@LaunchedEffect
+        val animate = use3d && renderer != null && android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        if (!animate) { faceSideIndex = deck.sideIndex; return@LaunchedEffect }
+        flipT.snapTo(0f)
+        flipT.animateTo(0.5f, tween(300, easing = FastOutLinearInEasing))
+        faceSideIndex = deck.sideIndex
+        flipT.animateTo(1f, tween(380, easing = LinearOutSlowInEasing))
+        thud()
+        flipT.snapTo(0f)
+    }
+    LaunchedEffect(renderer) {
+        val r = renderer ?: return@LaunchedEffect
+        snapshotFlow { flipT.value }.collect { r.setFlip(it) }
+    }
+
     // The record's face, painted once per record and side, then turned by the platter in 3D.
-    val boundaries = remember(deck.side) { deck.side?.trackBoundaries() ?: emptyList() }
-    val face = remember(deck.album?.id, deck.side, cover) {
-        deck.album?.let { if (use3d) recordFace(it, cover, boundaries, deck.side?.letter?.toString(), textMeasurer) else null }
+    val faceSide = deck.sides.getOrNull(faceSideIndex) ?: deck.side
+    val boundaries = remember(faceSide) { faceSide?.trackBoundaries() ?: emptyList() }
+    val face = remember(deck.album?.id, faceSide, cover) {
+        deck.album?.let { if (use3d) recordFace(it, cover, boundaries, faceSide?.letter?.toString(), textMeasurer) else null }
     }
     LaunchedEffect(renderer) { if (renderer != null) withContext(Dispatchers.Default) { RecordMaps.warmUp() } }
     LaunchedEffect(renderer, face, deck.album == null) {
@@ -337,7 +368,7 @@ fun Turntable(
                 // Filament finishes a frame, so the TextureView's newest picture is what shows.
                 Canvas(Modifier.fillMaxSize()) {
                     frames
-                    if (dropTargetActive) drawRecordOutline(cam)
+                    if (dropTargetActive) drawRecordOutline(cam, if (dropBlocked) Room.Danger else Room.Signal)
                 }
                 // Touch: the arm and the record.
                 Box(
@@ -398,7 +429,7 @@ fun Turntable(
                 KeyArea(cam, DeckModel.eject, "Eject the record", "deck:eject", keySources.getValue(DeckModel.eject), enabled = deck.album != null) { actions.eject() }
                 // The LED windows, for TalkBack and the tests: what they show, in words.
                 val (l1, l2) = screenLines(deck)
-                ScreenArea(cam, "$l1. $l2")
+                ScreenArea(cam, "$l1. $l2", onScreenLongPress)
             }
         }
     }
@@ -406,7 +437,7 @@ fun Turntable(
 
 /** The two LED windows' outline on the screen, read out as [description]. */
 @Composable
-private fun BoxScope.ScreenArea(cam: DeckCamera, description: String) {
+private fun BoxScope.ScreenArea(cam: DeckCamera, description: String, onLongPress: (() -> Unit)?) {
     val density = LocalDensity.current
     val (a, _) = DeckModel.titleWindow
     val (_, b) = DeckModel.timeWindow
@@ -418,7 +449,11 @@ private fun BoxScope.ScreenArea(cam: DeckCamera, description: String) {
             .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
             .size(with(density) { (corners.maxOf { it.x } - left).toDp() }, with(density) { (corners.maxOf { it.y } - top).toDp() })
             .testTag("deck:screen")
-            .semantics { contentDescription = description },
+            .semantics {
+                contentDescription = description
+                if (onLongPress != null) onLongClick("Audio quality") { onLongPress(); true }
+            }
+            .then(if (onLongPress != null) Modifier.pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) } else Modifier),
     )
 }
 
@@ -444,14 +479,14 @@ private fun BoxScope.KeyArea(cam: DeckCamera, key: DeckKey, label: String, tag: 
 }
 
 /** The record's rim on the platter, dashed, where a pulled disc will land. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(cam: DeckCamera) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecordOutline(cam: DeckCamera, colour: Color) {
     val path = Path()
     for (i in 0..96) {
         val a = i / 96f * 2f * PI.toFloat()
         val p = cam.project(V3(DeckModel.platterCentre.x + cos(a) * DeckModel.RECORD_R * 1.02f, DeckModel.RECORD_Y, DeckModel.platterCentre.z + sin(a) * DeckModel.RECORD_R * 1.02f))
         if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
     }
-    drawPath(path, Room.Signal.copy(alpha = 0.85f), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))))
+    drawPath(path, colour.copy(alpha = 0.85f), style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 12f))))
 }
 
 /**

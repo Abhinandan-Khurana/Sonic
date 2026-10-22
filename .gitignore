@@ -50,3 +50,7 @@ __pycache__/
 
 # Licensed fonts used only by the pen.dev design file (not redistributed)
 docs/design/fonts/
+
+# Array (ITF Free Font License): may be embedded in the APK but not shared through a public repository.
+# Builds without these files fall back to Silkscreen.
+app/src/main/assets/fonts/licensed/

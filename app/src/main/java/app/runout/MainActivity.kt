@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIncoming(intent)
 
         val graph = graph
+        app.runout.ui.TeType.init(this)
         setContent {
             val albums by graph.shelf.collectAsStateWithLifecycle()
             val folder by graph.library.folder.collectAsStateWithLifecycle()

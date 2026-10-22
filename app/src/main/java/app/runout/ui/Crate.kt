@@ -1,5 +1,6 @@
 package app.runout.ui
 
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.calculateTargetValue
 import androidx.compose.animation.core.spring
@@ -75,6 +76,8 @@ fun Crate(
     /** Long-press on a sleeve: the record's menu. */
     onMenu: (Album) -> Unit = {},
     initialIndex: Int = 0,
+    /** Dig to this record (a record flying back from the deck needs its sleeve in front). */
+    scrollTo: String? = null,
     emptyTitle: String = if (hasFolder) "No albums found" else "Choose your\nmusic folder",
     emptyDetail: String = if (hasFolder) "Tap to pick another folder" else "Each album folder becomes\na record on your shelf",
 ) {
@@ -83,13 +86,18 @@ fun Crate(
     val pos = remember { Animatable(initialIndex.toFloat()) }
     val decay = rememberSplineBasedDecay<Float>()
 
+    LaunchedEffect(scrollTo) {
+        val i = albums.indexOfFirst { it.id == scrollTo }
+        if (i >= 0) pos.animateTo(i.toFloat(), spring(dampingRatio = 0.86f, stiffness = 160f))
+    }
     LaunchedEffect(albums.size) {
         if (albums.isNotEmpty() && pos.value > albums.lastIndex) pos.snapTo(albums.lastIndex.toFloat())
     }
 
     BoxWithConstraints(modifier) {
         val boxHeight = maxHeight
-        val sleeve = min(maxHeight.value * 0.58f, maxWidth.value * 0.47f).dp
+        // 85 % of the old size, leaving headroom for the record as it rises out of its sleeve.
+        val sleeve = min(maxHeight.value * 0.50f, maxWidth.value * 0.40f).dp
         val sleevePx = with(density) { sleeve.toPx() }
         val stepPx = sleevePx * 0.55f
         var originInRoot = Offset.Zero
@@ -140,30 +148,6 @@ fun Crate(
                 return@Box
             }
             val center = pos.value
-            // One soft shadow on the "floor" under the front slot. It never turns with a sleeve (a
-            // shadow cast by a half-turned sleeve smears into a grey wedge mid-flick), and it only
-            // darkens as a sleeve settles square to you.
-            val settled = 1f - (abs(center - center.roundToInt()) * 2f).coerceIn(0f, 1f)
-            Canvas(
-                Modifier
-                    .align(Alignment.Center)
-                    .padding(bottom = boxHeight * 0.12f)
-                    .size(sleeve)
-                    .zIndex(-10f),
-            ) {
-                val floor = Offset(size.width / 2f, size.height * 1.02f)
-                val r = size.width * 0.62f
-                // A round soft shadow squashed flat, so it fades out evenly on every side.
-                scale(1f, 0.16f, pivot = floor) {
-                    drawCircle(
-                        brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                            listOf(Color.Black.copy(alpha = 0.24f * settled), Color.Transparent),
-                            center = floor, radius = r,
-                        ),
-                        radius = r, center = floor,
-                    )
-                }
-            }
             val first = (center - 6).toInt().coerceAtLeast(0)
             val last = (center + 6).toInt().coerceAtMost(albums.lastIndex)
             for (i in first..last) {
@@ -207,6 +191,28 @@ fun Crate(
                             },
                     ) {
                         SleeveArt(album, Modifier.fillMaxSize())
+                        // A faint reflection on the white floor, fading out within a fifth of the sleeve.
+                        if (adx < 2.5f) SleeveArt(
+                            album,
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    translationY = size.height + 2.dp.toPx()
+                                    scaleY = -1f
+                                    alpha = 0.16f
+                                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                                }
+                                .drawWithContent {
+                                    drawContent()
+                                    drawRect(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            0f to Color.Transparent, 0.78f to Color.Transparent, 1f to Color.Black,
+                                        ),
+                                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                    )
+                                },
+                            showSticker = false,
+                        )
                         if (album.id == loadedId) {
                             OnPlatterTag(Modifier.align(Alignment.BottomStart).padding(7.dp))
                         }
@@ -221,7 +227,7 @@ fun Crate(
                     Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .padding(top = boxHeight * 0.44f + sleeve / 2 + 14.dp),
+                        .padding(top = boxHeight * 0.44f + sleeve / 2 + sleeve * 0.22f + 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
@@ -243,9 +249,8 @@ fun Crate(
 private fun OnPlatterTag(modifier: Modifier) {
     Box(
         modifier
-            .alpha(0.94f)
-            .background(Room.Ink.copy(alpha = 0.72f), RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .background(Room.Signal)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
         BasicText("On the platter", style = Room.Label.copy(color = Color.White, fontSize = 9.sp))
     }

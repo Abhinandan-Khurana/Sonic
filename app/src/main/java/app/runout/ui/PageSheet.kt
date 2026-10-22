@@ -84,7 +84,7 @@ private fun SheetBody(tag: String, onDismiss: () -> Unit, content: @Composable C
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.22f))
+                    .background(Room.Scrim)
                     .testTag("sheet-shade")
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
             )
@@ -94,8 +94,8 @@ private fun SheetBody(tag: String, onDismiss: () -> Unit, content: @Composable C
                 Modifier
                     .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .shadow(24.dp, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), ambientColor = Color.Black.copy(alpha = 0.2f))
-                    .background(Color.White, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .background(Room.Background)
+                    .hairlineTop(Room.Ink)
                     .pointerInput(Unit) { detectTapGestures { } }
                     .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 18.dp)
@@ -103,7 +103,7 @@ private fun SheetBody(tag: String, onDismiss: () -> Unit, content: @Composable C
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // The grab handle, so it reads as a sheet that belongs to the page.
-                Box(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp).size(36.dp, 4.dp).background(Room.Ink.copy(alpha = 0.15f), RoundedCornerShape(50)))
+                Box(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp).size(36.dp, 3.dp).background(Room.Ink))
                 content()
             }
         }

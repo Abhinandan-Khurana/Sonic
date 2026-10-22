@@ -150,6 +150,32 @@ object DeckModel {
     /** The record lying on the mat, turning with the platter. */
     fun recordTransform(degrees: Float): FloatArray = placeTurned(V3(platterOrigin.x, RECORD_Y, platterOrigin.z), -degrees * PI.toFloat() / 180f)
 
+    /**
+     * The record turning over, [t] from 0 to 1: it lifts off the mat, rolls about the left-right
+     * axis towards you and settles back, still turned [degrees] with the platter. Past halfway the
+     * roll restarts from the other edge, so the face drawn on top is always the one showing: swap the
+     * face to the new side at t = 0.5, when the record is edge-on.
+     */
+    fun flipTransform(degrees: Float, t: Float): FloatArray {
+        val f = t.coerceIn(0f, 1f)
+        if (f <= 0f || f >= 1f) return recordTransform(degrees)
+        val roll = (if (f < 0.5f) f else f - 1f) * PI.toFloat()
+        val lift = FLIP_LIFT * sin(f * PI.toFloat())
+        val yaw = -degrees * PI.toFloat() / 180f
+        val c = cos(yaw); val s = sin(yaw)
+        val ca = cos(roll); val sa = sin(roll)
+        // Rx(roll) · Ry(yaw), column-major.
+        return floatArrayOf(
+            c, sa * s, -ca * s, 0f,
+            0f, ca, sa, 0f,
+            s, -sa * c, ca * c, 0f,
+            platterOrigin.x, RECORD_Y + lift, platterOrigin.z, 1f,
+        )
+    }
+
+    /** How high the record rises as it turns over: enough to clear the spindle and the mat's edge. */
+    const val FLIP_LIFT = RECORD_R * 0.55f
+
     /** The tonearm at [angle], lowered by [drop] (0 = cued up, 1 = needle in the groove). */
     fun armTransform(angle: Float, drop: Float): FloatArray =
         placeTurned(V3(pivot.x, pivot.y - NEEDLE_DROP * drop.coerceIn(0f, 1f), pivot.z), armYaw(angle))

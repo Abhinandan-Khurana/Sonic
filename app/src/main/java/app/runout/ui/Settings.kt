@@ -48,7 +48,12 @@ fun SettingsPanel(
         TextAction("‹ Settings", { onSection(null) }, tag = "settings-back", color = Room.Ink)
         BasicText(section.label, style = Room.Title.copy(fontSize = 17.sp), modifier = Modifier.padding(vertical = 6.dp))
         when (section) {
-            SettingsSection.SOUND -> SoundPanel(state.sound, state.output, actions)
+            SettingsSection.SOUND -> {
+                SoundPanel(state.sound, state.output, actions)
+                // Crackle moved here from the home screen: it's part of how the deck sounds.
+                SectionTitle("05 the deck")
+                ToggleRow("Crackle", "Surface noise under the music.", state.crackleOn, { actions.toggleCrackle() }, more = "Always off in Pure.")
+            }
             SettingsSection.ACCOUNT -> {
                 ConnectionNotice(state, actions, onSetup)
                 SoulseekAccountPanel(state, actions, onOffline, onSignIn = onSetup)
@@ -67,8 +72,6 @@ fun SettingsPanel(
                     if (state.hasFolder) Pill("Rescan", actions::rescan)
                 }
                 if (state.hasFolder) RepairLibrary(state, actions)
-                SectionTitle("The deck")
-                ToggleRow("Crackle", "Surface noise under the music.", state.crackleOn, { actions.toggleCrackle() }, more = "Always off in Pure.")
             }
             SettingsSection.ABOUT -> {
                 BasicText("Runout ${BuildConfig.VERSION_NAME}", style = Room.Title)
