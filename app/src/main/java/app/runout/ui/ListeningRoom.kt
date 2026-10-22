@@ -1,5 +1,7 @@
 package app.runout.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.aspectRatio
@@ -332,6 +334,8 @@ fun RoomScreen(
     var heldReady by remember { mutableStateOf(false) }
     // A different record was dropped on a busy platter.
     var occupied by remember { mutableStateOf(false) }
+    // The record on the platter was dragged as if to take it off by hand.
+    var useEject by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(state)
     var menuFor by remember { mutableStateOf<String?>(null) }
     // The record in front of the crate, for the caption under it.
@@ -441,7 +445,9 @@ fun RoomScreen(
                     scaleX = sc; scaleY = sc
                     alpha = e.coerceIn(0f, 1f)
                 }
-                .layerBackdrop(roomBackdrop),
+                .layerBackdrop(roomBackdrop)
+                // Under a page the room is out of sight: keep TalkBack out of it too.
+                .then(if (panel?.fullPage == true) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
             RoomBackground(Modifier.fillMaxSize().layerBackdrop(backdrop), portrait)
 
@@ -458,6 +464,7 @@ fun RoomScreen(
                     link = deckLink,
                     onScreenLongPress = { panel = Panel.SIGNAL; pulledId = null },
                     ledOverride = if (ejecting != null) "EJECT" else null,
+                    onRecordDragged = { useEject = true },
                 )
             }
             val crate = @Composable { m: Modifier, geometry: CrateGeometry ->
@@ -474,6 +481,16 @@ fun RoomScreen(
                     onFront = { frontId = it?.id },
                     initialIndex = initialCrateIndex,
                     scrollTo = crateTarget,
+                    putBack = {
+                        val s = slot
+                        if (s != null && pulledId != null && ejecting == null) {
+                            coroutineScope {
+                                launch { lift.animateTo(1f, tween(160)) }
+                                disc.animateTo(s.rect.center - rootOrigin, tween(260, easing = FastOutSlowInEasing))
+                            }
+                        }
+                        pulledId = null
+                    },
                 )
             }
             val front = state.albums.firstOrNull { it.id == frontId } ?: state.albums.firstOrNull()
@@ -844,7 +861,14 @@ fun RoomScreen(
             TeNavBar(
                 active = page,
                 badges = navBadges(state),
-                onOpen = { if (it == Panel.SETTINGS) settings = null; panel = if (panel == it) null else it; pulledId = null },
+                onOpen = {
+                    if (it == Panel.SETTINGS) settings = null
+                    // Friends always opens on its own page, not on the last chat.
+                    if (it == Panel.FRIENDS) actions.closeSoulseekConversation()
+                    panel = if (panel == it) null else it
+                    pulledId = null
+                },
+                onHome = if (page != null) ({ closePanel() }) else null,
                 modifier = Modifier
                     .align(if (portrait) Alignment.BottomCenter else Alignment.BottomEnd)
                     .then(if (portrait) Modifier else Modifier.fillMaxWidth(LANDSCAPE_ROOM))
@@ -897,6 +921,14 @@ fun RoomScreen(
             LaunchedEffect(Unit) { delay(4_000); occupied = false }
             TeToast("first, remove the current record from the platter.", Room.Danger, toastAt.zIndex(21f).testTag("platter-occupied")) {
                 TeLink("eject", { occupied = false; deckActions.eject() }, tag = "occupied-eject", color = Color.White)
+            }
+        }
+
+        // Dragging the record off the platter: point to the key that does it.
+        if (useEject && !setupOpen) {
+            LaunchedEffect(Unit) { delay(3_500); useEject = false }
+            TeToast("use the eject key to put the record back.", Room.Accent, toastAt.zIndex(21f).testTag("use-eject")) {
+                TeLink("eject", { useEject = false; deckActions.eject() }, tag = "use-eject-key", color = Color.White)
             }
         }
 

@@ -216,6 +216,12 @@ class TurntableDeckTest {
             val after = DeckModel.flipTransform(degrees, 0.5001f)
             assertEquals(kotlin.math.abs(mid[6]), kotlin.math.abs(after[6]), 2e-3f)
             assertEquals(mid[13], after[13], 1e-3f)
+            // At every step the lowest point of the rim stays above the record's own plane.
+            for (k in 1..19) {
+                val m = DeckModel.flipTransform(degrees, k / 20f)
+                val lowest = m[13] - DeckModel.RECORD_R * kotlin.math.abs(m[6])
+                assertTrue("rim dips below the mat at ${k / 20f}", lowest >= DeckModel.RECORD_Y - 1e-3f)
+            }
         }
     }
 

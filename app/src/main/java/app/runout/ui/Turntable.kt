@@ -206,6 +206,8 @@ fun Turntable(
     dropBlocked: Boolean = false,
     /** Words for the LED title window for a moment (EJECT while a record flies home). */
     ledOverride: String? = null,
+    /** The record on the platter was dragged, as if to take it off: the room points to Eject. */
+    onRecordDragged: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val textMeasurer = rememberTextMeasurer()
@@ -420,17 +422,30 @@ fun Turntable(
                                         actions.needleDrop(DeckModel.fractionForAngle(a))
                                     }
                                 } else if (d.album != null && DeckModel.isOnRecord(p)) {
-                                    // A quick tap flips the record; a press on a spinning record slows it down.
-                                    val quickRelease = withTimeoutOrNull(170L) { waitForUpOrCancellation() }
-                                    if (quickRelease != null) {
-                                        if (!d.needleDown) actions.flip()
-                                    } else if (d.needleDown) {
-                                        actions.holdPlatter()
-                                        waitForUpOrCancellation()
-                                        actions.releasePlatter()
-                                    } else {
-                                        waitForUpOrCancellation()
+                                    // A quick tap flips the record; a press on a spinning record slows it
+                                    // down; pulling it off the platter asks for Eject instead.
+                                    val dragLimit = 24.dp.toPx()
+                                    var pressed = false
+                                    var holding = false
+                                    var dragged = false
+                                    while (true) {
+                                        val event = withTimeoutOrNull(if (pressed) Long.MAX_VALUE else 170L) { awaitPointerEvent() }
+                                        if (event == null) {
+                                            pressed = true
+                                            if (d.needleDown) { holding = true; actions.holdPlatter() }
+                                            continue
+                                        }
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed) {
+                                            if (!pressed && !dragged && !d.needleDown) actions.flip()
+                                            break
+                                        }
+                                        if (!dragged && (change.position - down.position).getDistance() > dragLimit) {
+                                            dragged = true
+                                            onRecordDragged?.invoke()
+                                        }
                                     }
+                                    if (holding) actions.releasePlatter()
                                 }
                             }
                         },

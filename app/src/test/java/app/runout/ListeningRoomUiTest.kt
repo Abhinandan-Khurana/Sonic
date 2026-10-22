@@ -3,6 +3,7 @@ package app.runout
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import app.runout.discovery.remoteAlbums
 
 import app.runout.discovery.SearchSource
@@ -268,6 +269,27 @@ class ListeningRoomUiTest {
     }
 
     @Test
+    fun `Dig spins the dotted vinyl until the first folders arrive`() {
+        portrait()
+        val options = DiscoveryOptions(source = SearchSource.SOULSEEK)
+        val searching = SoulseekSearchStatus("r", "moon safari", SearchPhase.SEARCHING)
+        var s by mutableStateOf(state().copy(discovery = DiscoveryState("moon safari", options, online = searching)))
+        compose.setContent { RoomScreen(s, RecordingActions(), initialPanel = Panel.DIG) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Searching").assertIsDisplayed()
+        compose.onNodeWithText("digging soulseek for “moon safari”…").assertIsDisplayed()
+        compose.onNodeWithTag("stop-search").assertIsDisplayed()
+        compose.onNodeWithTag("search-status").assertTextContains("listening for peers", substring = true)
+        // The first folders replace the vinyl; the status keeps saying the search is still on.
+        val results = moonSafari.take(3).mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/0${i + 1} $t.flac", 30) }
+        s = s.copy(discovery = s.discovery.copy(remote = remoteAlbums("moon safari", results, options)))
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Searching").assertDoesNotExist()
+        compose.onNodeWithTag("remote-results").assertIsDisplayed()
+        compose.onNodeWithTag("search-status").assertTextContains("listening for peers", substring = true)
+    }
+
+    @Test
     fun `readme shot of a folder preview`() {
         portrait()
         val files = moonSafari.mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/Air - Moon Safari - ${(i + 1).toString().padStart(2, '0')} $t.flac", 30, 24, 96_000) }
@@ -332,6 +354,9 @@ class ListeningRoomUiTest {
         }
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
         compose.waitForIdle()
+        // The real cover fades in over the dotted placeholder, which then goes.
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("drop-placeholder:NS050", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithContentDescription("Another Day, Another Way").assertExists()
         readme("drops")
     }
 
@@ -358,13 +383,13 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("nav:SETTINGS").performClick()
         compose.onNodeWithTag("panel-title").assertTextContains("SETTINGS")
         // A plain list first; Sound is one row of it.
-        compose.onNodeWithTag("settings:SOUND").assertIsDisplayed()
-        compose.onNodeWithTag("settings:SOUND").performClick()
-        compose.onNodeWithTag("panel:sound").assertIsDisplayed()
-        // The signal chain: the file, Runout's path, and where it goes out.
-        compose.onNodeWithTag("signal-path").assertIsDisplayed()
+        // The signal chain heads the list: the file, Runout's path, and where it goes out.
+        compose.onNodeWithTag("signal-path").assertExists()
         compose.onNodeWithTag("spec:Track").assertTextContains("24-bit · 96 khz", ignoreCase = true)
         compose.onNodeWithTag("spec:Runout").assertTextContains("32-bit float", substring = true, ignoreCase = true)
+        compose.onNodeWithTag("settings:SOUND").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("settings:SOUND").performClick()
+        compose.onNodeWithTag("panel:sound").assertIsDisplayed()
 
         compose.onNodeWithTag("fader:1k").performScrollTo().performTouchInput {
             swipe(center, center - Offset(0f, 140f), durationMillis = 300)
@@ -397,11 +422,14 @@ class ListeningRoomUiTest {
         compose.onNodeWithContentDescription("2 of 3 claims left").assertIsDisplayed()
         compose.onNodeWithText("In your crate", ignoreCase = true).assertIsDisplayed() // already claimed
         compose.onNodeWithTag("drop:NS050").assertIsDisplayed()
+        // No cover yet: a dotted record on grey with the drop's number stands in for it.
+        compose.onNodeWithTag("drop-placeholder:NS050", useUnmergedTree = true).assertIsDisplayed()
         compose.onAllNodes(hasText("Claim")).assertCountEquals(0)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/05_drops_panel.png")
         // A tap opens the drop: its licence, its tracks, and Claim inside.
         compose.onNodeWithTag("drop:NS050").performClick()
         compose.onNodeWithTag("drop-preview").assertIsDisplayed()
+        compose.onNodeWithTag("drop-placeholder:NS050", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("CC BY-NC-SA 4.0", ignoreCase = true).assertIsDisplayed()
         compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
         assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
@@ -445,10 +473,11 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("field:Soulseek ID").performTextClearance()
         compose.onNodeWithTag("field:Soulseek ID").performTextInput("Abhi_99")
         compose.onNodeWithTag("field:Password").performTextInput("test password")
-        compose.onNodeWithTag("submit-soulseek").performClick()
+        // In landscape the collage stays and the page scrolls down to the key.
+        compose.onNodeWithTag("submit-soulseek").performScrollTo().performClick()
         assertTrue(actions.log.toString(), actions.log.contains("soulseekSignIn:Abhi_99:true"))
         // The ⓘ explains that there is no sign-up page.
-        compose.onNodeWithTag("soulseek-id-info").performClick()
+        compose.onNodeWithTag("soulseek-id-info").performScrollTo().performClick()
         compose.onNodeWithText("Soulseek has no sign-up page", substring = true, ignoreCase = true).assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/12_login.png")
         // The TE help panel closes with its "got it" key.

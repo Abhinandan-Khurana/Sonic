@@ -1,5 +1,12 @@
 package app.runout.ui
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -83,9 +90,32 @@ private val NAV = listOf(Panel.DIG, Panel.DROPS, Panel.FRIENDS, Panel.SETTINGS)
  * 8 dp apart. The open place is a black cell with white ink. An orange square marks news.
  */
 @Composable
-fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifier: Modifier = Modifier) {
+fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifier: Modifier = Modifier, onHome: (() -> Unit)? = null) {
     val tick = rememberTick()
     Row(modifier.fillMaxWidth().background(Room.Background)) {
+        // On a page, a "room" cell slides in from the left: home is under the thumb, not in the top corner.
+        AnimatedVisibility(
+            visible = onHome != null,
+            enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
+            exit = shrinkHorizontally(shrinkTowards = Alignment.Start) + fadeOut(),
+        ) {
+            var last by remember { mutableStateOf(onHome) }
+            if (onHome != null) last = onHome
+            Column(
+                Modifier
+                    .width(76.dp)
+                    .background(Room.Ink)
+                    .testTag("nav:ROOM")
+                    .semantics(mergeDescendants = true) { contentDescription = "Room" }
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); last?.invoke() }
+                    .padding(vertical = 11.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Canvas(Modifier.size(20.dp)) { drawRoomIcon(Color.White) }
+                BasicText("room", style = Room.Label.copy(color = Color.White))
+            }
+        }
         NAV.forEach { p ->
             val on = p == active
             val ink = if (on) Color.White else Room.Ink
@@ -108,6 +138,15 @@ fun TeNavBar(active: Panel?, badges: Set<Panel>, onOpen: (Panel) -> Unit, modifi
             }
         }
     }
+}
+
+/** Lucide's disc: a record with its label ring and spindle, for the "room" cell. */
+internal fun DrawScope.drawRoomIcon(color: Color) {
+    val k = size.width / 24f
+    val s = Stroke(width = 1.8f * k, cap = StrokeCap.Round)
+    drawCircle(color, 9.5f * k, Offset(12f * k, 12f * k), style = s)
+    drawCircle(color, 2.5f * k, Offset(12f * k, 12f * k), style = s)
+    drawArc(color, 200f, 70f, false, Offset(5.5f * k, 5.5f * k), Size(13f * k, 13f * k), style = s)
 }
 
 /** Lucide's search, calendar, message-square and sliders-horizontal, drawn on their 24-unit grid. */

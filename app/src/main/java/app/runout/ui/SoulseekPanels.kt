@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +46,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -626,8 +629,8 @@ private fun NewChat(onDismiss: () -> Unit, onStart: (String, Boolean) -> Unit) {
 
 /**
  * One chat: "← chats" and the person's name and lamp over an ink rule, the thread (theirs
- * outlined, yours black, records as full-width grey cards), and the composer under an ink rule:
- * the field, the send-a-record key and the black send key.
+ * orange, yours black, records as full-width grey cards), and the composer: the outlined field,
+ * the send-a-record key and the black send key. The keyboard's enter key sends too.
  */
 @Composable
 private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (Long) -> String, onBack: () -> Unit, onDig: () -> Unit) {
@@ -675,11 +678,13 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
                         actions.searchSoulseek("${card.artist} ${card.album}")
                         onDig()
                     } else BasicText(
+                        // Yours solid black with white 10/400; theirs solid orange with black.
                         message.text,
                         style = Room.Label.copy(color = if (message.outgoing) Color.White else Room.Ink),
                         modifier = Modifier
                             .widthIn(max = 300.dp)
-                            .then(if (message.outgoing) Modifier.background(Room.Ink) else Modifier.border(1.dp, Room.Ink))
+                            .background(if (message.outgoing) Room.Ink else Room.Signal)
+                            .testTag(if (message.outgoing) "bubble:mine" else "bubble:theirs")
                             .padding(horizontal = 16.dp, vertical = 11.dp),
                     )
                     val pending = message.outgoing && message.state != SoulseekMessageState.SENT
@@ -691,40 +696,50 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
                 }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The composer: the field boxed in a 1 dp ink outline, 11 dp in, then the send-a-record key
+        // and the black send key; 11 dp clear of the page's left edge and its foot.
+        Column(Modifier.padding(start = 11.dp, bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             var text by rememberSaveable(peer) { mutableStateOf("") }
             val bytes = text.trim().toByteArray(Charsets.UTF_8).size
             val canSend = state.soulseekSession.signedIn && text.isNotBlank() && bytes <= 4096
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).hairlineTop(Room.Ink), verticalAlignment = Alignment.CenterVertically) {
+            val send = {
+                val submitted = text
+                actions.sendSoulseekMessage(peer, submitted) { if (text == submitted) text = "" }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                 BasicTextField(
                     value = text,
                     onValueChange = { text = it },
                     textStyle = Room.Text,
                     cursorBrush = SolidColor(Room.Signal),
                     maxLines = 5,
+                    // The keyboard's enter key sends.
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { if (canSend) send() }),
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .border(1.dp, Room.Ink)
                         .testTag("field:Private message")
                         .semantics { contentDescription = "Private message" }
-                        .padding(vertical = 14.dp),
+                        .padding(11.dp),
                     decorationBox = { inner ->
-                        Box {
+                        Box(Modifier.heightIn(min = 22.dp), contentAlignment = Alignment.CenterStart) {
                             if (text.isEmpty()) BasicText("private message", style = Room.Text.copy(color = Room.Faint))
                             inner()
                         }
                     },
                 )
-                SquareKey("Send a record", { sharing = true }, "share-record", enabled = state.soulseekSession.signedIn && state.albums.isNotEmpty(), filled = false) { c ->
-                    // A small record: the disc and its label.
-                    val line = 1.5.dp.toPx()
-                    drawCircle(c, size.width * 0.44f, center, style = Stroke(line))
-                    drawCircle(c, size.width * 0.16f, center, style = Stroke(line))
-                    drawCircle(c, line, center)
+                SquareKey("Send a record", { sharing = true }, "share-record", enabled = state.soulseekSession.signedIn && state.albums.isNotEmpty(), filled = false, glyphSize = 22.dp) { c ->
+                    // A record: the rim, two grooves, the label disc and its spindle hole.
+                    val w = size.width
+                    drawCircle(c, w * 0.47f, center, style = Stroke(1.5.dp.toPx()))
+                    drawCircle(c, w * 0.37f, center, style = Stroke(0.75.dp.toPx()))
+                    drawCircle(c, w * 0.29f, center, style = Stroke(0.75.dp.toPx()))
+                    drawCircle(c, w * 0.18f, center)
+                    drawCircle(Room.Background, w * 0.05f, center)
                 }
-                SquareKey("Send message", {
-                    val submitted = text
-                    actions.sendSoulseekMessage(peer, submitted) { if (text == submitted) text = "" }
-                }, "send-message", enabled = canSend, filled = true) { c ->
+                SquareKey("Send message", send, "send-message", enabled = canSend, filled = true) { c ->
                     // An arrow, up.
                     val line = 1.5.dp.toPx()
                     val w = size.width
@@ -742,7 +757,7 @@ private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (L
     }
 }
 
-/** A 44 dp square key with a 16 dp drawn glyph: black with a white glyph, or bare with an ink one. */
+/** A 44 dp square key with a drawn glyph (16 dp unless set): black with a white glyph, or bare with an ink one. */
 @Composable
 private fun SquareKey(
     description: String,
@@ -750,6 +765,7 @@ private fun SquareKey(
     tag: String,
     enabled: Boolean,
     filled: Boolean,
+    glyphSize: Dp = 16.dp,
     glyph: androidx.compose.ui.graphics.drawscope.DrawScope.(Color) -> Unit,
 ) {
     Box(
@@ -762,7 +778,7 @@ private fun SquareKey(
             .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(16.dp)) { glyph(if (filled) Color.White else Room.Ink) }
+        Canvas(Modifier.size(glyphSize)) { glyph(if (filled) Color.White else Room.Ink) }
     }
 }
 

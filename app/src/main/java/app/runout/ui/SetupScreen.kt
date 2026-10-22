@@ -199,14 +199,19 @@ private fun StepCopy(label: String, title: String, body: String) {
 /**
  * Steps 02–05: "← back" and five progress squares along the top (22 in), the step number set at
  * 132/700 under them, the copy at the foot of the content, then the actions, 22 / 22 / 33 in.
+ * [picture] (a file in assets/onboarding) sits in the space between the number and the copy when
+ * it's there; it shrinks to fit the screen, and gives way altogether on a short one, never the type.
+ * When the screen is too short for everything, the space closes and the page scrolls.
  */
 @Composable
 private fun StepPage(
     number: Int,
     onBack: () -> Unit,
     copy: @Composable ColumnScope.() -> Unit,
+    picture: String? = null,
     actions: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
+    val art = if (picture != null) rememberOnboardingPicture(picture, STEP_PICTURE_MAX) else null
     FootColumn {
         // 22 in on the board; the 48 dp touch height of "← back" takes up most of that.
         Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 5.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -214,23 +219,41 @@ private fun StepPage(
             Spacer(Modifier.weight(1f))
             Pips(number)
         }
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 22.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            BasicText(
-                "%02d".format(number),
-                style = Room.Display.copy(fontSize = 132.sp, lineHeight = 119.sp),
-                modifier = Modifier.clearAndSetSemantics { },
-            )
-            Column(Modifier.fillMaxWidth().padding(top = 22.dp), verticalArrangement = Arrangement.spacedBy(22.dp), content = copy)
+        BasicText(
+            "%02d".format(number),
+            style = Room.Display.copy(fontSize = 132.sp, lineHeight = 119.sp),
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 33.dp).clearAndSetSemantics { },
+        )
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 22.dp), contentAlignment = Alignment.CenterStart) {
+            // 22 under the number; the copy's own 22 keeps it off the kicker.
+            val side = minOf(maxHeight - 22.dp, maxWidth, STEP_PICTURE_MAX)
+            if (art != null && side >= STEP_PICTURE_MIN) {
+                val shown = remember(art) { Animatable(0f) }
+                LaunchedEffect(art) { shown.animateTo(1f, tween(260)) }
+                Image(
+                    art,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .padding(top = 22.dp)
+                        .size(side)
+                        .graphicsLayer { alpha = shown.value }
+                        .testTag("setup-picture"),
+                )
+            }
         }
+        Column(
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+            content = copy,
+        )
         if (actions != null) ActionColumn(Modifier.padding(top = 22.dp), actions)
     }
 }
+
+/** The step pictures: up to 240 dp square, and left out below 96 dp rather than shrinking the type. */
+private val STEP_PICTURE_MAX = 240.dp
+private val STEP_PICTURE_MIN = 96.dp
 
 /**
  * The actions at the foot, 22 / 33 in and 16 apart on the board. The text links below the key
@@ -307,8 +330,6 @@ private fun LoginStep(state: RoomState, actions: RoomActions, onClose: (() -> Un
     @OptIn(ExperimentalLayoutApi::class)
     val typing = WindowInsets.isImeVisible
     val wordmark by animateFloatAsState(if (typing) 22f else 44f, label = "wordmark")
-    // On a short screen the collage gives way too, so the key and the fields stay in reach.
-    val tall = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 600
 
     @Composable
     fun Connect(modifier: Modifier) {
@@ -317,14 +338,15 @@ private fun LoginStep(state: RoomState, actions: RoomActions, onClose: (() -> Un
     }
 
     Box(Modifier.fillMaxSize()) {
+        // The collage stays on a short screen and in landscape too: the page scrolls instead, the
+        // fields and the key sized as they are, with the key below them.
         FootColumn {
-            AnimatedVisibility(!typing && tall, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            AnimatedVisibility(!typing, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 RecordCollage()
             }
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .weight(1f)
                     .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 22.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
@@ -359,6 +381,8 @@ private fun LoginStep(state: RoomState, actions: RoomActions, onClose: (() -> Un
                     }
                 }
             }
+            // Pushes the actions to the foot when there's room; closes up when there isn't.
+            Spacer(Modifier.weight(1f))
             if (!typing) {
                 ActionColumn {
                     Connect(Modifier.fillMaxWidth())
@@ -466,7 +490,7 @@ private fun SoulseekIdHelp(onDismiss: () -> Unit) {
 
 @Composable
 private fun OfflineStep(state: RoomState, actions: RoomActions, onDone: () -> Unit, onBack: () -> Unit) {
-    StepPage(2, onBack, copy = {
+    StepPage(2, onBack, picture = "step-02", copy = {
         StepCopy("offline · no account needed", "BRING YOUR OWN RECORDS", "choose a folder of flac albums. you can connect soulseek later from settings › soulseek.")
         if (state.hasFolder) BasicText("music folder selected. your records will appear in the crate.", style = Room.Label.copy(color = Room.Body))
     }) {
@@ -482,7 +506,7 @@ private fun DownloadsStep(state: RoomState, actions: RoomActions, onDone: () -> 
     LaunchedEffect(state.downloadFolder) {
         if (state.downloadFolder != null && state.downloadFolder != atEntry) onDone()
     }
-    StepPage(3, onBack, copy = {
+    StepPage(3, onBack, picture = "step-03", copy = {
         StepCopy("keep your records", "WHERE SHOULD DOWNLOADS GO?", "finished flac downloads land in this folder, play in other apps too, and stay if you uninstall runout.")
     }) {
         StepKey(if (state.downloadFolder == null) "choose download folder" else "change download folder", actions::pickDownloadFolder, "setup-download-folder", Modifier.fillMaxWidth())
@@ -500,14 +524,39 @@ private fun ShareStep(state: RoomState, actions: RoomActions, onDone: () -> Unit
             onDone()
         }
     }
-    StepPage(4, onBack, copy = {
+    StepPage(4, onBack, picture = "step-04", copy = {
         StepCopy(
             "give something back", "SHARE A FOLDER?",
             "the folder you choose becomes public: anyone on soulseek can browse it and download its flac files. nothing else on your phone is shared.",
         )
+        PublicNote()
     }) {
         StepKey("share a folder", { asked = true; actions.pickSharedFolder() }, "setup-share", Modifier.fillMaxWidth(), icon = { drawCaution() })
         TextKey("skip", { actions.setSoulseekSharing(false); onDone() }, "setup-share-skip")
+    }
+}
+
+/**
+ * The share step's warning, between the body and the key: a 1 dp amber outline, 11 in, an 8 dp
+ * amber lamp beside two 10/400 ink lines. Read as one sentence by TalkBack.
+ */
+@Composable
+private fun PublicNote() {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, Room.Warning)
+            .padding(11.dp)
+            .semantics(mergeDescendants = true) { }
+            .testTag("share-public-note"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Level with the first line's capitals.
+        Box(Modifier.padding(top = 3.dp).size(8.dp).background(Room.Warning))
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            BasicText("this folder becomes PUBLIC.", style = Room.Label)
+            BasicText("nothing else on your phone is.", style = Room.Label)
+        }
     }
 }
 
@@ -562,22 +611,27 @@ private fun RhythmCard(title: String, detail: String, selected: Boolean, enabled
 /**
  * The last screen (TE · Onboarding · Welcome): the RG-1 above an orange square and the greeting
  * in 44/700, "WELCOME IN, <Soulseek ID>." or "WELCOME IN, LISTENER." offline. The greeting pops
- * in, holds, and the room takes over from the deck.
+ * in, holds for about two seconds (a tap skips it), and the room takes over from the deck.
  */
 @Composable
 private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
     val pop = remember { Animatable(0f) }
     val hold = remember { Animatable(0f) }
-    val finish by rememberUpdatedState(onFinish)
+    val onFinished by rememberUpdatedState(onFinish)
+    // A tap skips the hold; either way the room is opened once.
+    var done by remember { mutableStateOf(false) }
+    val finish = { if (!done) { done = true; onFinished() } }
     LaunchedEffect(Unit) {
+        // The pop settles in about half a second; the hold makes it about two on screen.
         pop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 260f))
         // Held on screen by an animation rather than a delay, so it runs on the frame clock.
-        hold.animateTo(1f, tween(650))
+        hold.animateTo(1f, tween(WELCOME_HOLD_MS))
         finish()
     }
     Column(
         Modifier
             .fillMaxSize()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = "Skip") { finish() }
             .testTag("setup-welcome")
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(start = 22.dp, end = 22.dp, top = 33.dp, bottom = 66.dp),
@@ -608,3 +662,6 @@ private fun WelcomeStep(name: String?, onFinish: () -> Unit) {
         }
     }
 }
+
+/** How long the greeting stays after it pops in, before the room comes in. */
+private const val WELCOME_HOLD_MS = 1450

@@ -1,37 +1,53 @@
 package app.runout.ui
 
+import android.content.res.AssetManager
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.IOException
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /*
  * The drawn pieces of onboarding: the RUNOUT wordmark, the sign-in's record collage and the
- * caution icon on the share key.
+ * caution icon on the share key, and the loader for the pictures the owner adds to
+ * assets/onboarding (the step pictures and the collage covers).
  */
 
 /**
@@ -88,30 +104,98 @@ private val SLEEVES = listOf(
     SleeveArt(listOf(0f to Color(0xFFF0CCCC)), Room.Danger, Color(0xFF272727)),
 )
 
+/** The covers that stand in for the drawn sleeves, `assets/onboarding/cover-1` … `cover-6`. */
+private val COVERS = List(6) { "cover-${it + 1}" }
+
+/** A sleeve is never bigger than on the 412-wide board, so the collage stays 274 dp tall. */
+private val MAX_CELL = (412.dp - 2.dp) / 3
+
 /**
- * The record collage at the top of the sign-in: two rows of three square sleeve arts on black,
- * 1 dp apart, each a sun over a horizon (TE · Onboarding · Sign in).
+ * The record collage at the top of the sign-in: two rows of three square sleeves on black, 1 dp
+ * apart (TE · Onboarding · Sign in). Each is the owner's cover from the assets when it's there,
+ * otherwise a drawn sun over a horizon. On a wide screen the sleeves keep their board size and
+ * the grid sits in the middle of the black band.
  */
 @Composable
 internal fun RecordCollage(modifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier.fillMaxWidth()) {
+    val covers = rememberOnboardingPictures(COVERS, MAX_CELL)
+    BoxWithConstraints(modifier.fillMaxWidth().background(Room.Ink)) {
         val gap = 1.dp
-        val cell = (maxWidth - gap * 2) / 3
+        val cell = minOf((maxWidth - gap * 2) / 3, MAX_CELL)
         Canvas(
             Modifier
-                .fillMaxWidth()
-                .height(cell * 2 + gap)
-                .background(Room.Ink)
+                .align(Alignment.Center)
+                .size(cell * 3 + gap * 2, cell * 2 + gap)
                 .clearAndSetSemantics { },
         ) {
             val g = gap.toPx()
             val c = (size.width - g * 2) / 3f
             SLEEVES.forEachIndexed { i, art ->
                 val o = Offset((i % 3) * (c + g), (i / 3) * (c + g))
-                drawSleeveArt(art, o, c)
+                val cover = covers.getOrNull(i)
+                if (cover != null) drawCover(cover, o, c) else drawSleeveArt(art, o, c)
             }
         }
     }
+}
+
+/** A cover filling its square, cropped to the middle if it isn't square itself. */
+private fun DrawScope.drawCover(cover: ImageBitmap, o: Offset, c: Float) {
+    val side = minOf(cover.width, cover.height)
+    drawImage(
+        cover,
+        srcOffset = IntOffset((cover.width - side) / 2, (cover.height - side) / 2),
+        srcSize = IntSize(side, side),
+        dstOffset = IntOffset(o.x.roundToInt(), o.y.roundToInt()),
+        dstSize = IntSize((o.x + c).roundToInt() - o.x.roundToInt(), (o.y + c).roundToInt() - o.y.roundToInt()),
+        filterQuality = FilterQuality.High,
+    )
+}
+
+/**
+ * Pictures the owner drops into `assets/onboarding/` (`<name>.webp`, `.png` or `.jpg`), decoded off
+ * the main thread at about [maxSide] across and kept while the screen is up. Each is null while it
+ * loads, and stays null when its file isn't there, so the drawn layout stands in.
+ */
+@Composable
+internal fun rememberOnboardingPictures(names: List<String>, maxSide: Dp): List<ImageBitmap?> {
+    val assets = LocalContext.current.assets
+    val px = with(LocalDensity.current) { maxSide.roundToPx() }
+    val pictures by produceState(List<ImageBitmap?>(names.size) { null }, names, px) {
+        value = withContext(Dispatchers.IO) { names.map { decodeOnboardingPicture(assets, it, px) } }
+    }
+    return pictures
+}
+
+/** One picture from `assets/onboarding/`, as [rememberOnboardingPictures] loads them. */
+@Composable
+internal fun rememberOnboardingPicture(name: String, maxSide: Dp): ImageBitmap? =
+    rememberOnboardingPictures(remember(name) { listOf(name) }, maxSide).firstOrNull()
+
+private val PICTURE_TYPES = listOf("webp", "png", "jpg")
+
+/** Decodes `onboarding/<name>.*`, halving it while it's still twice [maxSide] across; null if absent. */
+private fun decodeOnboardingPicture(assets: AssetManager, name: String, maxSide: Int): ImageBitmap? {
+    for (type in PICTURE_TYPES) {
+        val path = "onboarding/$name.$type"
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        val there = try {
+            assets.open(path).use { BitmapFactory.decodeStream(it, null, bounds) }
+            true
+        } catch (_: IOException) {
+            false
+        }
+        if (!there) continue
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        val bitmap = try {
+            assets.open(path).use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
+        } catch (_: IOException) {
+            null
+        }
+        if (bitmap != null) return bitmap.asImageBitmap()
+    }
+    return null
 }
 
 private fun DrawScope.drawSleeveArt(art: SleeveArt, o: Offset, c: Float) {

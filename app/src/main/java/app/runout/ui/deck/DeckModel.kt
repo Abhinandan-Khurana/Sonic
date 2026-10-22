@@ -160,7 +160,9 @@ object DeckModel {
         val f = t.coerceIn(0f, 1f)
         if (f <= 0f || f >= 1f) return recordTransform(degrees)
         val roll = (if (f < 0.5f) f else f - 1f) * PI.toFloat()
-        val lift = FLIP_LIFT * sin(f * PI.toFloat())
+        // High enough at every angle that the lower half never dips into the platter or the
+        // plinth: the half-width it hangs below its axis, plus a little air.
+        val lift = RECORD_R * kotlin.math.abs(sin(roll)) + FLIP_CLEAR * sin(f * PI.toFloat())
         val yaw = -degrees * PI.toFloat() / 180f
         val c = cos(yaw); val s = sin(yaw)
         val ca = cos(roll); val sa = sin(roll)
@@ -173,8 +175,11 @@ object DeckModel {
         )
     }
 
-    /** How high the record rises as it turns over: enough to clear the spindle and the mat's edge. */
-    const val FLIP_LIFT = RECORD_R * 0.55f
+    /** The air under the record's lowest edge at the top of the flip, above the spindle. */
+    const val FLIP_CLEAR = 0.12f
+
+    /** How high the record's centre rises as it turns over, edge-on: its radius plus the air. */
+    const val FLIP_LIFT = RECORD_R + FLIP_CLEAR
 
     /** The tonearm at [angle], lowered by [drop] (0 = cued up, 1 = needle in the groove). */
     fun armTransform(angle: Float, drop: Float): FloatArray =

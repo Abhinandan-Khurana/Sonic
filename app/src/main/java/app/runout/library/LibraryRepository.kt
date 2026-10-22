@@ -81,14 +81,33 @@ class LibraryRepository(
         }
     }
 
-    fun setFolder(uri: Uri): Job? {
+    /**
+     * Uses [uri] as the music folder, keeping read access to it across restarts. Picking the same
+     * folder again is a plain rescan that keeps the shelf until the folder has been listed.
+     *
+     * A different folder replaces the shelf: the old folder's records leave the crate at once
+     * (their files are no longer ours to read), the saved index is emptied so a restart mid-scan
+     * reads the new folder instead of showing the old one, and a partial scan never mixes old
+     * records back in. The old folder's read grant is released unless [keepGrant] says another
+     * part of the app (the downloads or shared folder) still uses that same folder.
+     */
+    fun setFolder(uri: Uri, keepGrant: (Uri) -> Boolean = { false }): Job? {
         runCatching {
             context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        val old = _folder.value
         prefs.edit().putString(KEY_FOLDER, uri.toString()).apply()
         _folder.value = uri
-        // Keep the previous shelf until the selected root has actually been listed.
-        return rescan()
+        if (old == null || old == uri) return rescan()
+        return synchronized(scanLock) {
+            // Stop reading the old folder before giving up access to it.
+            scanJob?.cancel()
+            if (!keepGrant(old)) runCatching {
+                context.contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            _albums.value = emptyList()
+            startScan(uri, fresh = false, replace = true)
+        }
     }
 
     /**
@@ -115,14 +134,16 @@ class LibraryRepository(
         if (scanJob?.isActive == true) null else startScan(tree, fresh = false)
     }
 
-    private fun startScan(tree: Uri, fresh: Boolean): Job {
+    /** [replace]: the folder changed, so nothing from the shelf before belongs on it any more. */
+    private fun startScan(tree: Uri, fresh: Boolean, replace: Boolean = false): Job {
         // LAZY so that [scanJob] is set before the body can run: a scan that starts late must
         // already be the live one when another scan asks whether anything is running.
         val job = scope.launch(start = CoroutineStart.LAZY) {
             _scan.value = ScanState.Scanning(ScanProgress(0, 0))
             _report.value = null
-            val previous = _albums.value
-            if (fresh) _albums.value = emptyList()
+            val previous = if (replace) emptyList() else _albums.value
+            if (fresh || replace) _albums.value = emptyList()
+            if (replace) withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, emptyList()) }
             val found = mutableListOf<Album>()
             val report = try {
                 scanner.scan(

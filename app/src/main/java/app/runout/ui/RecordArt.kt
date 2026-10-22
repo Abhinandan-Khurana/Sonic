@@ -305,29 +305,42 @@ fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean
 /** The board's front sleeve, which the stickers are sized against. */
 private val BOARD_SLEEVE = 151.3.dp
 
-/** HI-RES over the spec, Inter 800 in black, on a 41 dp orange round with a white edge, 10° off true. */
+/**
+ * The hi-res mark, printed like an official badge: a black rectangle with a 1.5 dp white keyline,
+ * "Hi-Res" over "AUDIO" in white Inter, the spec under a hairline, set a hair off true.
+ */
 @Composable
 fun HiResSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
     val d = LocalDensity.current
-    Box(
-        modifier.rotate(10f).size(41.dp * k).clip(CircleShape).background(Room.Signal).border(1.5.dp * k, Color.White, CircleShape),
-        contentAlignment = Alignment.Center,
+    fun sp(v: Double) = with(d) { (v.dp * k).toSp() }
+    Column(
+        modifier
+            .rotate(1f)
+            .background(Room.Ink)
+            .padding(1.5.dp * k)
+            .border(0.75.dp * k, Color.White)
+            .padding(horizontal = 5.dp * k, vertical = 3.dp * k),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            BasicText("HI-RES", style = Room.Sticker.copy(fontSize = with(d) { (6.97.dp * k).toSp() }, letterSpacing = with(d) { (0.4.dp * k).toSp() }))
-            BasicText(text, style = Room.Sticker.copy(fontSize = with(d) { (9.84.dp * k).toSp() }, lineHeight = with(d) { (10.dp * k).toSp() }, letterSpacing = with(d) { (-0.2).dp.times(k).toSp() }))
-        }
+        BasicText("Hi-Res", style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(7.5), lineHeight = sp(8.0), letterSpacing = sp(0.1)))
+        BasicText("AUDIO", style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(5.2), lineHeight = sp(6.0), letterSpacing = sp(1.2)))
+        Box(Modifier.padding(vertical = 2.dp * k).size(22.dp * k, 0.75.dp * k).background(Color.White))
+        BasicText(text, style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(6.5), lineHeight = sp(7.0)))
     }
 }
 
-/** A black label tab, white Inter 700 caps, 4 × 7 inside, stuck on 3° off true. */
+/** The label tab, printed rather than stuck on: black, a thin white keyline, small white caps, straight. */
 @Composable
 fun LabelSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
     val d = LocalDensity.current
     BasicText(
         text.uppercase(),
-        style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = with(d) { (7.565.dp * k).toSp() }, letterSpacing = with(d) { (0.9.dp * k).toSp() }),
+        style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = with(d) { (6.5.dp * k).toSp() }, letterSpacing = with(d) { (1.1.dp * k).toSp() }),
         maxLines = 1,
-        modifier = modifier.rotate(-3f).background(Room.Ink).padding(horizontal = 7.dp * k, vertical = 4.dp * k),
+        modifier = modifier
+            .background(Room.Ink)
+            .padding(1.5.dp * k)
+            .border(0.75.dp * k, Color.White)
+            .padding(horizontal = 6.dp * k, vertical = 3.dp * k),
     )
 }

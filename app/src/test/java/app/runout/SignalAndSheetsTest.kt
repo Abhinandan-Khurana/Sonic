@@ -94,6 +94,74 @@ class SignalAndSheetsTest {
         assertTrue(actions.log.contains("crackle"))
     }
 
+    @Test fun `the signal heads the Settings list, and Sound starts at output with crackle first`() {
+        val actions = RecordingActions()
+        compose.setContent { RoomScreen(room, actions, initialPanel = Panel.SETTINGS) }
+        compose.onNodeWithTag("signal-path").assertExists()
+        compose.onNodeWithTag("signal-verdict").assertTextEquals("lossless, resampled to 48 khz")
+        compose.onNodeWithTag("spec:Track").assertExists()
+        // The signal stands above the four rows.
+        assertTrue(compose.onNodeWithTag("signal-path").getBoundsInRoot().bottom <= compose.onNodeWithTag("settings:SOUND").getBoundsInRoot().top)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/35_settings_signal.png")
+        compose.onNodeWithTag("settings:SOUND").performScrollTo().performClick()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/36_sound_output.png")
+        compose.onNodeWithTag("panel:sound").assertExists()
+        compose.onNodeWithTag("signal-path").assertDoesNotExist()
+        compose.onNodeWithText("01 output").assertExists()
+        compose.onNodeWithText("02 equaliser").assertExists()
+        compose.onNodeWithText("03 loudness").assertExists()
+        compose.onNodeWithText("05 the deck").assertDoesNotExist()
+        assertTrue(compose.onNodeWithTag("toggle:Crackle").getBoundsInRoot().top < compose.onNodeWithTag("toggle:Pure").getBoundsInRoot().top)
+        // "import autoeq…" is an outlined key now.
+        compose.onNodeWithTag("import-autoeq").performScrollTo().assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Button)).performClick()
+        assertTrue(actions.log.contains("autoeq"))
+    }
+
+    @Test fun `Settings › Soulseek has no review-setup key`() {
+        compose.setContent { RoomScreen(room, RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
+        compose.onNodeWithTag("settings-downloads").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("settings-setup").assertDoesNotExist()
+        compose.onNodeWithText("review soulseek setup").assertDoesNotExist()
+    }
+
+    @Test fun `About credits fuze2k and 0xs0m, whose name opens somm·tf`() {
+        compose.setContent { RoomScreen(room, RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ABOUT) }
+        compose.onNodeWithText("credits").assertExists()
+        compose.onNodeWithText("fuze2k and ").assertExists()
+        compose.onNodeWithText("records").assertExists() // the other facts stay
+        compose.onNodeWithTag("credits-link").assertTextEquals("0xs0m").performScrollTo().performClick()
+        val started = org.robolectric.Shadows.shadowOf(org.robolectric.RuntimeEnvironment.getApplication()).nextStartedActivity
+        assertEquals(android.content.Intent.ACTION_VIEW, started.action)
+        assertEquals("https://somm.tf", started.dataString)
+    }
+
+    @Test fun `after a folder change, Settings › Library asks whether sharing should follow`() {
+        val answers = mutableListOf<Boolean>()
+        val actions = object : RecordingActions() { override fun answerShareSwap(change: Boolean) { answers += change } }
+        compose.setContent { RoomScreen(room.copy(offerShareSwap = true, sharedFolder = "Music"), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.LIBRARY) }
+        compose.onNodeWithTag("share-swap").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("share the new folder too?").assertIsDisplayed()
+        compose.onNodeWithText("choose new shared folder").assertIsDisplayed()
+        compose.onNodeWithTag("share-swap-change").performClick()
+        compose.onNodeWithTag("share-swap-keep").performClick()
+        assertEquals(listOf(true, false), answers)
+    }
+
+    @Test fun `the share question is never shown unless offered`() {
+        compose.setContent { RoomScreen(room.copy(sharedFolder = "Music"), RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.LIBRARY) }
+        compose.onNodeWithTag("settings-change-folder").assertExists()
+        compose.onNodeWithTag("share-swap").assertDoesNotExist()
+    }
+
+    @Test fun `the share question comes only after a real change while signed in, with something shared`() {
+        val a = "content://docs/tree/primary%3AMusic"; val b = "content://docs/tree/primary%3AFLAC"
+        assertTrue(offersShareSwap(a, b, signedIn = true, shared = a))
+        assertFalse("offline or no account: never ask", offersShareSwap(a, b, signedIn = false, shared = a))
+        assertFalse("the first folder isn't a change", offersShareSwap(null, b, signedIn = true, shared = a))
+        assertFalse("the same folder again isn't a change", offersShareSwap(a, a, signedIn = true, shared = a))
+        assertFalse("nothing shared, nothing to follow", offersShareSwap(a, b, signedIn = true, shared = null))
+    }
+
     @Test fun `Settings › Library repairs local albums and lists the files it couldn't read`() {
         val actions = RecordingActions()
         val report = ScanReport(4, 12, 2, 3, emptyMap(), unreadableFiles = listOf(
@@ -133,6 +201,25 @@ class SignalAndSheetsTest {
         compose.onNodeWithTag("new-chat-card").assertIsDisplayed()
         assertEquals(compose.onRoot().getBoundsInRoot(), compose.onNodeWithTag("sheet-shade").getBoundsInRoot())
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/33_new_chat_sheet.png")
+    }
+
+    @Test fun `chat bubbles are solid, mine black and theirs orange, over an outlined composer`() {
+        val chat = room.copy(
+            soulseekConversation = "maya",
+            soulseekConversations = listOf(app.runout.soulseek.SoulseekConversation("maya", listOf(
+                app.runout.soulseek.SoulseekMessage("1", "maya", "hello", 1L, false, app.runout.soulseek.SoulseekMessageState.SENT),
+                app.runout.soulseek.SoulseekMessage("2", "maya", "hi back", 2L, true, app.runout.soulseek.SoulseekMessageState.SENT),
+            ), 0)),
+        )
+        compose.setContent { RoomScreen(chat, RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("bubble:theirs").assertTextEquals("hello")
+        compose.onNodeWithTag("bubble:mine").assertTextEquals("hi back")
+        // Theirs sits at the left, yours at the right.
+        assertTrue(compose.onNodeWithTag("bubble:theirs").getBoundsInRoot().left < compose.onNodeWithTag("bubble:mine").getBoundsInRoot().left)
+        // The composer stands clear of the body's left edge.
+        assertTrue(compose.onNodeWithTag("field:Private message").getBoundsInRoot().left > compose.onNodeWithTag("bubble:theirs").getBoundsInRoot().left)
+        compose.onNodeWithContentDescription("Send a record").assertIsEnabled()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/34_chat.png")
     }
 
     @Test fun `an interrupted read is recognised as Android pausing the app`() {

@@ -17,7 +17,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -42,7 +44,8 @@ import java.util.Locale
 /*
  * Dig, drawn to the TE · Dig boards in runout-te.pen: the underlined search field with its square
  * black key, the two-cell source switch, then either the big grey "?" hint, the albums on this
- * device, or Soulseek's album folders as two compact lines each. The page head is the shell's.
+ * device, or Soulseek's album folders as two compact lines each. The field, the switch and the
+ * results head stay put; only the list under them scrolls. The page head is the shell's.
  */
 
 /** The peers help, from the TE · Help panels board. */
@@ -204,12 +207,32 @@ private fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, on
     }
 }
 
+/** Where the empty page's mark sits: low in the free space, about 60 % down rather than centred. */
+private val LowInSpace = BiasAlignment(horizontalBias = -1f, verticalBias = 0.2f)
+
+/** The empty area under the field: one mark and its line, set low; clipped when the keyboard squeezes it. */
+@Composable
+private fun LowMark(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Box(modifier.fillMaxWidth().clipToBounds(), contentAlignment = LowInSpace) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+    }
+}
+
 /** Nothing typed yet: the big grey "?" and one line on what Dig finds. */
 @Composable
 private fun Hint(modifier: Modifier, text: String = "albums only, always flac. try an artist and an album title.") {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+    LowMark(modifier) {
         BasicText("?", style = Room.Display.copy(fontSize = 132.sp, color = Room.Hairline))
         BasicText(text, style = Room.Text.copy(color = Room.Body, lineHeight = 17.sp), modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** A Soulseek search under way with nothing back yet: the dotted vinyl spinning where the "?" sits. */
+@Composable
+private fun Digging(query: String, modifier: Modifier) {
+    LowMark(modifier) {
+        DotVinylSpinner(Modifier.size(132.dp))
+        BasicText("digging soulseek for “${query.trim()}”…", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp), modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -228,18 +251,18 @@ private fun SignedOutNote(session: SoulseekSession, actions: RoomActions, onAcco
     }
 }
 
-/** Albums on this device: the count, then one hairlined row per album. */
+/** Albums on this device: the count, pinned, then one hairlined row per album; only the rows scroll. */
 @Composable
 private fun LocalResults(discovery: DiscoveryState, actions: RoomActions, onCue: () -> Unit, modifier: Modifier) {
     val albums = discovery.local.filter { it.track == null }.ifEmpty { discovery.local.distinctBy { it.album.id }.map { it.copy(track = null) } }
-    LazyColumn(modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = 22.dp)) {
-        item("local-heading") {
-            BasicText("on this device · ${plural(albums.size, "album")}", style = Room.LabelQuiet, modifier = Modifier.padding(bottom = 22.dp))
+    Column(modifier.fillMaxWidth()) {
+        BasicText("on this device · ${plural(albums.size, "album")}", style = Room.LabelQuiet, modifier = Modifier.padding(bottom = 22.dp))
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("local-results"), contentPadding = PaddingValues(bottom = 22.dp)) {
+            items(albums, key = { "local:${it.id}" }) { hit -> LocalAlbumCard(hit, actions, onCue) }
+            if (albums.isEmpty()) item("no-local") {
+                BasicText("no albums here match. try fewer words, or dig on soulseek.", style = Room.Label.copy(color = Room.Body))
+            } else item("local-end") { Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Hairline)) }
         }
-        items(albums, key = { "local:${it.id}" }) { hit -> LocalAlbumCard(hit, actions, onCue) }
-        if (albums.isEmpty()) item("no-local") {
-            BasicText("no albums here match. try fewer words, or dig on soulseek.", style = Room.Label.copy(color = Room.Body))
-        } else item("local-end") { Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Hairline)) }
     }
 }
 
@@ -285,7 +308,8 @@ private fun LocalAlbumCard(hit: LocalMatch, actions: RoomActions, onCue: () -> U
 
 /**
  * Soulseek's album folders: the count with "peers ?", the search's state in one 10/400 line, and
- * any key the state needs (retry, broaden), then two compact lines per folder.
+ * any key the state needs (retry, broaden), all pinned; then two compact lines per folder, the only
+ * part that scrolls. Until the first folder arrives, the dotted vinyl spins in the list's place.
  */
 @Composable
 private fun RemoteResults(
@@ -297,31 +321,35 @@ private fun RemoteResults(
     onPeersHelp: () -> Unit,
     modifier: Modifier,
 ) {
-    // Room under the last row for the floating "sort" key.
-    LazyColumn(modifier.fillMaxWidth(), contentPadding = PaddingValues(bottom = 88.dp)) {
-        item("online-heading") {
-            Column(Modifier.fillMaxWidth().padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BasicText("soulseek · ${plural(discovery.remote.size, "album folder")}", style = Room.LabelQuiet, modifier = Modifier.weight(1f))
-                    // The "?" box sits in a 32 dp touch target: 8 dp of it are already the gap.
-                    BasicText("peers", style = Room.LabelQuiet, modifier = Modifier.offset(x = 2.dp))
-                    InfoDot("peers", onPeersHelp)
-                }
-                BasicText(searchStatus(discovery), style = Room.Label.copy(color = Room.Body), modifier = Modifier.testTag("search-status"))
-                if (discovery.online.limited) BasicText("showing the first 5,000 flac matches. refine your search for a closer shortlist.", style = Room.Label.copy(color = Room.Body))
-                val retry = discovery.online.phase in setOf(SearchPhase.FAILED, SearchPhase.INTERRUPTED)
-                val broaden = discovery.remote.isEmpty() && discovery.online.phase == SearchPhase.COMPLETE
-                if (retry || broaden) Row(Modifier.padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                    if (retry) TeButton("retry search", submit, kind = KeyKind.OUTLINE, enabled = connected)
-                    if (broaden) TeButton("broaden search terms", actions::broadenSearch, kind = KeyKind.OUTLINE)
-                }
+    Column(modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicText("soulseek · ${plural(discovery.remote.size, "album folder")}", style = Room.LabelQuiet, modifier = Modifier.weight(1f))
+                // The "?" box sits in a 32 dp touch target: 8 dp of it are already the gap.
+                BasicText("peers", style = Room.LabelQuiet, modifier = Modifier.offset(x = 2.dp))
+                InfoDot("peers", onPeersHelp)
+            }
+            BasicText(searchStatus(discovery), style = Room.Label.copy(color = Room.Body), modifier = Modifier.testTag("search-status"))
+            if (discovery.online.limited) BasicText("showing the first 5,000 flac matches. refine your search for a closer shortlist.", style = Room.Label.copy(color = Room.Body))
+            val retry = discovery.online.phase in setOf(SearchPhase.FAILED, SearchPhase.INTERRUPTED)
+            val broaden = discovery.remote.isEmpty() && discovery.online.phase == SearchPhase.COMPLETE
+            if (retry || broaden) Row(Modifier.padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                if (retry) TeButton("retry search", submit, kind = KeyKind.OUTLINE, enabled = connected)
+                if (broaden) TeButton("broaden search terms", actions::broadenSearch, kind = KeyKind.OUTLINE)
             }
         }
-        itemsIndexed(discovery.remote, key = { _, it -> "folder:${it.id}" }) { i, group ->
-            val (count, free) = peers[folderKey(group.directory)] ?: (1 to group.available)
-            RemoteAlbumCard(i + 1, group, count, free, enabled = connected) { actions.previewSoulseekFolder(group.tracks.first()) }
+        if (discovery.online.phase == SearchPhase.SEARCHING && discovery.remote.isEmpty()) {
+            Digging(discovery.online.query, Modifier.weight(1f))
+        } else {
+            // Room under the last row for the floating 66 dp "sort" key and its 22 dp gap, so it never covers the last size.
+            LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("remote-results"), contentPadding = PaddingValues(bottom = 66.dp + 22.dp)) {
+                itemsIndexed(discovery.remote, key = { _, it -> "folder:${it.id}" }) { i, group ->
+                    val (count, free) = peers[folderKey(group.directory)] ?: (1 to group.available)
+                    RemoteAlbumCard(i + 1, group, count, free, enabled = connected) { actions.previewSoulseekFolder(group.tracks.first()) }
+                }
+                if (discovery.remote.isNotEmpty()) item("online-end") { Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Hairline)) }
+            }
         }
-        if (discovery.remote.isNotEmpty()) item("online-end") { Box(Modifier.fillMaxWidth().height(1.dp).background(Room.Hairline)) }
     }
 }
 

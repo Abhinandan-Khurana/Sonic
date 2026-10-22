@@ -50,6 +50,10 @@ class MainActivity : ComponentActivity() {
     private val message = MutableStateFlow<String?>(null)
     private val claiming = MutableStateFlow<Map<String, Float>>(emptyMap())
     private val activeConversation = MutableStateFlow<String?>(null)
+    /** The music folder changed while signed in: Settings › Library asks whether sharing should follow. */
+    private val shareSwap = MutableStateFlow(false)
+    /** The shared-folder picker was opened from that question while sharing was on. */
+    private var resumeSharing = false
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         graph.soulseek.onExternalFlow(false)
         if (granted) graph.soulseek.setStayOnline(true)
@@ -88,6 +92,7 @@ class MainActivity : ComponentActivity() {
             val conversations by graph.soulseek.conversations.collectAsStateWithLifecycle()
             val destination by graph.soulseek.destination.collectAsStateWithLifecycle()
             val sharedFolder by graph.soulseek.sharedFolder.collectAsStateWithLifecycle()
+            val offerShareSwap by shareSwap.collectAsStateWithLifecycle()
             val sharing by graph.soulseek.sharing.collectAsStateWithLifecycle()
             val stayOnline by graph.soulseek.stayOnline.collectAsStateWithLifecycle()
             val savedUsername by graph.soulseek.savedUsername.collectAsStateWithLifecycle()
@@ -118,7 +123,7 @@ class MainActivity : ComponentActivity() {
 
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 graph.soulseek.onExternalFlow(false)
-                if (uri != null) graph.library.setFolder(uri)
+                if (uri != null) changeFolder(uri)
             }
             val downloadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 graph.soulseek.onExternalFlow(false)
@@ -130,7 +135,13 @@ class MainActivity : ComponentActivity() {
             }
             val sharePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 graph.soulseek.onExternalFlow(false)
-                if (uri != null) graph.soulseek.setSharedFolder(uri)
+                // A new shared folder starts unshared; one picked to follow a new music folder
+                // carries on sharing if sharing was on before.
+                val resume = resumeSharing; resumeSharing = false
+                if (uri != null) graph.scope.launch {
+                    graph.soulseek.setSharedFolder(uri).join()
+                    if (resume && graph.soulseek.sharedFolder.value == uri && graph.soulseek.session.value.connected) graph.soulseek.setSharing(true)
+                }
             }
             val autoEqPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) importAutoEq(uri)
@@ -195,6 +206,13 @@ class MainActivity : ComponentActivity() {
                     override fun retrySoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun pickDownloadFolder() { graph.soulseek.onExternalFlow(true); downloadPicker.launch(null) }
                     override fun pickSharedFolder() { graph.soulseek.onExternalFlow(true); sharePicker.launch(null) }
+                    override fun answerShareSwap(change: Boolean) {
+                        shareSwap.value = false
+                        if (!change) return
+                        // Its own picker, so Android asks for the shared folder's permission separately.
+                        resumeSharing = graph.soulseek.session.value.username?.let(graph.soulseek.preferences::sharing) ?: false
+                        pickSharedFolder()
+                    }
                     override fun setSoulseekSharing(enabled: Boolean) { graph.soulseek.setSharing(enabled) }
                     override fun setSoulseekStayOnline(enabled: Boolean) {
                         if (enabled && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -256,6 +274,8 @@ class MainActivity : ComponentActivity() {
                     soulseekConversation = selectedConversation,
                     downloadFolder = destination?.let(::folderLabel),
                     sharedFolder = sharedFolder?.let(::folderLabel),
+                    // Signed out since the question came up: don't ask.
+                    offerShareSwap = offerShareSwap && session.hasAccount,
                     soulseekSharing = sharing,
                     soulseekStayOnline = stayOnline,
                     soulseekShareConsent = shareConsent,
@@ -301,6 +321,30 @@ class MainActivity : ComponentActivity() {
         handleIncoming(intent)
     }
 
+
+    /**
+     * A music folder picked in Settings › Library, onboarding or the empty room. When it replaces
+     * another folder, the record on the deck (a folder record is always from the old folder) goes
+     * back first, since the old folder's read grant is released; the crate refills from the new
+     * folder; and, signed in to Soulseek with a folder shared, Settings › Library asks whether the
+     * shared folder should follow.
+     */
+    private fun changeFolder(uri: Uri) {
+        val old = graph.library.folder.value
+        if (old != null && old != uri && graph.deck.state.value.album?.source == Source.FOLDER) graph.deck.eject()
+        graph.library.setFolder(uri, keepGrant = ::grantStillUsed)
+        if (offersShareSwap(old?.toString(), uri.toString(), graph.soulseek.session.value.hasAccount, graph.soulseek.sharedFolder.value?.toString())) shareSwap.value = true
+    }
+
+    /**
+     * Whether a folder grant is still needed after the music folder moves away from it: it is the
+     * downloads folder or a shared folder (this account's, or one remembered for another account).
+     */
+    private fun grantStillUsed(uri: Uri): Boolean {
+        val s = uri.toString()
+        if (graph.soulseek.destination.value?.toString() == s || graph.soulseek.sharedFolder.value?.toString() == s) return true
+        return listOf("soulseek", "soulseek-setup").any { name -> getSharedPreferences(name, MODE_PRIVATE).all.values.any { it == s } }
+    }
 
     private fun folderLabel(uri: Uri): String = runCatching {
         androidx.documentfile.provider.DocumentFile.fromTreeUri(this, uri)?.name
@@ -428,3 +472,11 @@ class MainActivity : ComponentActivity() {
 
     private fun now(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
 }
+
+/**
+ * After the music folder moves from [old] to [new]: ask whether the Soulseek shared folder should
+ * follow only when the folder really changed (not the first pick, not the same folder again), the
+ * person is signed in to Soulseek (never offline or without an account) and something is shared.
+ */
+internal fun offersShareSwap(old: String?, new: String, signedIn: Boolean, shared: String?): Boolean =
+    old != null && old != new && signedIn && shared != null

@@ -1,23 +1,33 @@
 package app.runout.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.BuildConfig
@@ -25,9 +35,13 @@ import app.runout.BuildConfig
 /** "0.6", as the boards write it: the version without a trailing ".0". */
 private val VERSION = BuildConfig.VERSION_NAME.removeSuffix(".0")
 
+/** Where the credits' "0xs0m" goes. */
+internal const val CREDITS_URL = "https://somm.tf"
+
 /**
- * Settings, as the TE · Settings boards. [section] null is the list: four numbered rows standing at
- * the foot of the page, above the faint RUNOUT wordmark and the build line. Each row opens its own
+ * Settings, as the TE · Settings boards. [section] null is the list: the signal section (verdict,
+ * then track / runout / output and the tip) at the head of the page, and four numbered rows
+ * standing at its foot, above the faint RUNOUT wordmark and the build line. Each row opens its own
  * page (the head shows its name), which starts with "← settings".
  */
 @Composable
@@ -41,10 +55,16 @@ fun SettingsPanel(
     onOffline: () -> Unit,
 ) {
     if (section == null) {
+        var help by remember { mutableStateOf<TeHelp?>(null) }
         Column(
             Modifier.fillMaxWidth().fillPageHeight().testTag("panel:settings"),
-            verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Bottom),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
+            // What reaches your ears right now, moved here from Settings › Sound.
+            PageSection("01 signal") {
+                SignalChain(signalPath(state.output, state.sound), onVerdictHelp = { help = SoundHelp.VERDICT })
+            }
+            Spacer(Modifier.weight(1f))
             Column(Modifier.fillMaxWidth()) {
                 SettingsSection.entries.forEachIndexed { i, s ->
                     TeRow("%02d".format(i + 1), s.label.lowercase(), summary(s, state), { onSection(s) }, Modifier.testTag("settings:${s.name}"))
@@ -56,6 +76,7 @@ fun SettingsPanel(
                 BasicText("$VERSION · white / teal · flac only", style = Room.LabelQuiet)
             }
         }
+        TeHelpSheet(help) { help = null }
         return
     }
     BackHandler { onSection(null) }
@@ -68,14 +89,11 @@ fun SettingsPanel(
     ) {
         PageBackLink("← settings", "settings-back") { onSection(null) }
         when (section) {
-            SettingsSection.SOUND -> SoundPanel(state.sound, state.output, state.crackleOn, actions)
+            SettingsSection.SOUND -> SoundPanel(state.sound, state.crackleOn, actions)
             SettingsSection.ACCOUNT -> {
                 ConnectionNotice(state, actions, onSetup)
                 SoulseekAccountPanel(state, actions, onOffline, onSignIn = onSetup)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                    TeButton("downloads", onDownloads, Modifier.testTag("settings-downloads"), kind = KeyKind.OUTLINE)
-                    TeButton("review soulseek setup", onSetup, Modifier.testTag("settings-setup"), kind = KeyKind.OUTLINE)
-                }
+                TeButton("downloads", onDownloads, Modifier.testTag("settings-downloads"), kind = KeyKind.OUTLINE)
             }
             SettingsSection.LIBRARY -> LibraryPage(state, actions)
             SettingsSection.ABOUT -> AboutPage()
@@ -100,8 +118,9 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
 
 /**
  * Settings › Library: 01 music folder (what a record is, the scan in an ink-ruled stats strip, change
- * folder and rescan) and 02 repair local albums (the black repair key and, after a repair, the files
- * that couldn't be read in a red-ruled box, each with its reason).
+ * folder and rescan, and after a change while signed in, whether the shared folder should follow)
+ * and 02 repair local albums (the black repair key and, after a repair, the files that couldn't be
+ * read in a red-ruled box, each with its reason).
  */
 @Composable
 private fun LibraryPage(state: RoomState, actions: RoomActions) {
@@ -123,8 +142,34 @@ private fun LibraryPage(state: RoomState, actions: RoomActions) {
                 TeButton("choose folder", actions::pickFolder, Modifier.testTag("settings-change-folder"))
             }
         }
+        if (state.offerShareSwap) ShareSwapNote(state.sharedFolder, actions)
     }
     if (state.hasFolder) RepairLibrary(state, actions)
+}
+
+/**
+ * Asked once after the music folder changes while signed in to Soulseek: a grey tile with an orange
+ * lamp, "share the new folder too?", what is shared now, and two keys. The new shared folder goes
+ * through its own picker, so Android asks for its permission separately.
+ */
+@Composable
+private fun ShareSwapNote(shared: String?, actions: RoomActions) {
+    Column(
+        Modifier.fillMaxWidth().background(Room.Surface).padding(16.dp).testTag("share-swap"),
+        verticalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(8.dp).background(Room.Signal))
+            BasicText("share the new folder too?", style = Room.Strong)
+        }
+        BasicText(
+            "your music folder changed. soulseek still shares ${shared?.let { "“${it.lowercase()}”" } ?: "your old folder"}. " +
+                "choose a new shared folder and android asks for it on its own.",
+            style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
+        )
+        TeButton("choose new shared folder", { actions.answerShareSwap(true) }, Modifier.fillMaxWidth().testTag("share-swap-change"))
+        TeButton("keep sharing the old one", { actions.answerShareSwap(false) }, Modifier.fillMaxWidth().testTag("share-swap-keep"), kind = KeyKind.OUTLINE)
+    }
 }
 
 /** The scan as a TE stats strip, ruled in ink above and below; unreadable files count in red. */
@@ -193,7 +238,7 @@ private const val SHOWN_BROKEN = 50
 
 /**
  * Settings › About: the facts at the foot of the page, one per hairline row (an 88 dp grey key and
- * the 10/400 text), and under an ink rule the version in 33/700 and the build line.
+ * the 10/400 text), the credits last, and under an ink rule the version in 33/700 and the build line.
  */
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
@@ -211,6 +256,21 @@ private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
             Row(Modifier.fillMaxWidth().hairlineTop().padding(vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 BasicText(key, style = Room.LabelQuiet, modifier = Modifier.width(88.dp))
                 BasicText(value, style = Room.Label.copy(lineHeight = 15.sp), modifier = Modifier.weight(1f))
+            }
+        }
+        // Who made it: "0xs0m" in blue opens somm.tf in the browser.
+        val context = LocalContext.current
+        Row(Modifier.fillMaxWidth().hairlineTop().padding(vertical = 11.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            BasicText("credits", style = Room.LabelQuiet, modifier = Modifier.width(88.dp))
+            Row(Modifier.weight(1f)) {
+                BasicText("fuze2k and ", style = Room.Label.copy(lineHeight = 15.sp))
+                BasicText(
+                    "0xs0m",
+                    style = Room.Label.copy(color = Room.Accent, lineHeight = 15.sp),
+                    modifier = Modifier.testTag("credits-link").semantics { contentDescription = "0xs0m, somm.tf" }.overhangTap(min = 32.dp) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(CREDITS_URL))) }
+                    },
+                )
             }
         }
     }

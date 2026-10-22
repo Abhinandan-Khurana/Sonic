@@ -68,7 +68,8 @@ data class SleeveSlot(val rect: Rect, val size: Dp)
  */
 data class CrateGeometry(val sleeveOfWidth: Float, val sleeveOfHeight: Float, val topOfHeight: Float) {
     companion object {
-        val Portrait = CrateGeometry(151.3f / 412f, 151.3f / 300.7f, 96.7f / 300.7f)
+        // The owner asked for bigger sleeves sitting a little lower than the board's 151 at 97.
+        val Portrait = CrateGeometry(0.42f, 0.56f, 0.30f)
         val Landscape = CrateGeometry(130f / 412.5f, 130f / 168f, 10f / 168f)
     }
 }
@@ -96,6 +97,8 @@ fun Crate(
     initialIndex: Int = 0,
     /** Dig to this record (a record flying back from the deck needs its sleeve in front). */
     scrollTo: String? = null,
+    /** Put the pulled record back in its sleeve before digging to another one. */
+    putBack: suspend () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -117,6 +120,7 @@ fun Crate(
         val sleeve = min(maxWidth.value * geometry.sleeveOfWidth, maxHeight.value * geometry.sleeveOfHeight).dp
         val sleevePx = with(density) { sleeve.toPx() }
         val top = maxHeight * geometry.topOfHeight
+        val crateHeight = maxHeight
         val stepPx = sleevePx * 0.55f
 
         Box(
@@ -200,7 +204,11 @@ fun Crate(
                                 if (isFront) {
                                     if (pulledId == album.id) onPutBack() else onPull(album)
                                 } else {
-                                    scope.launch { pos.animateTo(i.toFloat(), spring(dampingRatio = 0.86f, stiffness = 160f)) }
+                                    // A record still out of its sleeve goes back first, then the crate slides.
+                                    scope.launch {
+                                        if (pulledId != null) putBack()
+                                        pos.animateTo(i.toFloat(), spring(dampingRatio = 0.86f, stiffness = 160f))
+                                    }
                                 }
                             },
                     ) {
@@ -215,7 +223,8 @@ fun Crate(
                 Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = top + sleeve)
-                    .size(sleeve, sleeve * 0.326f)
+                    // A third of a sleeve deep, or what's left of the crate under the floor line.
+                    .size(sleeve, minOf(sleeve * 0.326f, (crateHeight - top - sleeve).coerceAtLeast(0.dp)))
                     .clipToBounds()
                     .graphicsLayer { alpha = 0.3f * (1f - (abs(center - frontIndex) * 2f).coerceIn(0f, 1f)) },
             ) {

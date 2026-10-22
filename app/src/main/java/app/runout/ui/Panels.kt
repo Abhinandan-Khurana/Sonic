@@ -76,7 +76,6 @@ import app.runout.drops.DropsRepository
 import app.runout.model.Album
 import app.runout.model.Licences
 import app.runout.model.Source
-import app.runout.sound.OutputStatus
 import app.runout.sound.Presets
 import app.runout.sound.ReplayGainMode
 import app.runout.sound.SoundSettings
@@ -196,8 +195,11 @@ internal fun PageSection(label: String, modifier: Modifier = Modifier, content: 
 // ---------------------------------------------------------------------------------------------
 // Sound
 
-/** The help panels behind the Sound page's "?" squares, worded as on the TE · Help panels board. */
-private object SoundHelp {
+/**
+ * The help panels behind the Sound page's "?" squares, worded as on the TE · Help panels board.
+ * The verdict's opens from the signal section at the head of the Settings list.
+ */
+internal object SoundHelp {
     val PURE = TeHelp("help · sound › output", "pure", listOf(
         "pure sends each file to the output untouched: no eq, no replaygain, no limiter, no warmth.",
         "use it with a usb dac or amp that does its own shaping. the other sound settings rest while pure is on.",
@@ -231,22 +233,22 @@ private object SoundHelp {
 }
 
 /**
- * Settings › Sound, as the TE · Settings · Sound board: 01 signal (the chain), 02 output, 03
- * equaliser, 04 loudness and 05 the deck (crackle), 22 dp apart. Each "?" opens its help panel.
+ * Settings › Sound, as the TE · Settings · Sound board less its signal section (that now heads the
+ * Settings list): 01 output (crackle first), 02 equaliser and 03 loudness, 22 dp apart. Each "?"
+ * opens its help panel.
  */
 @Composable
-fun SoundPanel(s: SoundSettings, output: OutputStatus, crackleOn: Boolean, actions: RoomActions) {
+fun SoundPanel(s: SoundSettings, crackleOn: Boolean, actions: RoomActions) {
     var help by remember { mutableStateOf<TeHelp?>(null) }
     val dsp = !s.pure
     Column(Modifier.fillMaxWidth().testTag("panel:sound"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        PageSection("01 signal") {
-            SignalChain(signalPath(output, s), onVerdictHelp = { help = SoundHelp.VERDICT })
-        }
-        PageSection("02 output") {
+        PageSection("01 output") {
+            // Crackle moved here from the home screen: it's part of how the deck sounds.
+            ToggleRow("Crackle", "Surface noise under the music.", crackleOn, { actions.toggleCrackle() })
             HelpToggleRow("Pure", "The music, untouched.", s.pure, { on -> actions.updateSound { it.copy(pure = on) } }) { help = SoundHelp.PURE }
             HelpToggleRow("Hi-res output", "Each file at its own sample rate.", s.hiResOutput, { on -> actions.updateSound { it.copy(hiResOutput = on) } }) { help = SoundHelp.HI_RES }
         }
-        PageSection("03 equaliser") {
+        PageSection("02 equaliser") {
             HelpToggleRow(
                 "EQ",
                 if (s.useParametric) "AutoEq headphone profile · ${s.parametric.size} filters" else "10-band graphic EQ · ${s.presetName}",
@@ -280,12 +282,12 @@ fun SoundPanel(s: SoundSettings, output: OutputStatus, crackleOn: Boolean, actio
                 if (pre < -0.05f) "automatic headroom ${"%.1f".format(pre)} db, so boosted bands never clip" else "no boost, no headroom needed",
                 style = Room.LabelQuiet.copy(lineHeight = 15.sp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                FlatLink("import autoeq…", actions::importAutoEq, tag = "import-autoeq", enabled = dsp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                TeButton("import autoeq…", actions::importAutoEq, Modifier.testTag("import-autoeq"), kind = KeyKind.OUTLINE, enabled = dsp)
                 if (s.useParametric) FlatLink("use graphic eq", { actions.updateSound { it.copy(useParametric = false, presetName = "Custom") } }, tag = "use-graphic-eq", enabled = dsp)
             }
         }
-        PageSection("04 loudness") {
+        PageSection("03 loudness") {
             Column(
                 Modifier.fillMaxWidth().alpha(if (dsp) 1f else 0.4f).hairlineTop().padding(vertical = 11.dp),
                 verticalArrangement = Arrangement.spacedBy(11.dp),
@@ -298,10 +300,6 @@ fun SoundPanel(s: SoundSettings, output: OutputStatus, crackleOn: Boolean, actio
             }
             HelpToggleRow("Limiter", "Catches peaks.", s.limiter, { on -> actions.updateSound { it.copy(limiter = on) } }, enabled = dsp) { help = SoundHelp.LIMITER }
             HelpToggleRow("Warmth", "Like a warm cartridge.", s.warmth, { on -> actions.updateSound { it.copy(warmth = on) } }, enabled = dsp) { help = SoundHelp.WARMTH }
-        }
-        // Crackle moved here from the home screen: it's part of how the deck sounds.
-        PageSection("05 the deck") {
-            ToggleRow("Crackle", "Surface noise under the music.", crackleOn, { actions.toggleCrackle() })
         }
     }
     TeHelpSheet(help) { help = null }
@@ -483,7 +481,7 @@ fun DropsPanel(
         val ready = drops as? DropState.Ready
         val item = ready?.week?.items?.firstOrNull { it.identifier == open }
         if (item != null) {
-            DropPreview(item, isClaimed = item.identifier in claimed, progress = claiming[item.identifier], left = left, canClaim = left > 0 && signedIn, actions = actions) { open = null }
+            DropPreview(ready.week.items.indexOf(item) + 1, item, isClaimed =item.identifier in claimed, progress = claiming[item.identifier], left = left, canClaim = left > 0 && signedIn, actions = actions) { open = null }
             return@Column
         }
         if (!signedIn) {
@@ -578,8 +576,7 @@ private fun DropSleeve(number: Int, item: DropItem, isClaimed: Boolean, progress
         verticalArrangement = Arrangement.spacedBy(11.dp),
     ) {
         // 140 of the tile's 151 dp on the 412 dp board, square.
-        Box(Modifier.fillMaxWidth(140f / 151f).aspectRatio(1f).background(fallbackColorFor(item.title))) {
-            cover?.let { Image(it, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        DropCover(number, item, cover, Modifier.fillMaxWidth(140f / 151f).aspectRatio(1f)) {
             if (progress != null) ProgressLine(progress, Modifier.align(Alignment.BottomCenter).padding(6.dp))
         }
         Row(Modifier.fillMaxWidth()) {
@@ -604,7 +601,7 @@ private fun DropSleeve(number: Int, item: DropItem, isClaimed: Boolean, progress
  * listen, under #E5E5E5 hairlines; then the note that listening uses no claim.
  */
 @Composable
-private fun DropPreview(item: DropItem, isClaimed: Boolean, progress: Float?, left: Int, canClaim: Boolean, actions: RoomActions, onBack: () -> Unit) {
+private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progress: Float?, left: Int, canClaim: Boolean, actions: RoomActions, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler { actions.listen(null); onBack() }
     DisposableEffect(item.identifier) { onDispose { actions.listen(null) } }
     val cover by produceState<ImageBitmap?>(null, item.identifier) { value = actions.dropCover(item)?.let { CoverCache.load(it) } }
@@ -618,9 +615,7 @@ private fun DropPreview(item: DropItem, isClaimed: Boolean, progress: Float?, le
     Column(Modifier.fillMaxWidth().testTag("drop-preview"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         PageBackLink("← all drops", "drops-back") { actions.listen(null); onBack() }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.size(132.dp).background(fallbackColorFor(item.title))) {
-                cover?.let { Image(it, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-            }
+            DropCover(number, item, cover, Modifier.size(132.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 BasicText(item.title.uppercase(), style = Room.Heading.copy(fontWeight = FontWeight.Bold, lineHeight = 19.sp), maxLines = 4, overflow = TextOverflow.Ellipsis)
                 listOfNotNull(item.creator, item.year?.toString()).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
@@ -688,9 +683,23 @@ private fun DropPreview(item: DropItem, isClaimed: Boolean, progress: Float?, le
     }
 }
 
-private fun fallbackColorFor(title: String): Color {
-    val palette = listOf(0xFFE8E4FF, 0xFFDDEBFF, 0xFFFFE3EC, 0xFFE2F6EC, 0xFFFFF1D6, 0xFFE9E9EE)
-    return Color(palette[abs(title.hashCode()) % palette.size])
+/**
+ * A drop's sleeve: while its cover loads, or when it has none, a dot-matrix record on the #F5F5F5
+ * tile with the drop's number in its corner; the real cover fades in over it when it arrives.
+ */
+@Composable
+private fun DropCover(number: Int, item: DropItem, cover: ImageBitmap?, modifier: Modifier, overlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {}) {
+    val shown by androidx.compose.animation.core.animateFloatAsState(
+        if (cover != null) 1f else 0f, androidx.compose.animation.core.tween(400), label = "drop-cover",
+    )
+    Box(modifier.background(Room.Surface)) {
+        if (shown < 1f) Box(Modifier.fillMaxSize().testTag("drop-placeholder:${item.identifier}")) {
+            DotVinyl(Modifier.fillMaxSize().padding(11.dp))
+            BasicText("%02d".format(number), style = Room.Label, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+        }
+        cover?.let { Image(it, item.title, Modifier.fillMaxSize().alpha(shown), contentScale = ContentScale.Crop) }
+        overlay()
+    }
 }
 
 fun formatLength(ms: Long): String {

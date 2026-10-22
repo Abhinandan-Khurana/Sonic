@@ -82,6 +82,21 @@ class Slice0ComposerTest {
         assertEquals(0, actions.log.count { it.startsWith("soulseekMessage:") })
     }
 
+    @Test fun `the keyboard's send key sends the message`() {
+        val actions = RecordingActions()
+        open(actions)
+        compose.onNodeWithTag("field:Private message").performTextInput("Hi from the keyboard")
+        compose.onNodeWithTag("field:Private message").performImeAction()
+        assertEquals(listOf("soulseekMessage:fixture-peer:Hi from the keyboard"), actions.log.filter { it.startsWith("soulseekMessage:") })
+    }
+
+    @Test fun `an empty composer's send key sends nothing`() {
+        val actions = RecordingActions()
+        open(actions)
+        compose.onNodeWithTag("field:Private message").performImeAction()
+        assertEquals(0, actions.log.count { it.startsWith("soulseekMessage:") })
+    }
+
     @Test fun `4096 ASCII bytes remain valid without silent 4000 character truncation`() {
         open()
         val text = "a".repeat(4096)
