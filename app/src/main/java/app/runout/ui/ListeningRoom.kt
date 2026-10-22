@@ -185,6 +185,12 @@ data class RoomState(
     val coverLookupEnabled: Boolean = false,
     val coverLookupNoticePending: Boolean = false,
     val turtleMode: Boolean = false,
+    /** Uploads only on Wi-Fi or Ethernet. */
+    val soulseekWifiOnly: Boolean = true,
+    /** How many people can download from you at once. */
+    val soulseekUploadSlots: Int = app.runout.soulseek.SoulseekPreferences.DEFAULT_UPLOAD_SLOTS,
+    /** Sharing is on but held back: Wi-Fi only, and the phone is on mobile data. */
+    val soulseekWaitingForWifi: Boolean = false,
 
 )
 
@@ -260,6 +266,8 @@ interface RoomActions : DeckActions {
     fun answerShareSwap(change: Boolean) {}
     fun setSoulseekSharing(enabled: Boolean) {}
     fun setSoulseekStayOnline(enabled: Boolean) {}
+    fun setSoulseekWifiOnly(enabled: Boolean) {}
+    fun setSoulseekUploadSlots(slots: Int) {}
     fun addSoulseekContact(username: String) {}
     fun openSoulseekConversation(username: String) {}
     fun closeSoulseekConversation() {}

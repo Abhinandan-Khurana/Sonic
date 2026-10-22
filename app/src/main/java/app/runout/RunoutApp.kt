@@ -47,11 +47,17 @@ class RunoutApp : Application() {
             override fun onStop(owner: LifecycleOwner) { graph.soulseek.onForegroundChanged(false) }
         })
         val connectivity = getSystemService(ConnectivityManager::class.java)
+        // Wi-Fi or Ethernet, for Settings › soulseek › share on Wi-Fi only.
+        fun wifi(caps: NetworkCapabilities?) = caps != null &&
+            (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
         connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { graph.soulseek.onNetworkChanged(true) }
-            override fun onLost(network: Network) { graph.soulseek.onNetworkChanged(connectivity.activeNetwork != null) }
+            override fun onAvailable(network: Network) { graph.soulseek.onNetworkChanged(true, wifi(connectivity.getNetworkCapabilities(network))) }
+            override fun onLost(network: Network) {
+                val active = connectivity.activeNetwork
+                graph.soulseek.onNetworkChanged(active != null, wifi(active?.let(connectivity::getNetworkCapabilities)))
+            }
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) graph.soulseek.onNetworkChanged(true)
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) graph.soulseek.onNetworkChanged(true, wifi(caps))
             }
         })
     }

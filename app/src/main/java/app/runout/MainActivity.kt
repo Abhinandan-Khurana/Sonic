@@ -111,6 +111,11 @@ class MainActivity : ComponentActivity() {
             val shareConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::sharing) ?: false }
             val backgroundConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::background) ?: false }
             val turtleMode = remember(settingsRevision) { graph.soulseek.preferences.turtle() }
+            val wifiOnly = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::wifiOnly) ?: true }
+            val uploadSlots = remember(settingsRevision,session.username) {
+                session.username?.let(graph.soulseek.preferences::uploadSlots) ?: app.runout.soulseek.SoulseekPreferences.DEFAULT_UPLOAD_SLOTS
+            }
+            val waitingForWifi by graph.soulseek.waitingForWifi.collectAsStateWithLifecycle()
             val discovery by graph.discovery.state.collectAsStateWithLifecycle()
             val discoveryQuery by graph.discovery.query.collectAsStateWithLifecycle()
             val coverLookupEnabled by graph.library.coverLookupEnabled.collectAsStateWithLifecycle()
@@ -206,6 +211,8 @@ class MainActivity : ComponentActivity() {
                     override fun pauseAllDownloads() { graph.soulseek.pauseAll() }
                     override fun resumeAllDownloads() { graph.soulseek.resumeAll() }
                     override fun setTurtleMode(enabled: Boolean) { graph.soulseek.setTurtle(enabled) }
+                    override fun setSoulseekWifiOnly(enabled: Boolean) { graph.soulseek.setWifiOnly(enabled) }
+                    override fun setSoulseekUploadSlots(slots: Int) { graph.soulseek.setUploadSlots(slots) }
                     override fun resumeSoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun cancelSoulseekTransfer(id: String) { graph.soulseek.cancel(id) }
                     override fun removeSoulseekTransfer(id: String) { graph.soulseek.remove(id) }
@@ -302,6 +309,9 @@ class MainActivity : ComponentActivity() {
                     coverLookupEnabled = coverLookupEnabled,
                     coverLookupNoticePending = coverLookupNoticePending,
                     turtleMode = turtleMode,
+                    soulseekWifiOnly = wifiOnly,
+                    soulseekUploadSlots = uploadSlots,
+                    soulseekWaitingForWifi = waitingForWifi,
                 ),
                 actions = actions,
             )

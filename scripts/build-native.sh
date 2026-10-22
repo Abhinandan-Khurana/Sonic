@@ -4,7 +4,8 @@ runout_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 runout_cargo="${CARGO:-$HOME/.cargo/bin/cargo}"
 runout_rustup="${RUSTUP:-$HOME/.cargo/bin/rustup}"
 runout_ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-$HOME/.local/share/runout-build/android-ndk-r27d}}"
-runout_toolchain="$runout_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+case "$(uname -s)" in Darwin) runout_host=darwin-x86_64 ;; *) runout_host=linux-x86_64 ;; esac
+runout_toolchain="$runout_ndk/toolchains/llvm/prebuilt/$runout_host/bin"
 runout_output="${RUNOUT_JNI_OUTPUT:-$runout_root/app/build/generated/soulseekJni}"
 if [[ ! -x "$runout_cargo" || ! -x "$runout_toolchain/aarch64-linux-android28-clang" ]]; then
     echo "Rust 1.91.0 and Android NDK r27d or newer are required. Set CARGO and ANDROID_NDK_HOME." >&2

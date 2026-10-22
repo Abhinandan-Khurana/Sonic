@@ -124,6 +124,11 @@ class SoulseekRepository(
     val sharing = _sharing.asStateFlow()
     private val _stayOnline = MutableStateFlow(false)
     val stayOnline = _stayOnline.asStateFlow()
+    /** On Wi-Fi or Ethernet right now (assumed until Android says otherwise). */
+    @Volatile private var onWifi = true
+    /** Sharing is on, but held back because Wi-Fi only is on and the phone is on mobile data. */
+    private val _waitingForWifi = MutableStateFlow(false)
+    val waitingForWifi = _waitingForWifi.asStateFlow()
     val savedUsername = connection.savedUsername
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
@@ -429,6 +434,8 @@ class SoulseekRepository(
             val epoch = generation
             if (shareRevision.get() != revision) return@work
             preferences.setSharing(owner, enabled)
+            _waitingForWifi.value = false
+            if (enabled && offWifi(owner)) { holdForWifi(); return@work }
             if (!enabled) { _sharing.value = false; shares.clear(); if (session.value.signedIn) command("shares") { put("files", JSONArray()) }; _uploads.value = emptyList(); updateServices(); return@work }
             requireSignedIn()
             val tree = sharedFolder.value?.let { DocumentFile.fromTreeUri(context, it) } ?: throw IllegalStateException("Choose a folder to share first.")
@@ -460,6 +467,39 @@ class SoulseekRepository(
                 try { command("shares") { put("files", manifest) } } catch (e: Throwable) { _sharing.value = false; shares.clear(); throw e }
             }
         }
+    }
+    /** Wi-Fi only is on and the phone is on mobile data. */
+    private fun offWifi(owner: String) = preferences.wifiOnly(owner) && !onWifi
+    /** Nothing new is offered while off Wi-Fi; an upload already running finishes. */
+    private suspend fun holdForWifi() {
+        shareRevision.incrementAndGet(); _sharing.value = false; shares.clear()
+        _waitingForWifi.value = true
+        if (session.value.signedIn) runCatching { command("shares") { put("files", JSONArray()) } }.onFailure { if (it is CancellationException) throw it }
+    }
+    /** After a network change or a change to Wi-Fi only: share or hold back to match. */
+    private suspend fun applyWifiRule() {
+        val owner = session.value.username ?: return
+        if (!preferences.sharing(owner)) { _waitingForWifi.value = false; return }
+        if (offWifi(owner)) { if (!_waitingForWifi.value) holdForWifi() }
+        else if (_waitingForWifi.value) {
+            _waitingForWifi.value = false
+            if (session.value.connected && preferences.sharedFolder(owner) != null) setSharing(true)
+        }
+    }
+    fun setWifiOnly(enabled: Boolean): Job = work {
+        val owner = session.value.username ?: error("Sign in before choosing how to share.")
+        preferences.setWifiOnly(owner, enabled)
+        applyWifiRule()
+    }
+    /** How many people can download from you at once; applied now if connected, else at sign-in. */
+    fun setUploadSlots(slots: Int): Job = work {
+        val owner = session.value.username ?: error("Sign in before choosing an upload limit.")
+        preferences.setUploadSlots(owner, slots)
+        if (session.value.connected) applyUploadSlots(owner)
+    }
+    private suspend fun applyUploadSlots(owner: String) {
+        runCatching { command("upload_slots") { put("slots", preferences.uploadSlots(owner)) } }
+            .onFailure { if (it is CancellationException) throw it }
     }
     private data class SharedFile(val uri: Uri, val name: String, val size: Long)
     private fun openSharedFile(key: String): Int {
@@ -538,7 +578,12 @@ class SoulseekRepository(
         runCatching { resumeOne(id) }.onFailure { if (it is CancellationException) throw it }
     }
     fun onExternalFlow(active: Boolean) { connection.externalFlow(active) }
-    fun onNetworkChanged(available: Boolean): Job = work { connection.networkChanged(available) }
+    fun onNetworkChanged(available: Boolean, wifi: Boolean = onWifi): Job = work {
+        val changed = wifi != onWifi
+        onWifi = wifi
+        connection.networkChanged(available)
+        if (changed) applyWifiRule()
+    }
     private fun hasActiveTransfers() = archiveJobs.isNotEmpty() || transfers.value.any { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) } || uploads.value.any { it.state == "uploading" || it.state == "queued" }
     private fun startService(type: Class<*>) { ContextCompat.startForegroundService(context, Intent(context, type)) }
     private fun stopService(type: Class<*>) { context.stopService(Intent(context, type)) }
@@ -573,6 +618,7 @@ class SoulseekRepository(
                                 if (app.runout.BuildConfig.DEBUG) android.util.Log.d("RunoutSession", "contact watch rejected")
                             }
                     }
+                    applyUploadSlots(owner)
                     if (preferences.sharing(owner) && preferences.sharedFolder(owner) != null) setSharing(true)
                     recoverPending()
                 }

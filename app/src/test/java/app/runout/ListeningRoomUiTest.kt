@@ -249,6 +249,23 @@ class ListeningRoomUiTest {
         compose.onAllNodesWithText("cc by 4.0", substring = true).onFirst().assertExists()
     }
 
+    @Test
+    fun `soulseek settings hold wi-fi only and the upload limit`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setSoulseekWifiOnly(enabled: Boolean) { calls += "wifi:$enabled" }
+            override fun setSoulseekUploadSlots(slots: Int) { calls += "slots:$slots" }
+        }
+        val s = state().copy(soulseekSession = SoulseekSession(SoulseekConnection.CONNECTED, "abhi", authenticated = true), soulseekShareConsent = true, soulseekWaitingForWifi = true)
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
+        compose.onNodeWithTag("toggle:Share on Wi-Fi only").performScrollTo().performClick()
+        compose.onNodeWithTag("upload-slots:3").performScrollTo().performClick()
+        assertEquals(listOf("wifi:false", "slots:3"), calls)
+        compose.onNodeWithTag("sharing-waiting-wifi").performScrollTo().assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/soulseek_upload_settings.png")
+    }
+
     private fun broken(id: String, user: String, name: String, state: SoulseekTransferState, error: String, kind: FailureKind, recovery: Recovery? = null, retryAt: Long? = null) =
         SoulseekTransfer(id, user, "Music/Vela Park - Night Drive (2023)/$name", 1_000, state = state, error = error, albumId = albums.first { it.title == "Night Drive" }.id, failure = kind, recovery = recovery, retryAt = retryAt)
 

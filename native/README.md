@@ -31,6 +31,7 @@ Commands have an `op` field and return `{ "ok": true }` or `{ "ok": false, "erro
 | ack | incoming server message id |
 | contact | exact username |
 | shares | files array: opaque key, virtual FLAC path, expected size |
+| upload_slots | slots, 1 to 10: how many peers download from us at once (2 after login until set) |
 
 Events use `type`: session, search_batch, search_done, browse_result, transfer, message, message_sent, presence, upload, shares, or error. Transfer events carry the host id, state, bytes, total, speed, optional queue position, staged path and error. Message timestamps are server Unix seconds and incoming IDs are acknowledged only by an explicit host `ack` after persistence. Polling never acknowledges a message. Commands and polling run off Android's main thread.
 

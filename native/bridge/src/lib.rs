@@ -297,6 +297,12 @@ impl Runtime {
                 self.client()?.watch_user(&username).map_err(|e|e.to_string())?;
                 lock(&self.contacts).insert(username,None);
             }
+            // How many peers may download from us at once (the host's upload limit).
+            "upload_slots" => {
+                let client = self.client()?;
+                let slots = value["slots"].as_u64().filter(|n| (1..=10).contains(n)).ok_or("Uploads at once must be 1 to 10")?;
+                client.set_upload_slots(slots as usize);
+            }
             "shares" => {
                 let client = self.client()?;
                 let files = value["files"].as_array().ok_or("Missing shared files")?;

@@ -100,6 +100,13 @@ private val HelpSharing = TeHelp(
         "only that folder is shared, never the rest of your phone. sharing helps your downloads move faster.",
     ),
 )
+private val HelpWifiOnly = TeHelp(
+    "help · soulseek › wi-fi only", "share on wi-fi only",
+    listOf(
+        "on mobile data, nobody can start a download from you. an upload that's already running is allowed to finish.",
+        "sharing picks up again by itself when you're back on wi-fi or ethernet.",
+    ),
+)
 private val HelpBackground = TeHelp(
     "help · soulseek › background", "stay online in the background",
     listOf(
@@ -252,12 +259,31 @@ fun SoulseekAccountPanel(state: RoomState, actions: RoomActions, onOffline: () -
                 enabled = session.hasAccount && (state.soulseekShareConsent || (session.connected && state.sharedFolder != null)),
             ) { help = HelpSharing }
             HelpToggle(
+                "Share on Wi-Fi only",
+                "Uploads stop on mobile data and start again on Wi-Fi.",
+                state.soulseekWifiOnly, actions::setSoulseekWifiOnly,
+                enabled = session.hasAccount,
+            ) { help = HelpWifiOnly }
+            Column(
+                Modifier.fillMaxWidth().alpha(if (session.hasAccount) 1f else 0.4f).hairlineTop().padding(vertical = 16.dp).testTag("upload-slots"),
+                verticalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicText("uploads at once", style = Room.Text)
+                    BasicText("how many people can download from you at the same time. fewer is easier on a slow connection.", style = Room.LabelQuiet)
+                }
+                Segments(app.runout.soulseek.SoulseekPreferences.UPLOAD_SLOT_CHOICES, state.soulseekUploadSlots, { "$it" }, tag = { "upload-slots:$it" }) {
+                    if (session.hasAccount) actions.setSoulseekUploadSlots(it)
+                }
+            }
+            HelpToggle(
                 "Stay online in the background",
                 "Keeps private messages and sharing available with an ongoing notification you can disconnect from.",
                 state.soulseekBackgroundConsent, actions::setSoulseekStayOnline,
                 enabled = session.hasAccount && (state.soulseekBackgroundConsent || session.connected),
             ) { help = HelpBackground }
-            if(state.soulseekShareConsent && !state.soulseekSharing) BasicText("sharing is paused. it resumes after connection and folder checks succeed.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
+            if (state.soulseekShareConsent && state.soulseekWaitingForWifi) BasicText("sharing is paused until you're on wi-fi.", style = Room.LabelQuiet.copy(lineHeight = 15.sp), modifier = Modifier.testTag("sharing-waiting-wifi"))
+            else if(state.soulseekShareConsent && !state.soulseekSharing) BasicText("sharing is paused. it resumes after connection and folder checks succeed.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
             if(state.soulseekBackgroundConsent && !state.soulseekStayOnline) BasicText("background mode is paused. check notification permission and reconnect to resume.", style = Room.LabelQuiet.copy(lineHeight = 15.sp))
         }
         // The one warning on the page: amber, a bold "!", and its "?".

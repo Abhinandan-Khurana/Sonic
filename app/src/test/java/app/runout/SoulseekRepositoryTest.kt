@@ -376,6 +376,42 @@ class SoulseekRepositoryTest {
         await("failures cleared") { repo.transfers.value.map { it.id } == listOf("done") }
     }
 
+    private fun sharedFiles() = transport.commands.filter { it.optString("op") == "shares" }.map { it.getJSONArray("files").length() }
+
+    @Test fun `with wi-fi only, sharing waits on mobile data and comes back on wi-fi`() = runBlocking {
+        login()
+        val folder = destination()
+        File(folder, "01 Opening.flac").writeBytes(flac)
+        repo.setSharedFolder(FolderProvider.install(folder, allowWrite = true)).join()
+        assertTrue("on by default", repo.preferences.wifiOnly("runout-test"))
+        repo.onNetworkChanged(true, wifi = false).join()
+        repo.setSharing(true).join()
+        assertFalse(repo.sharing.value)
+        assertTrue(repo.waitingForWifi.value)
+        assertTrue("your choice to share is kept", repo.preferences.sharing("runout-test"))
+        assertEquals("nothing offered on mobile data", 0, sharedFiles().last())
+        repo.onNetworkChanged(true, wifi = true).join()
+        await("shared again on wi-fi") { repo.sharing.value }
+        assertFalse(repo.waitingForWifi.value)
+        assertEquals(1, sharedFiles().last())
+        repo.onNetworkChanged(true, wifi = false).join()
+        await("held back again") { !repo.sharing.value && repo.waitingForWifi.value }
+        assertEquals(0, sharedFiles().last())
+        // Wi-Fi only off: mobile data shares too.
+        repo.setWifiOnly(false).join()
+        await("shared on mobile data") { repo.sharing.value }
+        assertEquals(1, sharedFiles().last())
+    }
+
+    @Test fun `the upload limit reaches the client at sign-in and when you change it`() = runBlocking {
+        login()
+        val slots = { transport.commands.filter { it.optString("op") == "upload_slots" }.map { it.getInt("slots") } }
+        await("default at sign-in") { slots() == listOf(SoulseekPreferences.DEFAULT_UPLOAD_SLOTS) }
+        repo.setUploadSlots(5).join()
+        assertEquals(listOf(SoulseekPreferences.DEFAULT_UPLOAD_SLOTS, 5), slots())
+        assertEquals(5, repo.preferences.uploadSlots("runout-test"))
+    }
+
     private fun transferEvent(id: String, state: String, error: String? = null) = JSONObject().put("type", "transfer").put("id", id)
         .put("state", state).put("bytes", 10).put("queuePosition", JSONObject.NULL).put("error", error ?: JSONObject.NULL)
     private fun downloads(id: String? = null) = transport.commands.filter { it.optString("op") == "download" && (id == null || it.optString("id") == id) }

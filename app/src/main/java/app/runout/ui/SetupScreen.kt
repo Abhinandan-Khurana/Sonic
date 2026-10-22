@@ -253,7 +253,7 @@ private fun StepPage(
 
 /** The step pictures: up to 240 dp square, and left out below 96 dp rather than shrinking the type. */
 private val STEP_PICTURE_MAX = 240.dp
-private val STEP_PICTURE_MIN = 96.dp
+private val STEP_PICTURE_MIN = 64.dp
 
 /**
  * The actions at the foot, 22 / 33 in and 16 apart on the board. The text links below the key
@@ -530,9 +530,37 @@ private fun ShareStep(state: RoomState, actions: RoomActions, onDone: () -> Unit
             "the folder you choose becomes public: anyone on soulseek can browse it and download its flac files. nothing else on your phone is shared.",
         )
         PublicNote()
+        ShareTradeoffs(state.soulseekWifiOnly, state.soulseekUploadSlots)
     }) {
         StepKey("share a folder", { asked = true; actions.pickSharedFolder() }, "setup-share", Modifier.fillMaxWidth(), icon = { drawCaution() })
         TextKey("skip", { actions.setSoulseekSharing(false); onDone() }, "setup-share-skip")
+    }
+}
+
+/**
+ * What changes either way, under the warning: what skipping costs you on Soulseek, and what
+ * sharing costs your phone. Two 10/400 grey labels over 12/400 body lines.
+ */
+@Composable
+private fun ShareTradeoffs(wifiOnly: Boolean, uploadSlots: Int) {
+    val people = if (uploadSlots == 1) "one person" else "$uploadSlots people"
+    Column(Modifier.fillMaxWidth().testTag("share-tradeoffs"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicText("if you skip", style = Room.LabelQuiet)
+            BasicText(
+                "runout works the same, but other soulseek users will see that you share 0 files. some of them won't upload to people who share nothing, so rare albums can be harder to get.",
+                style = OnboardingBody,
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicText("if you share", style = Room.LabelQuiet)
+            BasicText(
+                (if (wifiOnly) "uploads only run on wi-fi, " else "uploads run on wi-fi and mobile data, ") +
+                    "at most $people at a time, and stop soon after you leave runout unless you stay online in the background. " +
+                    "change any of it in settings › soulseek.",
+                style = OnboardingBody,
+            )
+        }
     }
 }
 
