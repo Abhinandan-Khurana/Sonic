@@ -351,8 +351,9 @@ class SoulseekRepositoryTest {
         folder.walkTopDown().filter { it.isFile && it.name.endsWith(".flac") }.forEach { it.delete() }
         repo.download(file).join()
         await("fetched again") { downloads() == 2 }
+        // The old COMPLETED can still be showing: wait for the file itself, then the state.
+        await("saved again") { folder.walkTopDown().count { it.isFile && it.name.endsWith(".flac") } == 1 }
         await("published again") { repo.transfers.value.singleOrNull()?.state == SoulseekTransferState.COMPLETED }
-        assertEquals(1, folder.walkTopDown().count { it.isFile && it.name.endsWith(".flac") })
     }
 
     @Test fun `remove takes a download off the list and remove all failed clears the failures`() = runBlocking {

@@ -1213,19 +1213,20 @@ private fun TopBar(state: RoomState, onDownloads: () -> Unit, onAccount: () -> U
                     .touchHeight()
                     .padding(horizontal = 4.dp),
             ) { Lamp(if (c == Room.Quiet) null else c) }
-            // Downloads: a 16 dp download glyph (arrow into a tray) and the count, red when one needs you.
-            val downloadsInk = if (downloadsColor(transfers) == Room.Danger) Room.Danger else Room.Ink
-            Row(
+            // Downloads: a 16 dp download glyph in the colour of the Downloads segment that most needs
+            // you: red if any failed, else orange while any are in the queue, green when all are done.
+            val status = listOf(DownloadGroup.FAILED, DownloadGroup.QUEUE, DownloadGroup.COMPLETED)
+                .firstOrNull { g -> state.soulseekTransfers.any { downloadGroup(it.state) == g } }
+            Box(
                 Modifier
                     .testTag("open-downloads")
-                    .semantics(mergeDescendants = true) { contentDescription = "Downloads, ${transfers.size}" }
+                    .semantics { contentDescription = "Downloads" + (status?.let { ", ${it.label}" } ?: "") }
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onDownloads)
-                    .touchHeight(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .touchHeight()
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Canvas(Modifier.size(16.dp)) { drawDownloadGlyph(downloadsInk) }
-                BasicText("${transfers.size}", style = Room.Strong.copy(color = downloadsInk), maxLines = 1)
+                Canvas(Modifier.size(16.dp)) { drawDownloadGlyph(status?.colour ?: Room.Ink) }
             }
             BasicText("${state.albums.size} rec", style = Room.Label, maxLines = 1, modifier = Modifier.semantics { contentDescription = recordCount(state.albums.size) })
         }
