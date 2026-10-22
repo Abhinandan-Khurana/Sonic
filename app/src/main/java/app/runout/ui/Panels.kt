@@ -603,6 +603,7 @@ private fun DropSleeve(number: Int, item: DropItem, isClaimed: Boolean, progress
 @Composable
 private fun DropPreview(number: Int, item: DropItem, isClaimed: Boolean, progress: Float?, left: Int, canClaim: Boolean, actions: RoomActions, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler { actions.listen(null); onBack() }
+    PageStep { actions.listen(null); onBack() }
     DisposableEffect(item.identifier) { onDispose { actions.listen(null) } }
     val cover by produceState<ImageBitmap?>(null, item.identifier) { value = actions.dropCover(item)?.let { CoverCache.load(it) } }
     // null while loading; then the list, or null again if the archive couldn't be reached.

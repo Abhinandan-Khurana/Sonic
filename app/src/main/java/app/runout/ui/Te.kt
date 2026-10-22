@@ -56,30 +56,69 @@ import androidx.compose.ui.unit.sp
  * one line, then the title in 44/700, 11 dp apart.
  */
 @Composable
-fun TeScreenHead(index: String, title: String, onClose: (() -> Unit)?, modifier: Modifier = Modifier) {
+fun TeScreenHead(index: String, title: String, onClose: (() -> Unit)?, modifier: Modifier = Modifier, onBack: () -> (() -> Unit)? = { null }) {
     Column(modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicText(index, style = Room.LabelQuiet, modifier = Modifier.weight(1f))
-            if (onClose != null) CloseKey(onClose)
+            HeadKey(onClose, onBack)
         }
         BasicText(title.uppercase(), style = Room.Display, maxLines = 1, modifier = Modifier.testTag("panel-title").semantics { heading() })
     }
 }
 
+/**
+ * The head's key: "← back" inside a page (a section, a chat, a page reached from another), else
+ * "close ×". [onBack] is read here, so a step coming or going redraws only this key.
+ */
+@Composable
+fun HeadKey(onClose: (() -> Unit)?, onBack: () -> (() -> Unit)?) {
+    val back = onBack()
+    if (back != null) BackKey(back) else if (onClose != null) CloseKey(onClose)
+}
+
 /** "close ×", 12/400, right-aligned in 64 dp, with a full-height touch target. */
 @Composable
-fun CloseKey(onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun CloseKey(onClose: () -> Unit, modifier: Modifier = Modifier) = HeadText("close ×", "Close", onClose, modifier)
+
+/** "← back", in close's place: one step back out of where you are. */
+@Composable
+fun BackKey(onBack: () -> Unit, modifier: Modifier = Modifier) = HeadText("← back", "Back", onBack, modifier)
+
+@Composable
+private fun HeadText(text: String, name: String, onClick: () -> Unit, modifier: Modifier) {
     val tick = rememberTick()
     BasicText(
-        "close ×",
+        text,
         style = Room.Text.copy(textAlign = TextAlign.End),
+        maxLines = 1,
         modifier = modifier
-            .testTag("action:Close")
-            .semantics { contentDescription = "Close" }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClose() }
+            .testTag("action:$name")
+            .semantics { contentDescription = name }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
             .touchHeight()
             .width(64.dp),
     )
+}
+
+/**
+ * The steps inside the open page that "← back" leaves, innermost last: a Settings section, a chat,
+ * a drop or a folder registers itself with [PageStep] while it's showing.
+ */
+internal class PageSteps {
+    var steps by mutableStateOf(listOf<Pair<Any, () -> Unit>>())
+}
+internal val LocalPageSteps = androidx.compose.runtime.staticCompositionLocalOf<PageSteps?> { null }
+
+/** While this is showing, the page head's key reads "← back" and runs [onBack]. */
+@Composable
+internal fun PageStep(onBack: () -> Unit) {
+    val host = LocalPageSteps.current ?: return
+    val key = remember { Any() }
+    val current by androidx.compose.runtime.rememberUpdatedState(onBack)
+    androidx.compose.runtime.DisposableEffect(host) {
+        host.steps = host.steps + (key to { current() })
+        onDispose { host.steps = host.steps.filterNot { it.first === key } }
+    }
 }
 
 /** The places in the nav bar, in its order. */

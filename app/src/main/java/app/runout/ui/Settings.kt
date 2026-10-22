@@ -80,6 +80,7 @@ fun SettingsPanel(
         return
     }
     BackHandler { onSection(null) }
+    PageStep { onSection(null) }
     Column(
         Modifier
             .fillMaxWidth()

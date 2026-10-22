@@ -274,6 +274,12 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("find-copy:f").performClick()
         assertTrue(actions.log.toString(), "soulseekSearch:Vela Park Night Drive" in actions.log)
         compose.onNodeWithTag("panel:transfers").assertDoesNotExist()
+        // Dig, reached from Downloads: "← back" returns there; Downloads itself only closes.
+        compose.onNodeWithTag("action:Back").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("panel:transfers").assertExists()
+        compose.onNodeWithTag("action:Back").assertDoesNotExist()
+        compose.onNodeWithTag("action:Close").assertExists()
     }
 
     @Test
@@ -476,9 +482,15 @@ class ListeningRoomUiTest {
         assertEquals(true, actions.sound.pure)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/04_sound_panel.png")
 
-        compose.onNodeWithTag("action:Close").performClick()
+        // Inside a section the head's key goes back to the list, which closes as before.
+        compose.onNodeWithTag("action:Close").assertDoesNotExist()
+        compose.onNodeWithTag("action:Back").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("panel:sound").assertDoesNotExist()
+        compose.onNodeWithTag("settings:SOUND").assertExists()
+        compose.onNodeWithTag("action:Close").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("panel:settings").assertDoesNotExist()
     }
 
     @Test

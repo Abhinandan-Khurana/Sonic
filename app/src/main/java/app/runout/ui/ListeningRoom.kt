@@ -76,6 +76,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -326,10 +327,25 @@ fun RoomScreen(
     val openAccount = {
         if (state.soulseekSession.hasAccount) { settings = SettingsSection.ACCOUNT; panel = Panel.SETTINGS; pulledId = null } else openSetup()
     }
+    // Pages reached from another page (Downloads from Settings, Dig from Downloads): back returns there.
+    val pageHistory = remember { mutableStateListOf<Panel>() }
+    val pageSteps = remember { PageSteps() }
     fun closePanel() {
         if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
+        pageHistory.clear()
         panel = null
     }
+    fun goTo(next: Panel) {
+        panel?.takeIf { it != next }?.let { pageHistory += it }
+        panel = next
+    }
+    fun backPage() {
+        if (panel == Panel.DIG && state.folderPreview != null) actions.closeSoulseekFolder()
+        panel = pageHistory.removeAt(pageHistory.lastIndex)
+    }
+    // The head's "← back": out of the innermost step, else to the page before; null leaves "close ×".
+    // Read by the head itself, so a step coming or going doesn't recompose the room.
+    val headBack: () -> (() -> Unit)? = { pageSteps.steps.lastOrNull()?.second ?: if (pageHistory.isNotEmpty()) ({ backPage() }) else null }
     // A folder preview always opens inside the Dig sheet, wherever it was asked for.
     LaunchedEffect(state.folderPreview != null) {
         if (state.folderPreview != null && panel == null) panel = Panel.DIG
@@ -396,7 +412,7 @@ fun RoomScreen(
     val pulled = state.albums.firstOrNull { it.id == pulledId }
 
     BackHandler(enabled = panel != null || pulledId != null) {
-        if (panel != null) closePanel() else pulledId = null
+        if (panel != null) { if (pageHistory.isNotEmpty()) backPage() else closePanel() } else pulledId = null
     }
 
     BoxWithConstraints(
@@ -867,20 +883,20 @@ fun RoomScreen(
                     NetworkNote(state, actions)
                     val preview = state.folderPreview
                     if (preview != null) FolderPreview(preview, state, actions) { peer ->
-                        actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); panel = Panel.FRIENDS
+                        actions.closeSoulseekFolder(); actions.openSoulseekConversation(peer); goTo(Panel.FRIENDS)
                     } else DiscoveryScreen(state, actions, onAccount = openAccount, onCue = { panel = null })
                 }
                 Panel.DROPS -> DropsPanel(state.drops, state.claimed, state.claiming, actions, state.soulseekSession.signedIn, onAccount = openAccount)
                 Panel.FRIENDS -> {
                     if (state.soulseekSession.hasAccount) ConnectionNotice(state, actions, openSetup)
-                    SoulseekMessagesPanel(state, actions, onAccount = openAccount, onDig = { panel = Panel.DIG })
+                    SoulseekMessagesPanel(state, actions, onAccount = openAccount, onDig = { goTo(Panel.DIG) })
                 }
                 Panel.SETTINGS -> SettingsPanel(
                     state, actions, settings, { settings = it },
-                    onDownloads = { panel = Panel.DOWNLOADS }, onSetup = openSetup, onOffline = { panel = null },
+                    onDownloads = { goTo(Panel.DOWNLOADS) }, onSetup = openSetup, onOffline = { closePanel() },
                 )
-                Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions, onDig = { panel = Panel.DIG })
-                Panel.SIGNAL -> SignalPanel(state, actions, onSoundSettings = { settings = SettingsSection.SOUND; panel = Panel.SETTINGS })
+                Panel.DOWNLOADS -> SoulseekTransfersPanel(state, actions, onDig = { goTo(Panel.DIG) })
+                Panel.SIGNAL -> SignalPanel(state, actions, onSoundSettings = { settings = SettingsSection.SOUND; goTo(Panel.SETTINGS) })
             }
         }
 
@@ -916,8 +932,9 @@ fun RoomScreen(
                     width = sheetWidth,
                     height = screenH * 0.83f,
                     onClose = { closePanel() },
+                    onBack = headBack,
                     catchTaps = open != null,
-                ) { panelContent(shown) }
+                ) { CompositionLocalProvider(LocalPageSteps provides pageSteps) { panelContent(shown) } }
             }
         }
 
@@ -934,7 +951,9 @@ fun RoomScreen(
             if (page != null) shown = page
             val title = if (shown == Panel.SETTINGS) settings?.label ?: shown.title else shown.title
             // Dig and Friends scroll their own lists; the rest scroll as one page.
-            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = shown != Panel.DIG && shown != Panel.FRIENDS) { panelContent(shown) }
+            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
+                CompositionLocalProvider(LocalPageSteps provides pageSteps) { panelContent(shown) }
+            }
         }
 
         // One nav bar for the room and every page, the open page's cell in black.
@@ -948,6 +967,8 @@ fun RoomScreen(
                     if (it == Panel.SETTINGS) settings = null
                     // Friends always opens on its own page, not on the last chat.
                     if (it == Panel.FRIENDS) actions.closeSoulseekConversation()
+                    // The nav bar starts afresh: nothing to go back to.
+                    pageHistory.clear()
                     panel = if (panel == it) null else it
                     pulledId = null
                 },
@@ -1194,6 +1215,8 @@ private fun PanelSheet(
     height: Dp,
     /** Null hides Close: first-run setup has to be answered. */
     onClose: (() -> Unit)?,
+    /** Set inside a step or a page reached from another: "← back" in close's place. */
+    onBack: () -> (() -> Unit)? = { null },
     /** Off for content that scrolls itself, like a lazy list of search results. */
     scroll: Boolean = true,
     /** Off while the sheet slides away, so a tap meant for the room isn't swallowed. */
@@ -1212,7 +1235,7 @@ private fun PanelSheet(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicText(title.uppercase(), style = Room.Title, modifier = Modifier.weight(1f).testTag("panel-title"))
-            if (onClose != null) CloseKey(onClose)
+            HeadKey(onClose, onBack)
         }
         // The panel keeps its size; its contents shrink above the keyboard.
         val body = Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime)
@@ -1225,7 +1248,7 @@ private fun PanelSheet(
  * body 11 dp below it and 22 dp in, above the keyboard and the nav bar.
  */
 @Composable
-private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, onBack: () -> (() -> Unit)? = { null }, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
         Column(
             Modifier
@@ -1234,7 +1257,7 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
                 .windowInsetsPadding(WindowInsets.ime)
                 .padding(bottom = if (navRoom) NAV_HEIGHT else 0.dp),
         ) {
-            TeScreenHead(index, title, onClose)
+            TeScreenHead(index, title, onClose, onBack = onBack)
             val body = Modifier.fillMaxWidth().weight(1f)
             CompositionLocalProvider(LocalPageSheetHost provides sheets) {
                 Column(

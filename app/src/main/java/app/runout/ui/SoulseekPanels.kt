@@ -710,6 +710,7 @@ private fun NewChat(onDismiss: () -> Unit, onStart: (String, Boolean) -> Unit) {
 @Composable
 private fun Chat(peer: String, state: RoomState, actions: RoomActions, clock: (Long) -> String, onBack: () -> Unit, onDig: () -> Unit) {
     androidx.activity.compose.BackHandler(onBack = onBack)
+    PageStep(onBack)
     val conversation = state.soulseekConversations.firstOrNull { it.username == peer }
     LaunchedEffect(peer, conversation?.unread) { actions.markSoulseekRead(peer) }
     val contact = state.soulseekContacts.firstOrNull { it.username == peer }

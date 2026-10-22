@@ -557,6 +557,7 @@ private fun duration(seconds: Int?) = seconds?.takeIf { it > 0 }?.let { "${it / 
 @Composable
 internal fun FolderPreview(preview: SoulseekFolderPreview, state: RoomState, actions: RoomActions, onMessage: (String) -> Unit = {}) {
     BackHandler(onBack = actions::closeSoulseekFolder)
+    PageStep(actions::closeSoulseekFolder)
     val (artist, album) = folderNames(preview.directory)
     val folder = preview.directory.substringAfterLast('/')
     val bits = preview.files.mapNotNull { it.bitDepth }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
