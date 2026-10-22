@@ -299,7 +299,10 @@ class DeckCamera(val width: Float, val height: Float, val tiltDegrees: Float = T
             val shift = (ys.max() + ys.min()) / 2f
             target += up * (shift * tanV * (target - eye).length())
         }
-        place((target - eye).length())
+        // Seen from above, the fit leaves air around the deck's top: a touch closer, easing in
+        // as it tilts flat, and still inside the box.
+        val flatness = (1f - tiltDegrees / TILT_DEG).coerceIn(0f, 1f)
+        place((target - eye).length() / (1f + FLAT_ZOOM * flatness))
     }
 
     val near = 0.1f
@@ -373,6 +376,8 @@ class DeckCamera(val width: Float, val height: Float, val tiltDegrees: Float = T
         const val TILT_DEG = 25f
         /** Seen from straight above, flat on the screen. */
         const val FLAT_DEG = 0f
+        /** How much closer the flat view comes than the plain fit. */
+        private const val FLAT_ZOOM = 0.08f
         private const val MARGIN = 1.0f
     }
 }
