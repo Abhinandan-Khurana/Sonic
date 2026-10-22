@@ -1,5 +1,7 @@
 package app.runout.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.fillMaxSize
@@ -232,4 +234,56 @@ fun TeScrim(onDismiss: () -> Unit, modifier: Modifier = Modifier, tag: String? =
             .then(if (tag != null) Modifier.testTag(tag) else Modifier)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
     )
+}
+
+/**
+ * A vinyl record drawn in round dots, like the dotted cut of Array: rings of dots around a
+ * label and a spindle hole. [lit] (0 to 1) is how much of each ring is inked from 12 o'clock
+ * clockwise, starting at [phase] turns; the rest is drawn in [dim].
+ */
+@Composable
+fun DotVinyl(
+    modifier: Modifier = Modifier,
+    phase: Float = 0f,
+    lit: Float = 1f,
+    ink: Color = Room.Ink,
+    dim: Color = Room.HairlineSoft,
+    label: Color = Room.Signal,
+) {
+    Canvas(modifier) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val r = size.minDimension / 2f
+        val dot = r * 0.055f
+        val rings = 6
+        for (k in 0 until rings) {
+            val rr = r * (0.42f + 0.55f * k / (rings - 1))
+            val n = (2 * Math.PI * rr / (dot * 2.6f)).toInt().coerceAtLeast(8)
+            for (i in 0 until n) {
+                val f = i.toFloat() / n
+                val a = ((f + phase) * 2 * Math.PI - Math.PI / 2).toFloat()
+                val on = f <= lit
+                drawCircle(if (on) ink else dim, dot, Offset(c.x + rr * kotlin.math.cos(a), c.y + rr * kotlin.math.sin(a)))
+            }
+        }
+        // The label: a disc of dots in the accent, and the spindle hole.
+        val lr = r * 0.28f
+        var y = -lr
+        while (y <= lr) {
+            var x = -lr
+            while (x <= lr) {
+                if (x * x + y * y <= lr * lr && x * x + y * y > (dot * 1.6f) * (dot * 1.6f)) drawCircle(label, dot * 0.8f, Offset(c.x + x, c.y + y))
+                x += dot * 2.4f
+            }
+            y += dot * 2.4f
+        }
+    }
+}
+
+/** [DotVinyl] turning, its rings inking round and round: the waiting animation (Dig's search). */
+@Composable
+fun DotVinylSpinner(modifier: Modifier = Modifier) {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "dot-vinyl")
+    val spin by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1800, easing = androidx.compose.animation.core.LinearEasing)), label = "spin")
+    val ink by t.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1200, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse), label = "ink")
+    DotVinyl(modifier.semantics { contentDescription = "Searching" }, phase = spin, lit = 0.15f + 0.85f * ink)
 }

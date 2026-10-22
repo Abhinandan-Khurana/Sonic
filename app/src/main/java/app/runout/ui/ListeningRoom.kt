@@ -160,6 +160,8 @@ data class RoomState(
     val soulseekConversation: String? = null,
     val downloadFolder: String? = null,
     val sharedFolder: String? = null,
+    /** The music folder just changed while signed in: ask whether the shared folder should follow. */
+    val offerShareSwap: Boolean = false,
     val soulseekSharing: Boolean = false,
     val soulseekStayOnline: Boolean = false,
     val soulseekShareConsent: Boolean = false,
@@ -238,6 +240,8 @@ interface RoomActions : DeckActions {
     fun retrySoulseekTransfer(id: String) {}
     fun pickDownloadFolder() {}
     fun pickSharedFolder() {}
+    /** The answer to [RoomState.offerShareSwap]: true picks a new shared folder (its own permission). */
+    fun answerShareSwap(change: Boolean) {}
     fun setSoulseekSharing(enabled: Boolean) {}
     fun setSoulseekStayOnline(enabled: Boolean) {}
     fun addSoulseekContact(username: String) {}
