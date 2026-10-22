@@ -28,17 +28,24 @@ class VinylSfx(private val scope: CoroutineScope) {
 
     private var crackleTrack: AudioTrack? = null
 
-    fun needleDrop() = playOnce(Synth.needleDrop())
+    // Rendered once and kept: synthesising them is too much work for the main thread every time.
+    private val needleDropPcm by lazy { Synth.needleDrop() }
+    private val liftPcm by lazy { Synth.lift() }
+    private val runoutPcm by lazy { Synth.runout() }
+    private val platterDropPcm by lazy { Synth.platterDrop() }
+    private val cracklePcm by lazy { Synth.crackleLoop() }
 
-    fun lift() = playOnce(Synth.lift())
+    fun needleDrop() = playOnce(needleDropPcm)
 
-    fun runout() = playOnce(Synth.runout())
+    fun lift() = playOnce(liftPcm)
 
-    fun platterDrop() = playOnce(Synth.platterDrop())
+    fun runout() = playOnce(runoutPcm)
+
+    fun platterDrop() = playOnce(platterDropPcm)
 
     fun startCrackle() {
         if (!crackleEnabled || crackleTrack != null) return
-        val pcm = Synth.crackleLoop()
+        val pcm = cracklePcm
         val track = buildTrack(pcm.size, AudioTrack.MODE_STATIC) ?: return
         track.write(pcm, 0, pcm.size)
         track.setLoopPoints(0, pcm.size, -1)

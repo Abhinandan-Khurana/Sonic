@@ -201,16 +201,16 @@ internal fun PageSection(label: String, modifier: Modifier = Modifier, content: 
  */
 internal object SoundHelp {
     val PURE = TeHelp("help · sound › output", "pure", listOf(
-        "pure sends each file to the output untouched: no eq, no replaygain, no limiter, no warmth.",
-        "use it with a usb dac or amp that does its own shaping. the other sound settings rest while pure is on.",
+        "pure sends each file to the output untouched: no eq, no replaygain, no limiter, no warmth, no crackle.",
+        "use it with a usb dac or amp that does its own shaping. on android 14 and later, a usb dac that offers it plays bit-perfect. the other sound settings rest while pure is on.",
     ))
     val HI_RES = TeHelp("help · sound › output", "hi-res output", listOf(
-        "plays every file at its own sample rate, up to 24-bit / 192 khz, when the output accepts it.",
-        "when it can't, runout converts once, cleanly, and the signal section says so.",
+        "keeps 24-bit files at full depth on the way to android, as 32-bit float. android's mixer still sets the output rate, usually 48 khz, unless pure and a usb dac play bit-perfect; the signal section says which.",
+        "when off, runout sends 16-bit: a 16-bit file goes out as it is, and a deeper or processed one is dithered once.",
     ))
     val VERDICT = TeHelp("help · sound › signal", "the signal verdict", listOf(
         "one line on what reaches your ears: the track, what runout does to it, and what the output takes.",
-        "green: bit-perfect, nothing changed. amber: still lossless, but resampled or processed on the way.",
+        "green: bit-perfect, nothing changed. amber: a lossless source, but resampled, processed or cut to 16-bit on the way. red: lossy, because bluetooth re-encodes the music.",
         "hold the deck's led window to see this chain from the room.",
     ))
     val EQ = TeHelp("help · sound › equaliser", "eq", listOf(
@@ -223,11 +223,11 @@ internal object SoundHelp {
         "off plays each file at its mastered level.",
     ))
     val LIMITER = TeHelp("help · sound › loudness", "limiter", listOf(
-        "catches the loudest peaks before they distort when eq or replaygain lift the level.",
-        "it only acts on those peaks; most records never touch it.",
+        "catches the loudest peaks before they distort when eq, warmth or replaygain lift the level.",
+        "it only switches in when the level could go over, and then only acts on those peaks; most records never touch it.",
     ))
     val WARMTH = TeHelp("help · sound › loudness", "warmth", listOf(
-        "a gentle cartridge-style saturation that softens harsh highs.",
+        "a gentle low lift and high roll-off, like a warm cartridge.",
         "it changes the sound, so the signal verdict stops saying bit-perfect while it's on.",
     ))
 }
@@ -246,7 +246,7 @@ fun SoundPanel(s: SoundSettings, crackleOn: Boolean, actions: RoomActions) {
             // Crackle moved here from the home screen: it's part of how the deck sounds.
             ToggleRow("Crackle", "Surface noise under the music.", crackleOn, { actions.toggleCrackle() })
             HelpToggleRow("Pure", "The music, untouched.", s.pure, { on -> actions.updateSound { it.copy(pure = on) } }) { help = SoundHelp.PURE }
-            HelpToggleRow("Hi-res output", "Each file at its own sample rate.", s.hiResOutput, { on -> actions.updateSound { it.copy(hiResOutput = on) } }) { help = SoundHelp.HI_RES }
+            HelpToggleRow("Hi-res output", "Keeps 24-bit detail all the way to the output.", s.hiResOutput, { on -> actions.updateSound { it.copy(hiResOutput = on) } }) { help = SoundHelp.HI_RES }
         }
         PageSection("02 equaliser") {
             HelpToggleRow(

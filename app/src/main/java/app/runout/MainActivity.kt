@@ -22,6 +22,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
 import app.runout.model.Album
@@ -67,6 +68,10 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIncoming(intent)
 
         val graph = graph
+        // A track that fails to play lifts the needle; the room says why.
+        lifecycleScope.launch {
+            graph.deck.problem.collect { p -> if (p != null) { message.value = p; graph.deck.clearProblem() } }
+        }
         app.runout.ui.TeType.init(this)
         setContent {
             val albums by graph.shelf.collectAsStateWithLifecycle()
@@ -443,18 +448,53 @@ class MainActivity : ComponentActivity() {
     }
 
     // A short listen to a Friday Drop before claiming it. It streams from archive.org and stops on
-    // its own after thirty seconds; it never touches the deck.
+    // its own after thirty seconds; it never touches the deck. It takes audio focus for its
+    // moment, so a spinning record pauses and comes back after, and it stops when headphones go,
+    // rather than carrying on out of the speaker.
     private var preview: android.media.MediaPlayer? = null
     private var previewStop: kotlinx.coroutines.Job? = null
+    private var previewFocus: android.media.AudioFocusRequest? = null
+    private val previewAttributes = android.media.AudioAttributes.Builder()
+        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
+    private val previewNoisy = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) listenTo(null)
+        }
+    }
+    private var previewNoisyRegistered = false
 
     private fun listenTo(url: String?) {
         previewStop?.cancel()
         preview?.let { runCatching { it.stop() }; it.release() }
         preview = null
+        val audio = getSystemService(android.media.AudioManager::class.java)
+        previewFocus?.let { runCatching { audio?.abandonAudioFocusRequest(it) } }
+        previewFocus = null
+        if (previewNoisyRegistered) { runCatching { unregisterReceiver(previewNoisy) }; previewNoisyRegistered = false }
         if (url == null) return
+        val focus = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(previewAttributes)
+            .setOnAudioFocusChangeListener { change ->
+                if (change == android.media.AudioManager.AUDIOFOCUS_LOSS || change == android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) listenTo(null)
+            }
+            .build()
+        if (audio?.requestAudioFocus(focus) != android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            message.value = "Couldn't play a preview right now."
+            return
+        }
+        previewFocus = focus
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, previewNoisy, android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        previewNoisyRegistered = true
         preview = android.media.MediaPlayer().apply {
-            setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            setAudioAttributes(previewAttributes)
             setOnPreparedListener { it.start() }
+            // Done early: give the focus back, so the record comes back too.
+            setOnCompletionListener { done -> window.decorView.post { if (preview === done) listenTo(null) } }
             setOnErrorListener { _, _, _ -> message.value = "Couldn't play a preview of that track."; true }
             runCatching { setDataSource(url); prepareAsync() }.onFailure { message.value = "Couldn't play a preview of that track." }
         }

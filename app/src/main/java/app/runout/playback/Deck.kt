@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -93,10 +94,37 @@ class Deck(
     private val pending = mutableListOf<(Player) -> Unit>()
     private var rampJob: Job? = null
 
+    /** A short note for the listener when playback fails; shown once, then [clearProblem]. */
+    private val _problem = MutableStateFlow<String?>(null)
+    val problem: StateFlow<String?> = _problem.asStateFlow()
+
+    fun clearProblem() { _problem.value = null }
+
     private val listener = object : Player.Listener {
+        // The player is the truth: headset and car-kit buttons, the notification and a Bluetooth
+        // disconnect all reach it without the deck, so the needle and the platter follow it here.
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _state.update { it.copy(isPlaying = isPlaying) }
-            if (isPlaying && _state.value.needleDown && !pure) sfx.startCrackle() else if (!isPlaying) sfx.stopCrackle()
+            val c = controller
+            val ours = rampJob?.isActive == true
+            if (isPlaying) {
+                _state.update { it.copy(isPlaying = true, needleDown = true, held = false, sideFinished = false) }
+                // A play from outside the deck always turns at the recorded speed.
+                if (!ours && c != null && c.playbackParameters.speed != RECORDED_SPEED) {
+                    c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED)
+                }
+            } else {
+                // Paused from outside with the needle down: the platter is held, so START spins it up.
+                val pausedOutside = !ours && c != null && !c.playWhenReady && c.playbackState != Player.STATE_ENDED
+                _state.update { it.copy(isPlaying = false, held = it.held || (it.needleDown && pausedOutside)) }
+            }
+            if (isPlaying && !pure) sfx.startCrackle() else if (!isPlaying) sfx.stopCrackle()
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            rampJob?.cancel()
+            sfx.stopCrackle()
+            _state.update { it.copy(needleDown = false, isPlaying = false, held = false) }
+            _problem.value = describe(error)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -129,6 +157,7 @@ class Deck(
 
     init {
         sfx.crackleEnabled = _crackleOn.value
+        sound?.setCrackle(_crackleOn.value)
 
         scope.launch {
             while (isActive) {
@@ -217,6 +246,8 @@ class Deck(
         rampJob = scope.launch {
             withController { c ->
                 c.volume = 1f
+                // After a playback error the player rests idle until it's prepared again.
+                if (c.playbackState == Player.STATE_IDLE && c.mediaItemCount > 0) c.prepare()
                 c.seekTo(index, offset)
                 c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED)
             }
@@ -230,7 +261,8 @@ class Deck(
         rampJob?.cancel()
         if (!pure) sfx.lift()
         sfx.stopCrackle()
-        withController { c -> c.pause(); c.volume = 1f }
+        // Whatever plays next starts at the recorded speed, even if a wind-down was cut short.
+        withController { c -> c.pause(); c.volume = 1f; c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
         _state.update { it.copy(needleDown = false, held = false) }
     }
 
@@ -242,14 +274,18 @@ class Deck(
         rampJob?.cancel()
         rampJob = scope.launch {
             if (!pure) {
-                val start = RECORDED_SPEED
-                for (step in 1..10) {
-                    val f = (start * (1f - step / 10f)).coerceAtLeast(MIN_SPEED)
+                // Coasting to a stop: fast at first, easing out, from wherever the platter is now.
+                val start = controller?.playbackParameters?.speed ?: RECORDED_SPEED
+                for (step in 1..RAMP_STEPS) {
+                    val t = step / RAMP_STEPS.toFloat()
+                    val f = (start - (start - MIN_SPEED) * (1f - (1f - t) * (1f - t))).coerceAtLeast(MIN_SPEED)
                     withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
-                    delay(45)
+                    delay(RAMP_STEP_MS)
                 }
             }
-            withController { c -> c.pause() }
+            // Paused at the recorded speed, so a play from anywhere (the notification, a headset)
+            // never starts slowed.
+            withController { c -> c.pause(); c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
         }
     }
 
@@ -265,15 +301,21 @@ class Deck(
                 withController { c -> c.play() }
                 return@launch
             }
-            val startF = (end * 0.25f).coerceAtLeast(MIN_SPEED)
-            withController { c ->
-                c.playbackParameters = PlaybackParameters(startF, startF)
-                c.play()
-            }
-            for (step in 1..12) {
-                val f = (startF + (end - startF) * step / 12f)
-                withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
-                delay(50)
+            val startF = MIN_SPEED
+            try {
+                withController { c ->
+                    c.playbackParameters = PlaybackParameters(startF, startF)
+                    c.play()
+                }
+                for (step in 1..RAMP_STEPS) {
+                    val t = step / RAMP_STEPS.toFloat()
+                    val f = startF + (end - startF) * (1f - (1f - t) * (1f - t))
+                    withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
+                    delay(RAMP_STEP_MS)
+                }
+            } finally {
+                // Cut short by anything but a new hold: back to the recorded speed.
+                if (!_state.value.held) withController { c -> c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
             }
         }
     }
@@ -360,6 +402,7 @@ class Deck(
         _crackleOn.value = on
         prefs.edit().putBoolean("crackle", on).apply()
         sfx.crackleEnabled = on
+        sound?.setCrackle(on)
         if (on && _state.value.isPlaying && !pure) sfx.startCrackle()
     }
 
@@ -370,6 +413,28 @@ class Deck(
             val future = MediaController.Builder(context, token).buildAsync()
             future.addListener({ ready(runCatching { future.get() }.getOrNull()) }, ContextCompat.getMainExecutor(context))
         }
+
+        /** What went wrong, in words a listener can act on. */
+        fun describe(error: PlaybackException): String = when (error.errorCode) {
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> "This track couldn't be decoded on this phone. The needle is up."
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED -> "The phone's audio output couldn't play this track. The needle is up."
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+            PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE -> "Couldn't read this track. Is its folder still there?"
+            else -> "This track stopped playing. The needle is up."
+        }
+
+        /** Wind-down and spin-up: small steps, so the pitch glides instead of stepping. */
+        private const val RAMP_STEPS = 25
+        private const val RAMP_STEP_MS = 18L
 
         /** Android's playback-speed control doesn't go much lower without distorting. */
         const val MIN_SPEED = 0.25f

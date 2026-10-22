@@ -484,7 +484,8 @@ object TagReader {
 
     fun leadingInt(s: String?): Int? = s?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull()
     fun year(s: String?): Int? = s?.trim()?.take(4)?.toIntOrNull()?.takeIf { it in 1000..2999 }
-    fun gain(s: String?): Float? = s?.trim()?.replace(Regex("(?i)db$"), "")?.trim()?.toFloatOrNull()
+    /** A ReplayGain tag in dB, such as "-6.50 dB"; some localised taggers write "-6,50 dB". */
+    fun gain(s: String?): Float? = s?.trim()?.replace(Regex("(?i)db$"), "")?.trim()?.replace(',', '.')?.toFloatOrNull()
         ?.takeIf { it.isFinite() }?.coerceIn(-24f, 12f)
 
     private fun synchsafe(b: ByteArray, at: Int) =

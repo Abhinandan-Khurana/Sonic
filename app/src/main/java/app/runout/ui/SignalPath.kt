@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.model.AudioQuality
 import app.runout.sound.BitPerfect
+import app.runout.sound.OutputDevices
 import app.runout.sound.OutputKind
 import app.runout.sound.OutputStatus
-import app.runout.sound.ReplayGainMode
 import app.runout.sound.SoundSettings
 
 /**
@@ -59,45 +59,79 @@ data class SignalPath(
 
 private fun rate(hz: Int) = AudioQuality.formatRate(hz)
 
+/**
+ * The chain for what's playing, or null when nothing is. Honest by rule: "bit-perfect" only when
+ * a USB DAC media is routed to takes the file's own samples in an exactly matching mode; the bit
+ * depth is the file's, not the decoder's; Bluetooth is lossy, whatever else is on.
+ */
 fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
     if (o.sampleRate == 0) return null
-    val bits = if (o.sourceBits > 0) "${o.sourceBits}-bit" else "PCM"
+    val fileBits = o.sourceBits
+    val bits = if (fileBits > 0) "$fileBits-bit" else "PCM"
     val source = "$bits · ${rate(o.sampleRate)}"
-    val hiResFile = o.sourceBits > 16 || o.sampleRate > 48_000
-    val track = SignalPath.Step("FLAC", source, if (hiResFile) "Hi-res lossless" else "CD-quality lossless")
+    val hiResFile = fileBits > 16 || o.sampleRate > 48_000
+    val track = SignalPath.Step(
+        "FLAC", source,
+        when {
+            hiResFile -> "Hi-res lossless"
+            fileBits == 16 -> "CD-quality lossless"
+            else -> "Lossless"
+        },
+    )
 
     val carried = if (o.floatPath) "32-bit float · ${rate(o.sampleRate)}" else "16-bit · ${rate(o.sampleRate)}"
-    val folded = !o.floatPath && o.sourceBits > 16
-    val runout = when {
-        s.pure -> SignalPath.Step("Pure", carried, "Untouched: no EQ, ReplayGain, crackle or wind-down." + if (folded) " Hi-res output is off, so 24-bit is cut to 16-bit." else "", ok = !folded)
-        else -> {
-            val work = buildList {
-                if (s.eqEnabled) add(if (s.useParametric) "AutoEq" else "EQ ${s.presetName}")
-                if (s.replayGain != ReplayGainMode.OFF) add("ReplayGain")
-                if (s.warmth) add("warmth")
-                if (s.limiter) add("limiter")
-            }
-            SignalPath.Step(
-                if (work.isEmpty()) "Clean" else "Processing",
-                carried,
-                (if (work.isEmpty()) "Nothing changes the sound." else work.joinToString(", ").replaceFirstChar { it.uppercase() } + " in ${if (o.floatPath) "32-bit float" else "16-bit"}.") +
-                    if (folded) " Hi-res output is off, so 24-bit is cut to 16-bit." else "",
-                ok = !folded,
-            )
+    // The decoder itself delivered fewer bits than the file has (Android 9's FLAC decoder does).
+    val decoderCut = o.decodedBits in 1 until fileBits
+    val folded = decoderCut || (!o.floatPath && fileBits > 16)
+    val foldNote = when {
+        !folded -> ""
+        decoderCut -> " This phone's FLAC decoder gives 16-bit, so $fileBits-bit is cut to 16-bit."
+        else -> " Hi-res output is off, so $fileBits-bit is reduced to 16-bit, with dither."
+    }
+    val bluetooth = o.device.kind == OutputKind.BLUETOOTH
+    val crackle = o.crackle && !s.pure
+    val dsp = if (s.pure) emptyList() else buildList {
+        if (s.eqEnabled && (s.useParametric && s.parametric.any { it.enabled } || !s.useParametric && s.graphic.any { kotlin.math.abs(it) >= 0.05f })) {
+            add(if (s.useParametric) "AutoEq" else "EQ ${s.presetName}")
         }
+        if (o.replayGainDb != 0f) add("ReplayGain")
+        if (s.warmth) add("warmth")
+        if (o.limiting) add("limiter")
+    }
+    val processed = dsp.isNotEmpty() || crackle
+    val runout = when {
+        s.pure -> SignalPath.Step("Pure", carried, "Untouched: no EQ, ReplayGain, crackle or wind-down.$foldNote", ok = !folded)
+        else -> SignalPath.Step(
+            if (processed) "Processing" else "Clean",
+            carried,
+            buildString {
+                if (dsp.isNotEmpty()) append(dsp.joinToString(", ").replaceFirstChar { it.uppercase() } + " in ${if (o.floatPath) "32-bit float" else "16-bit"}.")
+                if (crackle) append((if (isEmpty()) "" else " ") + "Crackle is mixed in with the music.")
+                if (isEmpty()) append("Nothing changes the sound.")
+                append(foldNote)
+            },
+            ok = !folded,
+        )
     }
 
     val d = o.device
     val mixer = d.mixerRate
     val resampled = mixer > 0 && mixer != o.sampleRate
+    val bitPerfect = o.bitPerfect == BitPerfect.ON && d.kind == OutputKind.USB && s.pure && !folded
     val output = when {
-        o.bitPerfect == BitPerfect.ON -> SignalPath.Step(d.label, source, "Bit-perfect: the DAC gets the file's own samples.")
-        d.kind == OutputKind.BLUETOOTH -> SignalPath.Step(d.label, "Lossy", "Bluetooth re-encodes the music (SBC, AAC, aptX or LDAC, chosen by the phone), so it isn't lossless here.", ok = false)
+        // Bluetooth first: nothing that goes over it is bit-perfect or lossless.
+        bluetooth -> SignalPath.Step(d.label, if (hiResFile) "Lossy · resampled by Android" else "Lossy", bluetoothDetail(d.type), ok = false)
+        bitPerfect -> SignalPath.Step(d.label, source, "Bit-perfect: the DAC gets the file's own samples.")
         d.kind == OutputKind.USB -> SignalPath.Step(
             d.label,
             if (mixer > 0) "Mixer · ${rate(mixer)}" else "Mixer",
             if (s.pure) o.bitPerfect.label + "." else "Through Android's mixer. Turn on Pure for bit-perfect (Android 14 and later).",
             ok = !resampled,
+        )
+        d.kind == OutputKind.OTHER -> SignalPath.Step(
+            d.label,
+            "Mixer",
+            "Android's mixer sends it to this output; what happens there isn't shown to apps.",
         )
         else -> SignalPath.Step(
             d.label,
@@ -107,24 +141,36 @@ fun signalPath(o: OutputStatus, s: SoundSettings): SignalPath? {
         )
     }
 
+    val lossless = if (processed) "Lossless source, processed" else "Lossless"
     val verdict = when {
-        o.bitPerfect == BitPerfect.ON -> "Bit-perfect"
-        d.kind == OutputKind.BLUETOOTH -> "Lossy over Bluetooth"
+        bluetooth -> "Lossy over Bluetooth"
+        bitPerfect -> "Bit-perfect"
         folded -> "Cut to 16-bit"
-        resampled -> "Lossless, resampled to ${rate(mixer)}"
-        else -> "Lossless"
+        d.kind == OutputKind.OTHER -> "Through Android's mixer"
+        resampled -> "$lossless, resampled to ${rate(mixer)}"
+        d.kind == OutputKind.USB -> "$lossless, through Android's mixer"
+        else -> lossless
     }
-    val short = "${o.sourceBits.takeIf { it > 0 }?.let { "$it/" } ?: ""}${rate(o.sampleRate, withUnit = false)} → ${d.kind.label}"
+    val short = "${fileBits.takeIf { it > 0 }?.let { "$it/" } ?: ""}${rate(o.sampleRate, withUnit = false)} → ${d.kind.label}"
     val note = when {
-        o.bitPerfect == BitPerfect.ON -> null
-        hiResFile && d.kind != OutputKind.USB -> "For the full ${rate(o.sampleRate)}, play through a USB DAC with Pure on (Android 14 and later)."
+        bitPerfect -> null
+        hiResFile && d.kind != OutputKind.USB -> {
+            // A 24/48 file already plays at its own rate on a 48 kHz phone: what a DAC adds is the depth.
+            val what = if (fileBits > 16 && !resampled && o.sampleRate <= 48_000) "$fileBits-bit" else rate(o.sampleRate)
+            "For the full $what, play through a USB DAC with Pure on (Android 14 and later)."
+        }
         else -> null
     }
-    return SignalPath(
-        track, runout, output, verdict, short, note,
-        bitPerfect = o.bitPerfect == BitPerfect.ON,
-        lossy = o.bitPerfect != BitPerfect.ON && d.kind == OutputKind.BLUETOOTH,
-    )
+    return SignalPath(track, runout, output, verdict, short, note, bitPerfect = bitPerfect, lossy = bluetooth)
+}
+
+/** What each kind of Bluetooth link does to the music. Android doesn't tell apps the codec in use. */
+private fun bluetoothDetail(type: Int): String = when (type) {
+    OutputDevices.BLE_HEADSET, OutputDevices.BLE_SPEAKER, OutputDevices.BLE_BROADCAST -> "LE Audio re-encodes the music with LC3, a lossy codec."
+    OutputDevices.HEARING_AID -> "Hearing aids stream at 16 kHz with a lossy codec."
+    android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Call audio: mono, 16 kHz at best."
+    else -> "Bluetooth re-encodes the music with a lossy codec (SBC, AAC, aptX or LDAC, agreed by the phone and headphones; " +
+        "Android doesn't tell apps which). Even LDAC is lossy, at 24-bit/96 kHz at most."
 }
 
 private fun rate(hz: Int, withUnit: Boolean) = AudioQuality.formatRate(hz, withUnit)
@@ -224,7 +270,12 @@ internal fun SignalPanel(state: RoomState, actions: RoomActions, onSoundSettings
         SignalChain(signalPath(state.output, s), gap = 16.dp)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             ToggleRow("Pure", "Nothing is done to the sound.", s.pure, { on -> actions.updateSound { it.copy(pure = on) } })
-            ToggleRow("Hi-res output", "Keeps 24-bit and high sample rates.", s.hiResOutput, { on -> actions.updateSound { it.copy(hiResOutput = on) } })
+            ToggleRow(
+                "Hi-res output",
+                if (state.output.device.kind == OutputKind.BLUETOOTH) "Keeps 24-bit inside the phone; Bluetooth sends its own format."
+                else "Keeps 24-bit detail (32-bit float to Android).",
+                s.hiResOutput, { on -> actions.updateSound { it.copy(hiResOutput = on) } },
+            )
         }
         TeButton("open sound settings", onSoundSettings, Modifier.fillMaxWidth().testTag("signal-sound-settings"))
     }

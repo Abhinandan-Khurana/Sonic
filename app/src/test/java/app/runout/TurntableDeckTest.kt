@@ -3,7 +3,9 @@ package app.runout
 import android.net.Uri
 import android.os.Looper
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.Player
 import androidx.media3.test.utils.FakeClock
+import androidx.media3.test.utils.robolectric.TestPlayerRunHelper
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.Track
@@ -164,6 +166,90 @@ class TurntableDeckTest {
         engine.update { it.copy(pure = true) }
         deck.onPureChanged(true)
         assertEquals(1f, player.playbackParameters.speed, 0.001f)
+    }
+
+    @Test
+    fun `a held platter rests at the recorded speed, so a play from outside the deck never starts slowed`() {
+        deck.load(album())
+        settle()
+        deck.startStop() // needle down
+        settle()
+        deck.startStop() // hold: the music winds down and stops
+        settle()
+        assertTrue(s.held)
+        assertFalse(player.playWhenReady)
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+        // The notification, a headset or a car kit presses play.
+        player.play()
+        settle()
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+        // Lifting the needle mid-wind-down leaves it at the recorded speed too.
+        deck.startStop()
+        settle(60)
+        deck.liftNeedle()
+        settle()
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+    }
+
+    /** A deck on a player whose clock runs by itself, so it really reaches playing (and failing). */
+    private fun runningDeck(): Pair<Deck, ExoPlayer> {
+        val p = PlayerFactory.create(context, engine, handleAudioFocus = false, clock = FakeClock(true)) { ctx, _ -> AudioOutputTest.CapturingOutput(ctx) }
+        return Deck(context, VinylSfx(scope), scope, engine) { ready -> ready(p) } to p
+    }
+
+    @Test
+    fun `a pause from outside holds the platter, so one START spins it up again`() {
+        val (d, p) = runningDeck()
+        try {
+            d.load(album())
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_READY)
+            settle(50)
+            assertTrue(d.state.value.isPlaying)
+            p.playWhenReady = false // the headset button, or Bluetooth headphones switching off
+            settle(50)
+            assertTrue(d.state.value.needleDown)
+            assertTrue("the platter is held", d.state.value.held)
+            d.startStop()
+            settle()
+            assertTrue("one tap plays again", p.playWhenReady)
+            assertFalse(d.state.value.held)
+            // And a play from outside with the needle up lowers it: the deck follows the player.
+            d.liftNeedle()
+            settle(50)
+            p.play()
+            settle(50)
+            assertTrue(d.state.value.needleDown)
+        } finally { p.release() }
+    }
+
+    @Test
+    fun `a track that can't be played lifts the needle and says why`() {
+        val (d, p) = runningDeck()
+        try {
+            val record = album()
+            d.load(record)
+            // The file disappears before the player reaches it.
+            record.tracks.forEach { File(Uri.parse(it.uri).path!!).delete() }
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilPlayerError()
+            settle(50)
+            assertFalse(d.state.value.needleDown)
+            assertFalse(d.state.value.isPlaying)
+            assertTrue(d.problem.value.orEmpty().isNotBlank())
+            d.clearProblem()
+            assertEquals(null, d.problem.value)
+        } finally { p.release() }
+    }
+
+    @Test
+    fun `playback errors read as plain words`() {
+        fun error(code: Int) = androidx.media3.common.PlaybackException("x", null, code)
+        assertTrue(Deck.describe(error(androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED)).contains("couldn't be decoded"))
+        assertTrue(Deck.describe(error(androidx.media3.common.PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED)).contains("audio output"))
+        assertTrue(Deck.describe(error(androidx.media3.common.PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)).contains("Couldn't read"))
     }
 
     @Test
