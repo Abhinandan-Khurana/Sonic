@@ -60,9 +60,10 @@ import app.runout.soulseek.SoulseekPolicy
 
 /**
  * Onboarding steps. The numbers are what is saved as the resume point, unchanged from the earlier
- * setup so an interrupted onboarding picks up in the right place.
+ * setup so an interrupted onboarding picks up in the right place; a step added later takes the next
+ * free number, wherever it sits in the order.
  */
-internal enum class Step(val saved: Int) { INTRO(0), LOGIN(1), DOWNLOADS(2), SHARE(3), RHYTHM(4), WELCOME(5), OFFLINE(6) }
+internal enum class Step(val saved: Int) { INTRO(0), LOGIN(1), DOWNLOADS(2), SHARE(3), RHYTHM(4), WELCOME(5), OFFLINE(6), DROPS(7) }
 
 private fun stepFor(saved: Int, intro: Boolean): Step = when (saved) {
     0 -> if (intro) Step.INTRO else Step.LOGIN
@@ -86,13 +87,14 @@ internal fun SetupScreen(
     onClose: (() -> Unit)? = null,
     onFinish: () -> Unit,
 ) {
-    var step by rememberSaveable { mutableStateOf(stepFor(initialStep.coerceIn(0, 6), intro)) }
+    var step by rememberSaveable { mutableStateOf(stepFor(initialStep.coerceIn(0, 7), intro)) }
     fun move(next: Step) { step = next; if (next != Step.INTRO) actions.setOnboardingStep(next.saved) }
     fun back() {
         when (step) {
             Step.OFFLINE, Step.DOWNLOADS -> move(Step.LOGIN)
             Step.SHARE -> move(Step.DOWNLOADS)
-            Step.RHYTHM -> move(Step.SHARE)
+            Step.DROPS -> move(Step.SHARE)
+            Step.RHYTHM -> move(Step.DROPS)
             else -> onClose?.invoke()
         }
     }
@@ -117,7 +119,8 @@ internal fun SetupScreen(
                     Step.LOGIN -> LoginStep(state, actions, onClose, onConnected = { move(Step.DOWNLOADS) }, onOffline = { actions.disconnectSoulseek(); move(Step.OFFLINE) })
                     Step.OFFLINE -> OfflineStep(state, actions, onDone = { move(Step.WELCOME) }, onBack = { back() })
                     Step.DOWNLOADS -> DownloadsStep(state, actions, onDone = { move(Step.SHARE) }, onBack = { back() })
-                    Step.SHARE -> ShareStep(state, actions, onDone = { move(Step.RHYTHM) }, onBack = { back() })
+                    Step.SHARE -> ShareStep(state, actions, onDone = { move(Step.DROPS) }, onBack = { back() })
+                    Step.DROPS -> DropsStep(onDone = { move(Step.RHYTHM) }, onBack = { back() })
                     Step.RHYTHM -> RhythmStep(state, actions, onDone = { move(Step.WELCOME) }, onBack = { back() })
                     Step.WELCOME -> WelcomeStep(state.soulseekSession.username?.takeIf { state.soulseekSession.hasAccount }, onFinish)
                 }
@@ -197,7 +200,7 @@ private fun StepCopy(label: String, title: String, body: String) {
 }
 
 /**
- * Steps 02–05: "← back" and five progress squares along the top (22 in), the step number set at
+ * Steps 02–06: "← back" and six progress squares along the top (22 in), the step number set at
  * 132/700 under them, the copy at the foot of the content, then the actions, 22 / 22 / 33 in.
  * [picture] (a file in assets/onboarding) sits in the space between the number and the copy when
  * it's there; it shrinks to fit the screen, and gives way altogether on a short one, never the type.
@@ -251,6 +254,9 @@ private fun StepPage(
     }
 }
 
+/** How many numbered steps the signed-in path has, from the sign-in (01) to the rhythm (06). */
+private const val STEPS = 6
+
 /** The step pictures: up to 240 dp square, and left out below 96 dp rather than shrinking the type. */
 private val STEP_PICTURE_MAX = 240.dp
 private val STEP_PICTURE_MIN = 96.dp
@@ -287,14 +293,14 @@ private fun HelpLink(onClick: () -> Unit) {
     }
 }
 
-/** Five 8 dp squares, 4 apart: filled up to this step, outlined after it. */
+/** Six 8 dp squares, 4 apart: filled up to this step, outlined after it. */
 @Composable
 private fun Pips(number: Int) {
     Row(
-        Modifier.semantics(mergeDescendants = true) { contentDescription = "Step $number of 5" },
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "Step $number of $STEPS" },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        repeat(5) { i ->
+        repeat(STEPS) { i ->
             Box(Modifier.size(8.dp).then(if (i < number) Modifier.background(Room.Ink) else Modifier.border(1.dp, Room.Ink)))
         }
     }
@@ -560,10 +566,23 @@ private fun PublicNote() {
     }
 }
 
+/** What Friday Drops are, once, before the rhythm: nothing to choose, so one key moves on. */
+@Composable
+private fun DropsStep(onDone: () -> Unit, onBack: () -> Unit) {
+    StepPage(5, onBack, picture = "step-05", copy = {
+        StepCopy(
+            "every friday", "FRIDAY DROPS",
+            "ten creative commons albums from the internet archive, the same ten for everyone. listen to any of them, keep three a week.",
+        )
+    }) {
+        StepKey("next", onDone, "setup-drops-next", Modifier.fillMaxWidth())
+    }
+}
+
 @Composable
 private fun RhythmStep(state: RoomState, actions: RoomActions, onDone: () -> Unit, onBack: () -> Unit) {
     val connected = state.soulseekSession.connected
-    StepPage(5, onBack, copy = {
+    StepPage(6, onBack, copy = {
         StepCopy("choose your rhythm", "WHEN SHOULD YOU STAY ONLINE?", "both reconnect after a network blip. your own records always play offline.")
         Column(Modifier.fillMaxWidth()) {
             RhythmCard(

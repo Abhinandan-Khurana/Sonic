@@ -36,10 +36,12 @@ class OnboardingTest {
         var shareAsked = 0
         var sharing: Boolean? = null
         var background: Boolean? = null
+        val steps = mutableListOf<Int>()
         override fun pickDownloadFolder() { folderAsked++ }
         override fun pickSharedFolder() { shareAsked++ }
         override fun setSoulseekSharing(enabled: Boolean) { sharing = enabled }
         override fun setSoulseekStayOnline(enabled: Boolean) { background = enabled }
+        override fun setOnboardingStep(value: Int) { steps += value }
     }
 
     @Test fun `choosing a download folder, then a shared folder, moves on with no Continue buttons`() {
@@ -63,6 +65,9 @@ class OnboardingTest {
         state = state.copy(sharedFolder = "Music/Share")
         compose.waitForIdle()
         assertEquals(true, actions.sharing)
+        // Friday Drops comes between sharing and the rhythm.
+        compose.onNodeWithTag("setup-drops-next").assertIsDisplayed()
+        compose.onNodeWithTag("setup-drops-next").performClick()
         compose.onNodeWithTag("rhythm:app").assertIsDisplayed()
     }
 
@@ -72,6 +77,7 @@ class OnboardingTest {
         compose.setContent { SetupScreen(connected, actions, 3) { finished++ } }
         compose.onNodeWithTag("setup-share-skip").performClick()
         assertEquals(false, actions.sharing)
+        compose.onNodeWithTag("setup-drops-next").performClick()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/16_setup_rhythm.png")
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/readme/setup-rhythm.png")
         compose.onNodeWithText("Use background mode").assertDoesNotExist()
@@ -80,6 +86,32 @@ class OnboardingTest {
         compose.onNodeWithTag("setup-welcome").assertExists()
         compose.waitForIdle()
         assertEquals(1, finished)
+    }
+
+    @Test fun `Friday Drops gets its own step between sharing and the rhythm, and back returns to sharing`() {
+        val actions = Recording()
+        compose.setContent { SetupScreen(connected, actions, 3) {} }
+        compose.onNodeWithTag("setup-share-skip").performClick()
+        compose.onNodeWithText("FRIDAY DROPS").assertIsDisplayed()
+        compose.onNodeWithText("keep three a week", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Step 5 of 6").assertIsDisplayed()
+        assertEquals(7, actions.steps.last())
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/16a_setup_drops.png")
+        // Back from the rhythm lands on drops again, and back from drops on sharing.
+        compose.onNodeWithTag("setup-drops-next").performClick()
+        compose.onNodeWithTag("rhythm:app").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Step 6 of 6").assertIsDisplayed()
+        assertEquals(4, actions.steps.last())
+        compose.onNodeWithTag("setup-back").performClick()
+        compose.onNodeWithText("FRIDAY DROPS").assertIsDisplayed()
+        compose.onNodeWithTag("setup-back").performClick()
+        compose.onNodeWithTag("setup-share-skip").assertIsDisplayed()
+    }
+
+    @Test fun `an onboarding saved at Friday Drops resumes there`() {
+        compose.setContent { SetupScreen(connected, Recording(), 7) {} }
+        compose.onNodeWithText("FRIDAY DROPS").assertIsDisplayed()
+        compose.onNodeWithTag("setup-drops-next").assertIsDisplayed()
     }
 
     @Test fun `the sign-in shows the app's name and keeps listening offline as a quiet link`() {
