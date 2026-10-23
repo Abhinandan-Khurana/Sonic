@@ -49104,122 +49104,76 @@
             },
             {
               "type": "frame",
-              "id": "NVv0D",
-              "name": "Catalog",
+              "id": "hqzfP",
+              "name": "Catalog row",
               "width": "fill_container",
-              "layout": "vertical",
-              "gap": 16,
+              "gap": 22,
               "children": [
                 {
                   "type": "frame",
-                  "id": "hqzfP",
-                  "name": "Catalog row",
+                  "id": "HLqY8",
+                  "name": "Drop 01",
                   "width": "fill_container",
-                  "gap": 22,
+                  "fill": "$te-surface",
+                  "layout": "vertical",
+                  "gap": 11,
+                  "padding": 11,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "HLqY8",
-                      "name": "Drop 01",
-                      "width": "fill_container",
-                      "fill": "$te-surface",
-                      "layout": "vertical",
-                      "gap": 11,
-                      "padding": 11,
+                      "id": "G583bh",
+                      "name": "Sleeve art",
+                      "clip": true,
+                      "width": 140,
+                      "height": 140,
+                      "fill": "#0E7C6B",
+                      "layout": "none",
                       "children": [
                         {
-                          "type": "frame",
-                          "id": "G583bh",
-                          "name": "Sleeve art",
-                          "clip": true,
+                          "type": "ellipse",
+                          "id": "RRa3E",
+                          "x": 39.2,
+                          "y": 50.4,
+                          "name": "Sun",
+                          "fill": "#F05A24",
+                          "width": 61.6,
+                          "height": 61.6
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "lUdwN",
+                          "x": 0,
+                          "y": 100.8,
+                          "name": "Ground",
+                          "fill": "#0A0A0A",
                           "width": 140,
-                          "height": 140,
-                          "fill": "#0E7C6B",
-                          "layout": "none",
-                          "children": [
-                            {
-                              "type": "ellipse",
-                              "id": "RRa3E",
-                              "x": 39.2,
-                              "y": 50.4,
-                              "name": "Sun",
-                              "fill": "#F05A24",
-                              "width": 61.6,
-                              "height": 61.6
-                            },
-                            {
-                              "type": "rectangle",
-                              "id": "lUdwN",
-                              "x": 0,
-                              "y": 100.8,
-                              "name": "Ground",
-                              "fill": "#0A0A0A",
-                              "width": 140,
-                              "height": 39.2
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "A4XyK",
-                          "name": "Index row",
-                          "width": "fill_container",
-                          "justifyContent": "space_between",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "GVqFD",
-                              "name": "Index",
-                              "fill": "$te-muted",
-                              "content": "01",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "y6Ssan",
-                              "name": "Licence",
-                              "fill": "$te-blue",
-                              "content": "cc by",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
+                          "height": 39.2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "A4XyK",
+                      "name": "Index row",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "children": [
                         {
                           "type": "text",
-                          "id": "cNTzu",
-                          "name": "Title",
-                          "fill": "$te-ink",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "another day, another way",
-                          "lineHeight": 1.3,
-                          "fontFamily": "$te-font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "A1PNRf",
-                          "name": "Artist",
+                          "id": "GVqFD",
+                          "name": "Index",
                           "fill": "$te-muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "no-source netlabel · 2012",
-                          "lineHeight": 1.3,
+                          "content": "01",
                           "fontFamily": "$te-font",
                           "fontSize": 10,
                           "fontWeight": "normal"
                         },
                         {
                           "type": "text",
-                          "id": "gGY9u",
-                          "name": "Action",
-                          "fill": "$te-green",
-                          "content": "in your crate",
+                          "id": "y6Ssan",
+                          "name": "Licence",
+                          "fill": "$te-blue",
+                          "content": "cc by",
                           "fontFamily": "$te-font",
                           "fontSize": 10,
                           "fontWeight": "normal"
@@ -49227,226 +49181,119 @@
                       ]
                     },
                     {
-                      "type": "frame",
-                      "id": "sErNj",
-                      "name": "Drop 02",
+                      "type": "text",
+                      "id": "cNTzu",
+                      "name": "Title",
+                      "fill": "$te-ink",
+                      "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "fill": "$te-surface",
-                      "layout": "vertical",
-                      "gap": 11,
-                      "padding": 11,
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "g6gZxq",
-                          "name": "Sleeve art",
-                          "clip": true,
-                          "width": 140,
-                          "height": 140,
-                          "fill": "#FAB413",
-                          "layout": "none",
-                          "children": [
-                            {
-                              "type": "ellipse",
-                              "id": "jCNY8",
-                              "x": 39.2,
-                              "y": 50.4,
-                              "name": "Sun",
-                              "fill": "#000000",
-                              "width": 61.6,
-                              "height": 61.6
-                            },
-                            {
-                              "type": "rectangle",
-                              "id": "VaEdW",
-                              "x": 0,
-                              "y": 100.8,
-                              "name": "Ground",
-                              "fill": "#F05A24",
-                              "width": 140,
-                              "height": 39.2
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "L8jLn",
-                          "name": "Index row",
-                          "width": "fill_container",
-                          "justifyContent": "space_between",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "BLdVu",
-                              "name": "Index",
-                              "fill": "$te-muted",
-                              "content": "02",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "DksFd",
-                              "name": "Licence",
-                              "fill": "$te-blue",
-                              "content": "cc by",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "text",
-                          "id": "gBYMR",
-                          "name": "Title",
-                          "fill": "$te-ink",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "curses from past times",
-                          "lineHeight": 1.3,
-                          "fontFamily": "$te-font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "K6WSWN",
-                          "name": "Artist",
-                          "fill": "$te-muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "proleter · 2012",
-                          "lineHeight": 1.3,
-                          "fontFamily": "$te-font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "e6UOmZ",
-                          "name": "Action",
-                          "fill": "$te-ink",
-                          "content": "claim →",
-                          "fontFamily": "$te-font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        }
-                      ]
+                      "content": "another day, another way",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "A1PNRf",
+                      "name": "Artist",
+                      "fill": "$te-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "no-source netlabel · 2012",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gGY9u",
+                      "name": "Action",
+                      "fill": "$te-green",
+                      "content": "in your crate",
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
                     }
                   ]
                 },
                 {
                   "type": "frame",
-                  "id": "L4KI3",
-                  "name": "Catalog row",
+                  "id": "sErNj",
+                  "name": "Drop 02",
                   "width": "fill_container",
-                  "gap": 22,
+                  "height": 254,
+                  "fill": {
+                    "type": "color",
+                    "color": "$te-surface",
+                    "enabled": false
+                  },
+                  "stroke": "#1c1212ff",
+                  "strokeWidth": 2,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 11,
+                  "padding": [
+                    11,
+                    14
+                  ],
                   "children": [
                     {
                       "type": "frame",
-                      "id": "aVw9d",
-                      "name": "Drop 03",
-                      "width": "fill_container",
-                      "fill": "$te-surface",
-                      "layout": "vertical",
-                      "gap": 11,
-                      "padding": 11,
+                      "id": "g6gZxq",
+                      "name": "Sleeve art",
+                      "clip": true,
+                      "width": 140,
+                      "height": 140,
+                      "fill": "#FAB413",
+                      "layout": "none",
                       "children": [
                         {
-                          "type": "frame",
-                          "id": "fWgVV",
-                          "name": "Sleeve art",
-                          "clip": true,
+                          "type": "ellipse",
+                          "id": "jCNY8",
+                          "x": 39.2,
+                          "y": 50.4,
+                          "name": "Sun",
+                          "fill": "#000000",
+                          "width": 61.6,
+                          "height": 61.6
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "VaEdW",
+                          "x": 0,
+                          "y": 100.8,
+                          "name": "Ground",
+                          "fill": "#F05A24",
                           "width": 140,
-                          "height": 140,
-                          "fill": "#006837",
-                          "layout": "none",
-                          "children": [
-                            {
-                              "type": "ellipse",
-                              "id": "ARxzh",
-                              "x": 39.2,
-                              "y": 50.4,
-                              "name": "Sun",
-                              "fill": "#F0CCCC",
-                              "width": 61.6,
-                              "height": 61.6
-                            },
-                            {
-                              "type": "rectangle",
-                              "id": "EkaFb",
-                              "x": 0,
-                              "y": 100.8,
-                              "name": "Ground",
-                              "fill": "#0F0E12",
-                              "width": 140,
-                              "height": 39.2
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "s6hKg3",
-                          "name": "Index row",
-                          "width": "fill_container",
-                          "justifyContent": "space_between",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "rbdbz",
-                              "name": "Index",
-                              "fill": "$te-muted",
-                              "content": "03",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "kdLEE",
-                              "name": "Licence",
-                              "fill": "$te-blue",
-                              "content": "cc by",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
+                          "height": 39.2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L8jLn",
+                      "name": "Index row",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "children": [
                         {
                           "type": "text",
-                          "id": "Wzn0Q",
-                          "name": "Title",
-                          "fill": "$te-ink",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "brick city love song",
-                          "lineHeight": 1.3,
-                          "fontFamily": "$te-font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "O7nfj",
-                          "name": "Artist",
+                          "id": "BLdVu",
+                          "name": "Index",
                           "fill": "$te-muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "various · 2011",
-                          "lineHeight": 1.3,
+                          "content": "02",
                           "fontFamily": "$te-font",
                           "fontSize": 10,
                           "fontWeight": "normal"
                         },
                         {
                           "type": "text",
-                          "id": "l4Xi0i",
-                          "name": "Action",
-                          "fill": "$te-ink",
-                          "content": "claim →",
+                          "id": "DksFd",
+                          "name": "Licence",
+                          "fill": "$te-blue",
+                          "content": "cc by",
                           "fontFamily": "$te-font",
                           "fontSize": 10,
                           "fontWeight": "normal"
@@ -49454,113 +49301,267 @@
                       ]
                     },
                     {
-                      "type": "frame",
-                      "id": "I9yGk",
-                      "name": "Drop 04",
+                      "type": "text",
+                      "id": "gBYMR",
+                      "name": "Title",
+                      "fill": "$te-ink",
+                      "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "fill": "$te-surface",
-                      "layout": "vertical",
-                      "gap": 11,
-                      "padding": 11,
+                      "content": "curses from past times",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "K6WSWN",
+                      "name": "Artist",
+                      "fill": "$te-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "proleter · 2012",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "e6UOmZ",
+                      "name": "Action",
+                      "fill": "$te-ink",
+                      "content": "claim →",
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "L4KI3",
+              "name": "Catalog row",
+              "width": "fill_container",
+              "gap": 22,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aVw9d",
+                  "name": "Drop 03",
+                  "width": "fill_container",
+                  "fill": "$te-surface",
+                  "layout": "vertical",
+                  "gap": 11,
+                  "padding": 11,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "fWgVV",
+                      "name": "Sleeve art",
+                      "clip": true,
+                      "width": 140,
+                      "height": 140,
+                      "fill": "#006837",
+                      "layout": "none",
                       "children": [
                         {
-                          "type": "frame",
-                          "id": "y28kzB",
-                          "name": "Sleeve art",
-                          "clip": true,
-                          "width": 140,
-                          "height": 140,
+                          "type": "ellipse",
+                          "id": "ARxzh",
+                          "x": 39.2,
+                          "y": 50.4,
+                          "name": "Sun",
                           "fill": "#F0CCCC",
-                          "layout": "none",
-                          "children": [
-                            {
-                              "type": "ellipse",
-                              "id": "RY2bw",
-                              "x": 39.2,
-                              "y": 50.4,
-                              "name": "Sun",
-                              "fill": "#B81D13",
-                              "width": 61.6,
-                              "height": 61.6
-                            },
-                            {
-                              "type": "rectangle",
-                              "id": "S3OXG",
-                              "x": 0,
-                              "y": 100.8,
-                              "name": "Ground",
-                              "fill": "#272727",
-                              "width": 140,
-                              "height": 39.2
-                            }
-                          ]
+                          "width": 61.6,
+                          "height": 61.6
                         },
                         {
-                          "type": "frame",
-                          "id": "SKcOE",
-                          "name": "Index row",
-                          "width": "fill_container",
-                          "justifyContent": "space_between",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "tM06d",
-                              "name": "Index",
-                              "fill": "$te-muted",
-                              "content": "04",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "qh2h2",
-                              "name": "Licence",
-                              "fill": "$te-blue",
-                              "content": "cc by",
-                              "fontFamily": "$te-font",
-                              "fontSize": 10,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
+                          "type": "rectangle",
+                          "id": "EkaFb",
+                          "x": 0,
+                          "y": 100.8,
+                          "name": "Ground",
+                          "fill": "#0F0E12",
+                          "width": 140,
+                          "height": 39.2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "s6hKg3",
+                      "name": "Index row",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "children": [
                         {
                           "type": "text",
-                          "id": "rVlkN",
-                          "name": "Title",
-                          "fill": "$te-ink",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "riding alone for thousands",
-                          "lineHeight": 1.3,
-                          "fontFamily": "$te-font",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "sCNlZ",
-                          "name": "Artist",
+                          "id": "rbdbz",
+                          "name": "Index",
                           "fill": "$te-muted",
-                          "textGrowth": "fixed-width",
-                          "width": "fill_container",
-                          "content": "various · 2010",
-                          "lineHeight": 1.3,
+                          "content": "03",
                           "fontFamily": "$te-font",
                           "fontSize": 10,
                           "fontWeight": "normal"
                         },
                         {
                           "type": "text",
-                          "id": "k92yAu",
-                          "name": "Action",
-                          "fill": "$te-ink",
-                          "content": "claim →",
+                          "id": "kdLEE",
+                          "name": "Licence",
+                          "fill": "$te-blue",
+                          "content": "cc by",
                           "fontFamily": "$te-font",
                           "fontSize": 10,
                           "fontWeight": "normal"
                         }
                       ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Wzn0Q",
+                      "name": "Title",
+                      "fill": "$te-ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "brick city love song",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "O7nfj",
+                      "name": "Artist",
+                      "fill": "$te-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "various · 2011",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "l4Xi0i",
+                      "name": "Action",
+                      "fill": "$te-ink",
+                      "content": "claim →",
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "I9yGk",
+                  "name": "Drop 04",
+                  "width": "fill_container",
+                  "fill": "$te-surface",
+                  "layout": "vertical",
+                  "gap": 11,
+                  "padding": 11,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "y28kzB",
+                      "name": "Sleeve art",
+                      "clip": true,
+                      "width": 140,
+                      "height": 140,
+                      "fill": "#F0CCCC",
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "RY2bw",
+                          "x": 39.2,
+                          "y": 50.4,
+                          "name": "Sun",
+                          "fill": "#B81D13",
+                          "width": 61.6,
+                          "height": 61.6
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "S3OXG",
+                          "x": 0,
+                          "y": 100.8,
+                          "name": "Ground",
+                          "fill": "#272727",
+                          "width": 140,
+                          "height": 39.2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SKcOE",
+                      "name": "Index row",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "tM06d",
+                          "name": "Index",
+                          "fill": "$te-muted",
+                          "content": "04",
+                          "fontFamily": "$te-font",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qh2h2",
+                          "name": "Licence",
+                          "fill": "$te-blue",
+                          "content": "cc by",
+                          "fontFamily": "$te-font",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "rVlkN",
+                      "name": "Title",
+                      "fill": "$te-ink",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "riding alone for thousands",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "sCNlZ",
+                      "name": "Artist",
+                      "fill": "$te-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "various · 2010",
+                      "lineHeight": 1.3,
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "k92yAu",
+                      "name": "Action",
+                      "fill": "$te-ink",
+                      "content": "claim →",
+                      "fontFamily": "$te-font",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -79743,6 +79744,17 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "NVv0D",
+      "x": 4629,
+      "y": 5932,
+      "name": "Catalog",
+      "width": "fill_container(368)",
+      "height": "fit_content(254)",
+      "layout": "vertical",
+      "gap": 16
     }
   ],
   "themes": {
