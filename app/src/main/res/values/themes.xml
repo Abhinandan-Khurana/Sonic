@@ -3,7 +3,8 @@
     <color name="room">#FFF4F4F2</color>
     <color name="ink">#FF111111</color>
     <!-- The intro sleeve's paper, behind the launcher icon. -->
-    <color name="launcher_paper">#FFEAE3D7</color>
+    <color name="launcher_sleeve">#FF11110F</color>
+    <color name="launcher_paper">#FFECE7DD</color>
 
     <style name="Theme.Runout" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/room</item>

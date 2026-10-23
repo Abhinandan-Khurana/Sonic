@@ -391,6 +391,8 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         // A drop preview is a quick listen, not background music.
         listenTo(null)
+        // The launcher icon takes the room's theme while the room is off screen.
+        if (!isChangingConfigurations) runCatching { LauncherIcon.follow(this, app.runout.ui.Room.dark) }
         super.onStop()
     }
 
