@@ -26,9 +26,9 @@
   &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-## Story
+## Our Vision.
 
-*Music is one search away now. Type a name and the song plays, then the next one, then the next. It’s effortless, which is exactly why it never feels like a collection. When everything is instant, you lose the weight of an album—the effort it took to track it down, the choice to commit to the highest audio quality, and the feeling of actually owning the music.*
+*Music is one search away now. Type a name and the song plays, then the next one, then the next. It’s effortless, which is exactly why it never feels like a collection. When everything is instant, you lose the weight of an album-the effort it took to track it down, the choice to commit to the highest audio quality, and the feeling of actually owning the music.*
 
 *It used to take intention. Records piled up next to the turntable, and you flipped through them until one fit the evening. You slid the disc out of its sleeve, set the needle down, and got up to turn it over when Side A ended. You knew your records because you had handled every single one.*
 
