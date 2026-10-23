@@ -26,6 +26,16 @@
   &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+Music is one search away now. Type a name and the song plays, then the next one, then the next. It’s effortless, which is exactly why it never feels like a collection. When everything is instant, you lose the weight of an album—the effort it took to track it down, the choice to commit to the highest audio quality, and the feeling of actually owning the music.
+
+It used to take intention. Records piled up next to the turntable, and you flipped through them until one fit the evening. You slid the disc out of its sleeve, set the needle down, and got up to turn it over when Side A ended. You knew your records because you had handled every single one.
+
+Sonic brings that ritual back to your phone. If you want any song in two seconds, a streaming app will serve you better. Sonic is built for downloading, keeping, and truly listening to FLAC albums only.
+
+Each album in Sonic lives as a record in your crate, with its sides and resolution printed right on the sleeve. Pull it out, drop it on the platter, play Side A, and flip it for Side B. Under the hood, it delivers the exact pipeline an audiophile actually needs with nothing bloated on top: lossless decoding, hi-res playback at native sample rates, a Pure Mode that leaves samples untouched, and a transparent signal path that exposes when your OS resamples or Bluetooth (LDAC/AAC) compresses versus wired USB-C DAC playback.
+
+To grow your crate, Sonic searches Soulseek for full releases, delivers ten curated Creative Commons albums from the Internet Archive every Friday, and lets friends hand you a record as an interactive card in chat.
+
 <p align="center">
   <img src="docs/images/screens/room-light.png" width="260" alt="The room in light: a white and teal turntable playing Paper Moons above a crate of sleeves, the track list below" />
   &nbsp;
@@ -33,26 +43,6 @@
   &nbsp;
   <img src="docs/images/screens/room-dark.png" width="260" alt="The room in dark: a black turntable on a true-black screen, the same crate and sleeves" />
 </p>
-
----
-
-Getting music has never been easier. Open an app, type a name, and the song is playing before
-you've put the phone down. But music that easy to reach is also easy to lose track of. It sits in
-someone else's catalogue, and an album you loved last year can quietly disappear.
-
-Sonic is for keeping music. Every song you add is a FLAC file on your phone, lossless, in a folder
-you own. Every album becomes a record: a sleeve in a crate, with its sides, its track list and its
-resolution printed on it. You flick through the crate, pull a record out, drop it on the platter
-and lower the needle. It plays side A, and when side A runs out you turn it over.
-
-Playback keeps that quality as far as your phone allows. Hi-res albums play at their own sample rate, Pure mode leaves the
-samples untouched, and the signal path shows every step from the file to your ears, including when
-the phone resamples or Bluetooth compresses. We've listened through wired USB-C earphones and
-Bluetooth headphones over LDAC and AAC.
-
-Then there's the collecting. Sonic finds albums on Soulseek, brings ten free Creative Commons
-albums from the Internet Archive every Friday, and lets friends send you a record as a card in
-chat. Your crate grows one record at a time, the way a real one does.
 
 <p align="center">
   <img src="docs/images/screens/intro-light.gif" width="240" alt="The intro in light: the cream SONIC sleeve slides in, its record flies onto the turntable and SONIC. types out" />
