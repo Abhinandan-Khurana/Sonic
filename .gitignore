@@ -38,6 +38,7 @@ app/src/main/jniLibs/
 
 # New APKs are published as GitHub release assets.
 release/Runout-*-development.apk
+release/Sonic-*.apk
 
 # Local Argent credentials and generated test artifacts.
 .argent/secrets.env

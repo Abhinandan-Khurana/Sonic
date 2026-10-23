@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea or mechanical enhancement for Runout
+about: Suggest an idea or mechanical enhancement for Sonic
 title: "[FEATURE] "
 labels: enhancement
 assignees: ''
@@ -13,7 +13,7 @@ A clear and concise description of what the problem is. Ex: I'm always frustrate
 A clear and concise description of what you want to happen.
 
 **How does this fit the "No-Server" & "Vinyl Ritual" rules?**
-Explain how this feature respects Runout's principles (zero ongoing server costs, physical vinyl ritual, audiophile transparency).
+Explain how this feature respects Sonic's principles (zero ongoing server costs, physical vinyl ritual, audiophile transparency).
 
 **Describe alternatives you've considered**
 A clear and concise description of any alternative solutions or features you've considered.

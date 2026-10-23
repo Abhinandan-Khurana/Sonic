@@ -1,4 +1,4 @@
-Native dependencies bundled in Runout. Upstream notices follow.
+Native dependencies bundled in Sonic. Upstream notices follow.
 
 ========================================================================
 bytes 1.12.1

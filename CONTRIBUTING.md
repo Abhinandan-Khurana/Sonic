@@ -1,6 +1,6 @@
-# Contributing to Runout
+# Contributing to Sonic
 
-Start with the [README](README.md), [build guide](docs/BUILDING.md), [architecture](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md). The current integration is Runout 0.5.1 development; older Nostr guides describe v0.3.
+Start with the [README](README.md), [build guide](docs/BUILDING.md), [architecture](docs/ARCHITECTURE.md), and [developer notes](docs/DEVELOPMENT.md). Sonic 1.0.0 is the current release. Sonic was called Runout before 1.0, and the older Nostr guides describe v0.3.
 
 ## Product boundaries
 
@@ -9,12 +9,12 @@ Start with the [README](README.md), [build guide](docs/BUILDING.md), [architectu
 - Use Android's folder picker and persisted URI grants. Never request broad storage access or assume a document URI is a filesystem path. Completed downloads belong in the user's selected folder.
 - Sharing and staying online require explicit opt-in per account. A share-folder grant for one account is not consent for another. Preserve account identity during temporary disconnection and use the process lifecycle connection owner. Keep Soulseek credentials out of logs, backups, crash reports and Internet Archive requests.
 - Preserve the turntable controls, audio quality reporting and Pure mode. Output fidelity depends on the device and audio route; avoid unconditional bit-perfect claims.
-- Runout has no hosted application backend. Room is an on-device database; Soulseek uses its existing central server and peer network, and Archive uses HTTPS.
+- Sonic has no hosted application backend. Room is an on-device database; Soulseek uses its existing central server and peer network, and Archive uses HTTPS.
 - Soulseek downloads do not confer ownership or a redistribution license. Keep the existing original-music/Creative Commons checks for `.vinyl` audio bundles.
 
 ## Making a change
 
-1. Build with the pinned prerequisites in [BUILDING](docs/BUILDING.md). Debug builds install as **Runout Dev** alongside the original app.
+1. Build with the pinned prerequisites in [BUILDING](docs/BUILDING.md). Debug builds install as **Sonic. Dev** (`app.sonic.dev`) alongside the release app (`app.sonic`).
 2. Keep Compose rendering, repository decisions, document storage and native wire handling in their existing layers. Prefer a focused change over a new framework.
 3. Add regression coverage for behavior changes, particularly account isolation, message acknowledgement, transfer interruption and storage failures. Documentation-only changes do not require new tests.
 4. Run the checks relevant to the change:

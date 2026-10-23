@@ -1,19 +1,19 @@
-# Runout Sound Architecture & DSP Pipeline
+# Sonic Sound Architecture & DSP Pipeline
 
-Runout was built from day one for listeners who demand audiophile transparency. Rather than routing audio through default Android mixers that truncate sample bit depths or force 48 kHz resampling, Runout implements a dedicated **32-bit floating-point DSP pipeline**.
+Sonic was built from day one for listeners who demand audiophile transparency. Rather than routing audio through default Android mixers that truncate sample bit depths or force 48 kHz resampling, Sonic implements a dedicated **32-bit floating-point DSP pipeline**.
 
 ---
 
 ## Signal Processing Flow
 
 ```
-Digital Audio File (FLAC, WAV, MP3, ALAC)
+FLAC Audio File
                  │
                  ▼
      Native Audio Track Decoder (Media3)
                  │
                  ▼
-       Runout DSP Float Sink (`DspAudioSink.kt`)
+       Sonic DSP Float Sink (`DspAudioSink.kt`)
   ┌─────────────────────────────────────────────────────────────┐
   │  1. Float Normalization (16/24/32-bit PCM ──► 32-bit Float) │
   │                              │                              │
@@ -54,10 +54,10 @@ All internal filter states, delay lines, and coefficients are maintained in sing
 
 A frequent pitfall in software equalizers is digital clipping: if a user boosts a frequency band by +6 dB on a normalized track, the signal exceeds digital 0 dBFS, resulting in harsh clipping distortion.
 
-Runout solves this automatically:
+Sonic solves this automatically:
 $$\text{Headroom Attenuation (dB)} = -\max\left(0.0, \max_{i \in [1, 10]} \text{gain}_i\right)$$
 
-If an EQ band is boosted by +4.5 dB, Runout automatically drops the digital preamp level by −4.5 dB prior to filtering. The shape of your EQ curve is preserved with zero clipping.
+If an EQ band is boosted by +4.5 dB, Sonic automatically drops the digital preamp level by −4.5 dB prior to filtering. The shape of your EQ curve is preserved with zero clipping.
 
 ---
 
@@ -86,9 +86,9 @@ Coefficients are calculated dynamically whenever the track sample rate changes, 
 
 ## 4. AutoEq Headphone Correction Import
 
-Runout features built-in support for the open-source **AutoEq** database (`autoeq.app`):
+Sonic features built-in support for the open-source **AutoEq** database (`autoeq.app`):
 1. Users export their headphone model's `ParametricEQ.txt`.
-2. Runout's parser extracts:
+2. Sonic's parser extracts:
    - Fixed preamp gain (e.g. `Preamp: -6.4 dB`)
    - Filter types: `PK` (Peaking), `LS` (Low Shelf), `HS` (High Shelf)
    - Filter parameters: Frequency ($f_c$), Gain (dB), and Quality factor ($Q$).

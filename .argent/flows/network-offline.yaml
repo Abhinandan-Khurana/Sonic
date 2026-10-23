@@ -1,4 +1,4 @@
-executionPrerequisite: Runout is connected on its main screen, then both Wi-Fi and mobile data have deliberately been disabled on this test emulator. Restore both even if the flow fails.
+executionPrerequisite: Sonic is connected on its main screen, then both Wi-Fi and mobile data have deliberately been disabled on this test emulator. Restore both even if the flow fails.
 steps:
   - await: { visible: { text: Reconnecting }, timeout: 15000 }
   - tap: { id: open-account }

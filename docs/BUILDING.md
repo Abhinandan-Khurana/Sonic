@@ -1,8 +1,8 @@
-# Building and testing Runout 0.4
+# Building and testing Sonic
 
 ## Prerequisites
 
-Use Linux with Bash, JDK 21, Android SDK platform 36, Android build tools, Rust 1.91.0 through rustup, and Android NDK r27d (27.3.13750724) or newer. The Gradle wrapper supplies Gradle 8.14.3.
+Use Linux or macOS with Bash 4 or newer (on macOS, Homebrew `bash`; the system Bash 3.2 cannot run the native script), JDK 21, Android SDK platform 36, Android build tools, Rust 1.91.0 through rustup, and Android NDK r27d (27.3.13750724) or newer. The Gradle wrapper supplies Gradle 8.14.3.
 
 ```bash
 export JAVA_HOME=/path/to/jdk-21
@@ -19,13 +19,24 @@ Install SDK platform `platforms;android-36`, build tools, and the selected NDK w
 ./gradlew assembleDebug
 ```
 
-`preBuild` invokes `scripts/build-native.sh`. Native artifacts go into `app/build/generated/soulseekJni/`, then Gradle packages them into the APK. Do not distribute an APK assembled with the native task excluded.
+`preBuild` invokes `scripts/build-native.sh`. Native artifacts go into `app/build/generated/soulseekJni/`, then Gradle packages them into the APK. Do not distribute an APK whose native libraries were not built from the source revision being released; skipping the Gradle task is fine once the script has run (see below).
 
 The script pins Rust 1.91.0 and the Cargo lockfile, targets Android API 28, and builds arm64-v8a, armeabi-v7a, x86_64 and x86. All native libraries use 16 KiB load-segment alignment. Native build artifacts and local SDK settings are ignored by Git.
 
-Debug APK: `app/build/outputs/apk/debug/app-debug.apk`. It installs as **Runout Dev** (`app.runout.dev`) alongside the original app, because the supplied v0.3 APK uses a different signing key. The original app's private data are never removed to install this build.
+Debug APK: `./gradlew assembleDebug`, output `app/build/outputs/apk/debug/app-debug.apk`. It installs as **Sonic. Dev** (`app.sonic.dev`) next to the release app, with its own private data.
 
-Release APK: `./gradlew assembleRelease`, output `app/build/outputs/apk/release/app-release.apk`. As in the prototype, release signing currently uses the local debug key. Supply your production signing configuration before public release. Matching the existing app's signing key is required for an update that preserves its private data.
+Release APK: `./gradlew assembleRelease`, output `app/build/outputs/apk/release/app-release.apk`. It installs as **Sonic.** (`app.sonic`). The release build type is still signed with the local debug key, so an update installs over an existing copy only when it was built with the same key; the published releases are built by the maintainer for that reason. Neither ID replaces an older Runout install (`app.runout` or `app.runout.dev`): those stay as separate apps.
+
+### Building the native library separately
+
+`preBuild` runs the native task on every Gradle build. To build the libraries once and then iterate on Kotlin, run the script directly and skip the task afterwards:
+
+```bash
+bash scripts/build-native.sh            # writes app/build/generated/soulseekJni/<abi>/librunout_soulseek.so
+./gradlew :app:assembleRelease -x buildSoulseekNative
+```
+
+`RUNOUT_JNI_OUTPUT` sends the libraries to another directory; copy them into `app/build/generated/soulseekJni/<abi>/` before packaging. Pass `-x buildSoulseekNative` to every Gradle command in that session: a failed run of the native task can leave the output directory empty, and `./gradlew clean` deletes it. Before installing or publishing, check that the APK contains `lib/<abi>/librunout_soulseek.so` for all four ABIs.
 
 ## Tests
 
@@ -59,7 +70,7 @@ argent flow run .argent/flows/live-discovery.yaml --device emulator-5554
 argent flow run .argent/flows/picker-recovery.yaml --device emulator-5554
 ```
 
-`DiscoveryPerformanceTest` runs on Android with 10,000 local tracks and 5,000 remote files, reporting conservative warm p95 timings to `RunoutBenchmark`. Test both API 35 and API 37 when available. Device timing excludes fixture/index construction and network time; the release report identifies the measured environment.
+`DiscoveryPerformanceTest` runs on Android with 10,000 local tracks and 5,000 remote files, reporting conservative warm p95 timings to the `RunoutBenchmark` log tag. Test both API 35 and API 37 when available. Device timing excludes fixture/index construction and network time; the release report identifies the measured environment.
 
 `SoulseekLiveNetworkTest` skips unless explicitly enabled. Never put a real username/password in runner arguments or source. Create ignored `.argent/secrets.env` with `ARGENT_SECRET_SLSK_USERNAME` and `ARGENT_SECRET_SLSK_PASSWORD`, set mode 0600, and use the helper after installing the debug and Android test APKs:
 

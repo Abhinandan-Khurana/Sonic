@@ -1,4 +1,4 @@
-# Runout Soulseek native adapter
+# Sonic Soulseek native adapter
 
 The workspace builds `librunout_soulseek.so` around the MIT `soulseek-rs-lib` pinned in `vendor/UPSTREAM`. Vendor sources and license are tracked; Cargo output is not. No .NET runtime or GPL implementation is embedded.
 
