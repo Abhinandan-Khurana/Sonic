@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.compose.ui.graphics.toArgb
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
@@ -22,6 +23,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import app.runout.drops.DropItem
 import app.runout.social.ShelfItem
 import app.runout.model.Album
@@ -50,6 +53,10 @@ class MainActivity : ComponentActivity() {
     private val message = MutableStateFlow<String?>(null)
     private val claiming = MutableStateFlow<Map<String, Float>>(emptyMap())
     private val activeConversation = MutableStateFlow<String?>(null)
+    /** The music folder changed while signed in: Settings › Library asks whether sharing should follow. */
+    private val shareSwap = MutableStateFlow(false)
+    /** The shared-folder picker was opened from that question while sharing was on. */
+    private var resumeSharing = false
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         graph.soulseek.onExternalFlow(false)
         if (granted) graph.soulseek.setStayOnline(true)
@@ -59,10 +66,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        immerse()
+        // The theme before the first frame, so a dark room never opens white.
+        val phoneDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        applyTheme(graph.look.look.value.dark(phoneDark))
         if (savedInstanceState == null) handleIncoming(intent)
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("capture_intro_deck", false)) app.runout.ui.deck.DeckCapture.requested = true
 
         val graph = graph
+        // A track that fails to play lifts the needle; the room says why.
+        lifecycleScope.launch {
+            graph.deck.problem.collect { p -> if (p != null) { message.value = p; graph.deck.clearProblem() } }
+        }
+        app.runout.ui.TeType.init(this)
         setContent {
             val albums by graph.shelf.collectAsStateWithLifecycle()
             val folder by graph.library.folder.collectAsStateWithLifecycle()
@@ -76,6 +91,24 @@ class MainActivity : ComponentActivity() {
             val friends by graph.social.friends.collectAsStateWithLifecycle()
             val drops by graph.drops.state.collectAsStateWithLifecycle()
             val claimed by graph.drops.claimed.collectAsStateWithLifecycle()
+            val newDrop by graph.drops.newDrop.collectAsStateWithLifecycle()
+            val deckFlags by graph.deck.flags.collectAsStateWithLifecycle()
+            val look by graph.look.look.collectAsStateWithLifecycle()
+            val storage by graph.storage.state.collectAsStateWithLifecycle()
+            val dark = look.dark(androidx.compose.foundation.isSystemInDarkTheme())
+            LaunchedEffect(dark) { applyTheme(dark) }
+            // The next launch screen in the pinned theme's paper too (with "phone", Android's own).
+            LaunchedEffect(look.theme) {
+                if (android.os.Build.VERSION.SDK_INT >= 33) splashScreen.setSplashScreenTheme(
+                    when (look.theme) {
+                        app.runout.ui.ThemeMode.DARK -> R.style.Theme_Runout_Dark
+                        app.runout.ui.ThemeMode.LIGHT -> R.style.Theme_Runout_Light
+                        app.runout.ui.ThemeMode.PHONE -> android.content.res.Resources.ID_NULL
+                    },
+                )
+            }
+            val sleepAt by graph.deck.sleepAt.collectAsStateWithLifecycle()
+            val listening by previewState.collectAsStateWithLifecycle()
             val claimingNow by claiming.collectAsStateWithLifecycle()
             val note by message.collectAsStateWithLifecycle()
             val session by graph.soulseek.session.collectAsStateWithLifecycle()
@@ -87,6 +120,7 @@ class MainActivity : ComponentActivity() {
             val conversations by graph.soulseek.conversations.collectAsStateWithLifecycle()
             val destination by graph.soulseek.destination.collectAsStateWithLifecycle()
             val sharedFolder by graph.soulseek.sharedFolder.collectAsStateWithLifecycle()
+            val offerShareSwap by shareSwap.collectAsStateWithLifecycle()
             val sharing by graph.soulseek.sharing.collectAsStateWithLifecycle()
             val stayOnline by graph.soulseek.stayOnline.collectAsStateWithLifecycle()
             val savedUsername by graph.soulseek.savedUsername.collectAsStateWithLifecycle()
@@ -100,6 +134,11 @@ class MainActivity : ComponentActivity() {
             val shareConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::sharing) ?: false }
             val backgroundConsent = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::background) ?: false }
             val turtleMode = remember(settingsRevision) { graph.soulseek.preferences.turtle() }
+            val wifiOnly = remember(settingsRevision,session.username) { session.username?.let(graph.soulseek.preferences::wifiOnly) ?: true }
+            val uploadSlots = remember(settingsRevision,session.username) {
+                session.username?.let(graph.soulseek.preferences::uploadSlots) ?: app.runout.soulseek.SoulseekPreferences.DEFAULT_UPLOAD_SLOTS
+            }
+            val waitingForWifi by graph.soulseek.waitingForWifi.collectAsStateWithLifecycle()
             val discovery by graph.discovery.state.collectAsStateWithLifecycle()
             val discoveryQuery by graph.discovery.query.collectAsStateWithLifecycle()
             val coverLookupEnabled by graph.library.coverLookupEnabled.collectAsStateWithLifecycle()
@@ -108,16 +147,20 @@ class MainActivity : ComponentActivity() {
 
 
             var clock by remember { mutableStateOf(now()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    clock = now()
-                    delay(15_000)
+            // Only while the activity is started: a clock no one can see needs no wake-ups.
+            val clockLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+            LaunchedEffect(clockLifecycle) {
+                clockLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                    while (true) {
+                        clock = now()
+                        delay(15_000)
+                    }
                 }
             }
 
             val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 graph.soulseek.onExternalFlow(false)
-                if (uri != null) graph.library.setFolder(uri)
+                if (uri != null) changeFolder(uri)
             }
             val downloadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 graph.soulseek.onExternalFlow(false)
@@ -129,7 +172,13 @@ class MainActivity : ComponentActivity() {
             }
             val sharePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
                 graph.soulseek.onExternalFlow(false)
-                if (uri != null) graph.soulseek.setSharedFolder(uri)
+                // A new shared folder starts unshared; one picked to follow a new music folder
+                // carries on sharing if sharing was on before.
+                val resume = resumeSharing; resumeSharing = false
+                if (uri != null) graph.scope.launch {
+                    graph.soulseek.setSharedFolder(uri).join()
+                    if (resume && graph.soulseek.sharedFolder.value == uri && graph.soulseek.session.value.connected) graph.soulseek.setSharing(true)
+                }
             }
             val autoEqPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) importAutoEq(uri)
@@ -160,6 +209,7 @@ class MainActivity : ComponentActivity() {
                     override fun importAutoEq() = autoEqPicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream"))
 
                     override fun share(album: Album) = shareAlbum(album)
+                    override fun shareImage(file: File, title: String) = sharePicture(file, title)
                     override fun removeRecord(album: Album) = remove(album)
                     override fun shareMyCard() = shareCard()
                     override fun rename(name: String) = graph.social.rename(name)
@@ -179,6 +229,34 @@ class MainActivity : ComponentActivity() {
                     override fun signOutSoulseek() { activeConversation.value = null; graph.soulseek.logout() }
                     override fun searchSoulseek(query: String) { graph.soulseek.search(query) }
                     override fun stopSoulseekSearch() { graph.soulseek.stopSearch() }
+                    override fun clearSearch() { graph.soulseek.clearSearch(); graph.discovery.clear() }
+                    override fun setAutoFlip(on: Boolean) = graph.deck.setAutoFlip(on)
+                    override fun setAutoPlay(on: Boolean) = graph.deck.setAutoPlay(on)
+                    override fun setSleepMode(on: Boolean) = graph.deck.setSleepMode(on)
+                    override fun setTheme(theme: app.runout.ui.ThemeMode) = graph.look.setTheme(theme)
+                    override fun setDeckSkin(deck: app.runout.ui.DeckSkin) = graph.look.setDeck(deck)
+                    override fun setIntroOnLaunch(on: Boolean) = graph.look.setIntroOnLaunch(on)
+                    override fun analyzeStorage() {
+                        graph.scope.launch { graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value) }
+                    }
+                    override fun clearCache() { graph.scope.launch { graph.storage.clearCache() } }
+                    override fun deleteRecordFolder(record: app.runout.library.RecordUsage) {
+                        graph.scope.launch {
+                            val album = graph.shelf.value.firstOrNull { it.id == record.albumId }
+                            if (album != null && graph.deck.state.value.album?.id == album.id) graph.deck.eject()
+                            graph.storage.delete(record).onSuccess {
+                                when (album?.source) {
+                                    Source.SOULSEEK -> graph.soulseek.removeAlbum(album.id)
+                                    Source.DROP -> graph.drops.remove(album.id)
+                                    else -> Unit
+                                }
+                                graph.library.rescan()
+                                message.value = "Deleted “${record.title}”"
+                                graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value)
+                            }.onFailure { message.value = it.message ?: "Couldn't delete “${record.title}”" }
+                        }
+                    }
+                    override fun setSleepTimer(minutes: Int?) = graph.deck.setSleepTimer(minutes)
                     override fun downloadSoulseek(result: SoulseekSearchResult) {
                         if(graph.soulseek.destination.value == null) {
                             pendingDownload = result; graph.soulseek.onExternalFlow(true); downloadPicker.launch(null)
@@ -189,11 +267,27 @@ class MainActivity : ComponentActivity() {
                     override fun pauseAllDownloads() { graph.soulseek.pauseAll() }
                     override fun resumeAllDownloads() { graph.soulseek.resumeAll() }
                     override fun setTurtleMode(enabled: Boolean) { graph.soulseek.setTurtle(enabled) }
+                    override fun setSoulseekWifiOnly(enabled: Boolean) { graph.soulseek.setWifiOnly(enabled) }
+                    override fun setSoulseekUploadSlots(slots: Int) { graph.soulseek.setUploadSlots(slots) }
                     override fun resumeSoulseekTransfer(id: String) { resumeDownload(id) }
                     override fun cancelSoulseekTransfer(id: String) { graph.soulseek.cancel(id) }
-                    override fun retrySoulseekTransfer(id: String) { resumeDownload(id) }
+                    override fun removeSoulseekTransfer(id: String) { graph.soulseek.remove(id) }
+                    override fun removeFailedDownloads() { graph.soulseek.removeFailed() }
+                    override fun downloadSoulseekTracks(files: List<SoulseekSearchResult>, albumId: String?) { graph.soulseek.downloadTracks(files, albumId) }
+                    override fun retrySoulseekTransfer(id: String) {
+                        // Soulseek: the same peer again with a fresh round of automatic retries. Archive: its drop.
+                        if (graph.soulseek.transfers.value.firstOrNull { it.id == id }?.provider == "Soulseek") graph.soulseek.retry(id) else resumeDownload(id)
+                    }
+                    override fun fetchMissingTracks(albumId: String) { graph.soulseek.fetchMissing(albumId) }
                     override fun pickDownloadFolder() { graph.soulseek.onExternalFlow(true); downloadPicker.launch(null) }
                     override fun pickSharedFolder() { graph.soulseek.onExternalFlow(true); sharePicker.launch(null) }
+                    override fun answerShareSwap(change: Boolean) {
+                        shareSwap.value = false
+                        if (!change) return
+                        // Its own picker, so Android asks for the shared folder's permission separately.
+                        resumeSharing = graph.soulseek.session.value.username?.let(graph.soulseek.preferences::sharing) ?: false
+                        pickSharedFolder()
+                    }
                     override fun setSoulseekSharing(enabled: Boolean) { graph.soulseek.setSharing(enabled) }
                     override fun setSoulseekStayOnline(enabled: Boolean) {
                         if (enabled && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -214,6 +308,7 @@ class MainActivity : ComponentActivity() {
                     override fun reconnectSoulseek() { graph.soulseek.reconnect() }
                     override fun disconnectSoulseek() { graph.soulseek.disconnectFromNotification() }
                     override fun previewSoulseekFolder(result: SoulseekSearchResult) { graph.soulseek.previewFolder(result) }
+                    override fun openSoulseekFolder(username: String, directory: String) { graph.soulseek.previewFolder(username, directory) }
                     override fun confirmSoulseekFolder() { graph.soulseek.confirmFolderDownload() }
                     override fun closeSoulseekFolder() { graph.soulseek.closeFolderPreview() }
                     override fun setSearchQuery(value: String) { graph.discovery.setQuery(value) }
@@ -223,7 +318,8 @@ class MainActivity : ComponentActivity() {
                     override fun setOnboardingStep(value: Int) { graph.soulseek.preferences.setStep(value) }
                     override suspend fun coverFor(item: ShelfItem): String? {
                         val id = "shelf-" + app.runout.library.LibraryScanner.stableId(item.artist.lowercase() + "|" + item.title.lowercase())
-                        return (graph.artwork.cachedFile(id) ?: graph.artwork.lookupOnline(id, item.artist, item.title))?.absolutePath
+                        val online = graph.library.coverLookupEnabled.value
+                        return (graph.artwork.cachedFile(id) ?: if (online) graph.artwork.lookupOnline(id, item.artist, item.title) else null)?.absolutePath
                     }
                 }
             }
@@ -255,6 +351,8 @@ class MainActivity : ComponentActivity() {
                     soulseekConversation = selectedConversation,
                     downloadFolder = destination?.let(::folderLabel),
                     sharedFolder = sharedFolder?.let(::folderLabel),
+                    // Signed out since the question came up: don't ask.
+                    offerShareSwap = offerShareSwap && session.hasAccount,
                     soulseekSharing = sharing,
                     soulseekStayOnline = stayOnline,
                     soulseekShareConsent = shareConsent,
@@ -269,6 +367,15 @@ class MainActivity : ComponentActivity() {
                     coverLookupEnabled = coverLookupEnabled,
                     coverLookupNoticePending = coverLookupNoticePending,
                     turtleMode = turtleMode,
+                    newDrop = newDrop,
+                    deckFlags = deckFlags,
+                    look = look,
+                    storage = storage,
+                    sleepAt = sleepAt,
+                    soulseekWifiOnly = wifiOnly,
+                    soulseekUploadSlots = uploadSlots,
+                    soulseekWaitingForWifi = waitingForWifi,
+                    preview = listening,
                 ),
                 actions = actions,
             )
@@ -284,15 +391,36 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         // A drop preview is a quick listen, not background music.
         listenTo(null)
+        // The launcher icon takes the room's theme while the room is off screen.
+        if (!isChangingConfigurations) runCatching { LauncherIcon.follow(this, app.runout.ui.Room.dark) }
         super.onStop()
     }
 
-    /** The room fills the screen; the system bars appear only when swiped in. */
+    /**
+     * Upright, the status bar stays (clock, battery, notifications) in dark ink on the white room and
+     * only the navigation bar hides; sideways the room fills the screen. Hidden bars appear when swiped in.
+     */
     private fun immerse() {
+        val sideways = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         WindowCompat.getInsetsController(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
+            if (sideways) hide(WindowInsetsCompat.Type.systemBars())
+            else { show(WindowInsetsCompat.Type.statusBars()); hide(WindowInsetsCompat.Type.navigationBars()) }
+            isAppearanceLightStatusBars = !app.runout.ui.Room.dark
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    /** Light or dark (OLED black): the room's palette, the window behind it and the bar icons. */
+    private fun applyTheme(dark: Boolean) {
+        app.runout.ui.Room.dark = dark
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(app.runout.ui.Room.Background.toArgb()))
+        immerse()
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // The activity keeps itself across turns: switch between upright and sideways bars here.
+        immerse()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -300,6 +428,30 @@ class MainActivity : ComponentActivity() {
         handleIncoming(intent)
     }
 
+
+    /**
+     * A music folder picked in Settings › Library, onboarding or the empty room. When it replaces
+     * another folder, the record on the deck (a folder record is always from the old folder) goes
+     * back first, since the old folder's read grant is released; the crate refills from the new
+     * folder; and, signed in to Soulseek with a folder shared, Settings › Library asks whether the
+     * shared folder should follow.
+     */
+    private fun changeFolder(uri: Uri) {
+        val old = graph.library.folder.value
+        if (old != null && old != uri && graph.deck.state.value.album?.source == Source.FOLDER) graph.deck.eject()
+        graph.library.setFolder(uri, keepGrant = ::grantStillUsed)
+        if (offersShareSwap(old?.toString(), uri.toString(), graph.soulseek.session.value.hasAccount, graph.soulseek.sharedFolder.value?.toString())) shareSwap.value = true
+    }
+
+    /**
+     * Whether a folder grant is still needed after the music folder moves away from it: it is the
+     * downloads folder or a shared folder (this account's, or one remembered for another account).
+     */
+    private fun grantStillUsed(uri: Uri): Boolean {
+        val s = uri.toString()
+        if (graph.soulseek.destination.value?.toString() == s || graph.soulseek.sharedFolder.value?.toString() == s) return true
+        return listOf("soulseek", "soulseek-setup").any { name -> getSharedPreferences(name, MODE_PRIVATE).all.values.any { it == s } }
+    }
 
     private fun folderLabel(uri: Uri): String = runCatching {
         androidx.documentfile.provider.DocumentFile.fromTreeUri(this, uri)?.name
@@ -344,6 +496,19 @@ class MainActivity : ComponentActivity() {
             }
             launchShare(file, "Send your friend card")
         }
+    }
+
+    /** A record's details as a PNG, to any app that takes a picture. */
+    private fun sharePicture(file: File, title: String) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            clipData = android.content.ClipData.newRawUri(title, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, "Share “$title”"))
     }
 
     private fun launchShare(file: File, title: String) {
@@ -398,22 +563,88 @@ class MainActivity : ComponentActivity() {
     }
 
     // A short listen to a Friday Drop before claiming it. It streams from archive.org and stops on
-    // its own after thirty seconds; it never touches the deck.
+    // its own thirty seconds after the sound starts; it never touches the deck. It takes audio
+    // focus for its moment, so a spinning record pauses and comes back after, and it stops when
+    // headphones go, rather than carrying on out of the speaker. [previewState] is what the track
+    // rows show; every way the listen ends goes through listenTo(null), which clears it and gives
+    // the focus back.
+    private val previewState = MutableStateFlow<app.runout.ui.PreviewState?>(null)
     private var preview: android.media.MediaPlayer? = null
     private var previewStop: kotlinx.coroutines.Job? = null
+    private var previewFocus: android.media.AudioFocusRequest? = null
+    private val previewAttributes = android.media.AudioAttributes.Builder()
+        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
+    private val previewNoisy = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) listenTo(null)
+        }
+    }
+    private var previewNoisyRegistered = false
 
     private fun listenTo(url: String?) {
         previewStop?.cancel()
+        previewStop = null
         preview?.let { runCatching { it.stop() }; it.release() }
         preview = null
+        previewState.value = null
+        val audio = getSystemService(android.media.AudioManager::class.java)
+        previewFocus?.let { runCatching { audio?.abandonAudioFocusRequest(it) } }
+        previewFocus = null
+        if (previewNoisyRegistered) { runCatching { unregisterReceiver(previewNoisy) }; previewNoisyRegistered = false }
         if (url == null) return
-        preview = android.media.MediaPlayer().apply {
-            setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            setOnPreparedListener { it.start() }
-            setOnErrorListener { _, _, _ -> message.value = "Couldn't play a preview of that track."; true }
-            runCatching { setDataSource(url); prepareAsync() }.onFailure { message.value = "Couldn't play a preview of that track." }
+        val focus = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(previewAttributes)
+            .setOnAudioFocusChangeListener { change ->
+                if (change == android.media.AudioManager.AUDIOFOCUS_LOSS || change == android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) listenTo(null)
+            }
+            .build()
+        if (audio?.requestAudioFocus(focus) != android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            message.value = "Couldn't play a preview right now."
+            return
         }
-        previewStop = graph.scope.launch { kotlinx.coroutines.delay(30_000); listenTo(null) }
+        previewFocus = focus
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, previewNoisy, android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        previewNoisyRegistered = true
+        previewState.value = app.runout.ui.PreviewState(url, app.runout.ui.PreviewPhase.BUFFERING)
+        val player = android.media.MediaPlayer()
+        preview = player
+        player.setAudioAttributes(previewAttributes)
+        player.setOnPreparedListener { p ->
+            if (preview !== p) return@setOnPreparedListener
+            p.start()
+            previewState.value = app.runout.ui.PreviewState(url, app.runout.ui.PreviewPhase.PLAYING)
+            // The thirty seconds count from the first sound, not from the tap.
+            previewStop?.cancel()
+            previewStop = graph.scope.launch { kotlinx.coroutines.delay(PREVIEW_MS); if (preview === p) listenTo(null) }
+        }
+        // Done early: give the focus back, so the record comes back too. Posted, so the player
+        // isn't released from inside its own callback.
+        player.setOnCompletionListener { done -> window.decorView.post { if (preview === done) listenTo(null) } }
+        player.setOnErrorListener { failed, _, _ ->
+            window.decorView.post {
+                if (preview === failed) { message.value = "Couldn't play a preview of that track."; listenTo(null) }
+            }
+            true
+        }
+        val started = runCatching { player.setDataSource(url); player.prepareAsync() }
+        if (started.isFailure) {
+            message.value = "Couldn't play a preview of that track."
+            listenTo(null)
+            return
+        }
+        // A slow archive: give up rather than hold the focus (and the paused record) in silence.
+        previewStop = graph.scope.launch {
+            kotlinx.coroutines.delay(PREVIEW_BUFFER_MS)
+            if (preview === player && previewState.value?.phase == app.runout.ui.PreviewPhase.BUFFERING) {
+                message.value = "Couldn't load a preview right now."
+                listenTo(null)
+            }
+        }
     }
 
     private fun importAutoEq(uri: Uri) {
@@ -427,3 +658,16 @@ class MainActivity : ComponentActivity() {
 
     private fun now(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
 }
+
+/** A drop listen plays this long from its first sound. */
+private const val PREVIEW_MS = 30_000L
+/** How long a drop listen may take to start before it gives up. */
+private const val PREVIEW_BUFFER_MS = 15_000L
+
+/**
+ * After the music folder moves from [old] to [new]: ask whether the Soulseek shared folder should
+ * follow only when the folder really changed (not the first pick, not the same folder again), the
+ * person is signed in to Soulseek (never offline or without an account) and something is shared.
+ */
+internal fun offersShareSwap(old: String?, new: String, signedIn: Boolean, shared: String?): Boolean =
+    old != null && old != new && signedIn && shared != null

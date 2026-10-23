@@ -5,7 +5,7 @@
 We want this project to be a place where people can disagree about code without making it
 personal, and where newcomers feel welcome to ask the obvious question.
 
-We pledge to act in ways that keep Runout a calm, useful place to contribute.
+We pledge to act in ways that keep Sonic a calm, useful place to contribute.
 
 ## Expected behaviour
 

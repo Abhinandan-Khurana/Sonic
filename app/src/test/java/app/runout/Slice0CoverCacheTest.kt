@@ -29,6 +29,23 @@ class Slice0CoverCacheTest {
         assertEquals(3, http.calls.size)
     }
 
+    @Test fun `switching online covers on looks for the missing ones right away`() = runBlocking {
+        val context = Fixtures.context
+        val http = FakeHttp(mapOf("musicbrainz" to { "{\"release-groups\":[]}".toByteArray() }))
+        val dir = File(context.cacheDir, "no-art-now").apply { mkdirs() }
+        File(dir, "01 Opening.flac").writeBytes(flacWithoutPicture(Fixtures.bytes("Music/Vela Park - Night Drive (2023)/01 Opening.flac")))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val repo = LibraryRepository(context, LibraryScanner(context), ArtworkRepository(context, http = http), scope)
+            repo.setFolder(FolderProvider.install(dir))!!.join()
+            assertTrue(http.calls.isEmpty())
+            repo.setCoverLookupEnabled(true)
+            val until = System.nanoTime() + 5_000_000_000L
+            while (http.calls.isEmpty() && System.nanoTime() < until) delay(20)
+            assertEquals("no rescan needed", 1, http.calls.size)
+        } finally { scope.cancel() }
+    }
+
     @Test fun `scan sends no queries by default opt in sends one and disabling stops them`() = runBlocking {
         val context = Fixtures.context
         val http = FakeHttp(mapOf("musicbrainz" to { "{\"release-groups\":[]}".toByteArray() }))

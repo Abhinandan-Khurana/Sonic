@@ -1,6 +1,6 @@
-# Runout 0.4 architecture
+# Sonic architecture
 
-Runout is a single Android application module with a small Rust workspace for Soulseek. Kotlin owns user-visible policy, local persistence, document access and playback. The native library owns protocol framing, peer connections and network transfer machinery. There is no Runout account server.
+Sonic is a single Android application module with a small Rust workspace for Soulseek. Kotlin owns user-visible policy, local persistence, document access and playback. The native library owns protocol framing, peer connections and network transfer machinery. There is no Sonic account server. The Kotlin package is still `app.runout` and the native library is still `librunout_soulseek.so`; both are internal names kept from before the rename.
 
 ```mermaid
 flowchart TD

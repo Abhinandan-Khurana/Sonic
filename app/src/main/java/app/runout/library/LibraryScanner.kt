@@ -176,6 +176,12 @@ class LibraryScanner(private val context: Context) {
                 failed += UnreadableFile("${docPath(folderId)}/${entry.name}", FlacPolicy.diagnose(context, uri))
                 return@mapNotNull null
             }
+            // Real FLAC this phone can't decode stays off the shelf, with the reason in the report,
+            // rather than failing when the needle drops.
+            FlacPolicy.unplayableReason(info)?.let { reason ->
+                failed += UnreadableFile("${docPath(folderId)}/${entry.name}", reason)
+                return@mapNotNull null
+            }
             // A verified FLAC stream may omit its total sample count.
             val base = info
             val estimated = base.durationMs <= 0
@@ -212,12 +218,8 @@ class LibraryScanner(private val context: Context) {
                     year = items.firstNotNullOfOrNull { it.info.year },
                     folderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, folderId).toString(),
                     tracks = tracks,
-                    quality = AudioQuality(
-                        codec = first.codec,
-                        bitsPerSample = first.bits,
-                        sampleRateHz = first.sampleRate,
-                        bitrateKbps = sorted.mapNotNull { it.info.bitrateKbps }.takeIf { it.isNotEmpty() }?.average()?.toInt(),
-                    ),
+                    // The lowest depth and rate on the record, as the deck shows it.
+                    quality = FlacPolicy.quality(sorted.map { it.info }).copy(codec = first.codec),
                     license = licences.singleOrNull()?.takeIf { licences.size == 1 && sorted.all { it.info.license != null } },
                     albumGainDb = sorted.firstNotNullOfOrNull { it.info.albumGainDb },
                 ),

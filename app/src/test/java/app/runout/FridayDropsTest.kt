@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -84,6 +85,35 @@ class FridayDropsTest {
     }
 
     @Test
+    fun `from 30 October the ten don't depend on how the archive orders its page`() {
+        val pool = (1..100).map { DropItem("id$it", "Album $it", "Artist", 2020, null) }
+        val week = DropsRepository.STABLE_FROM
+        val a = DropsRepository.pickStable(pool, week)
+        assertEquals(10, a.map { it.identifier }.toSet().size)
+        assertEquals("any order of the same page", a.toSet(), DropsRepository.pickStable(pool.shuffled(java.util.Random(4)), week).toSet())
+        assertEquals(a, DropsRepository.pickStable(pool.reversed() + pool.take(7), week))
+        // An album that wasn't one of the ten leaving the page changes nothing.
+        val outsider = pool.first { it !in a }
+        assertEquals(a, DropsRepository.pickStable(pool - outsider, week))
+        assertNotEquals(a, DropsRepository.pickStable(pool, week + 1))
+        // The archive's oldest-first order, which new uploads don't reshuffle; earlier weeks keep theirs.
+        assertTrue(DropsRepository.searchUrl(DropsRepository.pageFor(week), stable = true).contains("publicdate+asc"))
+        assertTrue(DropsRepository.searchUrl(DropsRepository.pageFor(week - 1)).contains("downloads+desc"))
+        assertEquals(DropsRepository.pick(pool, DropsRepository.seed(week - 1)), DropsRepository.pickFor(week - 1, pool))
+        assertTrue(DropsRepository.pageFor(week + 7) in 1..DropsRepository.STABLE_PAGES.toInt())
+    }
+
+    @Test
+    fun `the drops tab marks a week until its drop is opened`() = runBlocking {
+        val drops = repo(http())
+        assertTrue(drops.newDrop.value)
+        drops.refresh()
+        assertFalse(drops.newDrop.value)
+        assertFalse("seen stays seen", repo(http()).newDrop.value)
+        assertTrue("next Friday is new", repo(http(), date = "2026-10-23").newDrop.value)
+    }
+
+    @Test
     fun `search results from archive_org are read correctly`() {
         val items = DropsRepository.parseSearch(Fixtures.text("ia/search_page1.json"))
         assertEquals(5, items.size)
@@ -103,6 +133,27 @@ class FridayDropsTest {
         assertEquals(listOf("01 Opening.flac", "02 Lowlight.flac"), flac.tracks.map { it.name })
         assertEquals(2_000L, flac.tracks[1].lengthMs)
         assertEquals("https://archive.org/download/x/01%20Opening.flac", DropsRepository.fileUrl("x", "01 Opening.flac"))
+    }
+
+    @Test
+    fun `a listen streams the archive's MP3 of a track and falls back to its FLAC`() = runBlocking {
+        val meta = JSONObject().apply {
+            put("metadata", JSONObject().put("identifier", "x"))
+            put("files", JSONArray().apply {
+                put(JSONObject().put("name", "01 Opening.flac").put("format", "Flac").put("source", "original").put("track", "1").put("title", "Opening"))
+                put(JSONObject().put("name", "02 Lowlight.flac").put("format", "Flac").put("source", "original").put("track", "2").put("title", "Lowlight"))
+                put(JSONObject().put("name", "01 Opening.mp3").put("format", "VBR MP3").put("source", "derivative").put("original", "01 Opening.flac"))
+                // An MP3 made from something else isn't a stand-in for track two.
+                put(JSONObject().put("name", "02 Other.mp3").put("format", "VBR MP3").put("source", "derivative").put("original", "02 Other.flac"))
+            })
+        }.toString().toByteArray()
+        val r = repo(FakeHttp(mapOf("/metadata/" to { meta })))
+        val tracks = r.preview(DropItem("x", "X", "Y", null, null)).getOrThrow()
+        assertEquals(listOf("Opening", "Lowlight"), tracks.map { it.title })
+        assertEquals("https://archive.org/download/x/01%20Opening.mp3", tracks[0].url)
+        assertEquals("https://archive.org/download/x/02%20Lowlight.flac", tracks[1].url)
+        // The claim still plans the FLACs only.
+        assertEquals(listOf("01 Opening.flac", "02 Lowlight.flac"), DropsRepository.planDownload(JSONObject(String(meta))).tracks.map { it.name })
     }
 
     @Test

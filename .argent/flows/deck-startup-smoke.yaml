@@ -1,7 +1,7 @@
 steps:
-  - echo: Restart Runout Dev; expect listening room. Inspect screenshot separately
+  - echo: Restart Sonic Dev; expect listening room. Inspect screenshot separately
       for the 3D deck.
-  - launch: app.runout.dev
+  - launch: app.sonic.dev
   - tool: await-ui-element
     args:
       condition: visible

@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import androidx.room.withTransaction
+import app.runout.discovery.folderNames
 import app.runout.library.AlbumJson
 import app.runout.library.ArtworkRepository
 import app.runout.library.FlacPolicy
@@ -17,6 +18,8 @@ import app.runout.model.Track
 import app.runout.sharing.VinylPackage
 import app.runout.social.Profile
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,10 +34,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -45,6 +50,16 @@ import java.util.concurrent.ConcurrentHashMap
 /** Wait before continuing a download Android interrupted, and how often to try in a row. */
 private const val AUTO_RESUME_DELAY_MS = 2_000L
 private const val AUTO_RESUME_LIMIT = 3
+/** How long one search for another copy of a failed file listens for answers. */
+private const val SEEK_TIMEOUT_MS = 20_000L
+/** How many times a search for another copy starts over after a search of yours cut it short. */
+private const val SEEK_ATTEMPTS = 3
+/** Said of a failed download once no one else turned out to share the identical file. */
+private const val NO_COPY = " No one else shares this exact file right now."
+/** A download's byte count reaches the database at most this often; its state changes at once. */
+private const val PROGRESS_WRITE_MS = 1_000L
+private val PROGRESS_STATES = setOf("QUEUED", "DOWNLOADING")
+private fun nowMs() = System.nanoTime() / 1_000_000
 
 class SoulseekRepository(
     private val context: Context,
@@ -52,6 +67,10 @@ class SoulseekRepository(
     private val transportFactory: ((String) -> Int) -> SoulseekTransport = { NativeTransport(it) },
     database: SoulseekDatabase? = null,
     private val artwork: ArtworkRepository? = null,
+    private val retryDelaysMs: List<Long> = SoulseekPolicy.RETRY_DELAYS_MS,
+    private val seekTimeoutMs: Long = SEEK_TIMEOUT_MS,
+    /** Settings › find missing covers online: off unless you opt in. */
+    private val coverLookup: () -> Boolean = { false },
 ) {
     private val db = database ?: Room.databaseBuilder(context.applicationContext, SoulseekDatabase::class.java, "soulseek.db").build()
     private val dao = db.soulseek()
@@ -64,14 +83,29 @@ class SoulseekRepository(
     private var ownerJob: Job? = null
     private var observedOwner: String? = null
     private val connection = SoulseekConnectionManager(context, scope, { transportFactory(::openSharedFile) },
-        { backgroundConsented() || hasActiveTransfers() }, ::handleEvent, { _error.value = it })
+        { backgroundConsented() || hasActiveTransfers() }, ::handleEvent, { _error.value = it }, busy = ::nativeBusy)
     private val generation get() = connection.generation
     private val activeTransfers = ConcurrentHashMap.newKeySet<String>()
     private val publicationJobs = ConcurrentHashMap<String, Job>()
-    private val pendingBrowse = ConcurrentHashMap<String, SoulseekSearchResult>()
+    private data class BrowseRequest(val username: String, val directory: String)
+    private val pendingBrowse = ConcurrentHashMap<String, BrowseRequest>()
     private val shares = ConcurrentHashMap<String, SharedFile>()
     private val shareRevision = java.util.concurrent.atomic.AtomicLong()
     private var searchId: String? = null
+    /** Searches for another copy of a failed file, by search id; one at a time, never over yours. */
+    private class RepairSearch {
+        val results: MutableList<SoulseekSearchResult> = java.util.Collections.synchronizedList(mutableListOf())
+        /** Completes with whether the search was cut short. */
+        val done = CompletableDeferred<Boolean>()
+    }
+    private val repairSearches = ConcurrentHashMap<String, RepairSearch>()
+    private val seekMutex = Mutex()
+    private val seekJobs = ConcurrentHashMap<String, Job>()
+    /** One waiting retry per download: coming back to the app or signing in again doesn't stack them. */
+    private val retryJobs = ConcurrentHashMap<String, Job>()
+    /** When each download's progress was last written, and the newest progress still held back. */
+    private val progressWritten = ConcurrentHashMap<String, Long>()
+    private val heldProgress = ConcurrentHashMap<String, TransferRow>()
     val session = connection.session
     private val _searchResults = MutableStateFlow<List<SoulseekSearchResult>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
@@ -102,6 +136,11 @@ class SoulseekRepository(
     val sharing = _sharing.asStateFlow()
     private val _stayOnline = MutableStateFlow(false)
     val stayOnline = _stayOnline.asStateFlow()
+    /** On Wi-Fi or Ethernet right now (assumed until Android says otherwise). */
+    @Volatile private var onWifi = true
+    /** Sharing is on, but held back because Wi-Fi only is on and the phone is on mobile data. */
+    private val _waitingForWifi = MutableStateFlow(false)
+    val waitingForWifi = _waitingForWifi.asStateFlow()
     val savedUsername = connection.savedUsername
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
@@ -130,6 +169,11 @@ class SoulseekRepository(
     fun canDownload(): Boolean = session.value.signedIn
     fun requireSignedIn() { check(canDownload()) { "Sign in with your Soulseek account to download and keep music." } }
     fun clearError() { _error.value = null }
+    /**
+     * Drops a "sign in" or "offline" error once the session is back, so the prompt doesn't stay up
+     * after you've signed in. Any other error is still news and stays.
+     */
+    private fun clearSessionError() { _error.update { if (it != null && isSessionError(it)) null else it } }
 
     fun signIn(username: String, password: String, remember: Boolean): Job = work {
         require(SoulseekPolicy.validUsername(username)) { "Use a Soulseek username of 1–30 printable ASCII characters, without surrounding spaces." }
@@ -144,8 +188,9 @@ class SoulseekRepository(
     }
     fun signInSaved(): Job = work {
         accountMutex.withLock { connection.disconnect(SoulseekDisconnectReason.MANUAL); clearSessionWork("Account changed", true); connection.signInSaved() }
+        clearSessionError()
     }
-    fun reconnect(): Job = work { connection.reconnect() }
+    fun reconnect(): Job = work { connection.reconnect(); clearSessionError() }
     private fun observeOwner(username: String) {
         if (observedOwner == username) return
         observedOwner = username
@@ -167,6 +212,9 @@ class SoulseekRepository(
         val owner = session.value.username
         publicationJobs.values.forEach { it.cancel() }; publicationJobs.clear()
         archiveJobs.values.forEach { it.cancel() }; archiveJobs.clear()
+        // Seeks pick up again at the next sign-in; their rows keep saying what they were doing.
+        seekJobs.values.forEach { it.cancel() }; seekJobs.clear()
+        repairSearches.values.forEach { it.done.complete(true) }
         activeTransfers.clear(); _uploads.value = emptyList(); pendingBrowse.clear(); _folderPreview.value = null
         searchMutex.withLock {
             searchId = null; _searching.value = false
@@ -198,6 +246,12 @@ class SoulseekRepository(
         try { command("search") { put("id", id); put("query", text); put("timeoutMs", 30000) } }
         catch (e: Exception) { _searching.value = false; _searchStatus.update { it.copy(phase = SearchPhase.FAILED, error = friendly(e)) }; throw e }
     } }
+    /** Dig left behind: the search stopped and its results gone, so Dig opens on its own page. */
+    fun clearSearch(): Job = work { searchMutex.withLock {
+        searchId?.let { id -> runCatching { command("cancel_search") { put("id", id) } }.onFailure { if (it is CancellationException) throw it } }
+        searchId = null; _searching.value = false
+        searchIndex.clear(); _searchResults.value = emptyList(); _searchStatus.value = SoulseekSearchStatus()
+    } }
     fun stopSearch(): Job = work { searchMutex.withLock {
         searchId?.let { id -> command("cancel_search") { put("id", id) } }
         searchId = null; _searching.value = false
@@ -205,12 +259,22 @@ class SoulseekRepository(
     } }
     fun removeAlbum(id: String): Job = work { dao.removeAlbum(id) }
     fun download(result: SoulseekSearchResult): Job = work { enqueue(result) }
+    /**
+     * Just these tracks of a folder, into [albumId]'s folder and record when it's an album Runout
+     * downloaded (so a broken or missing song joins the rest), else into the folder's own album.
+     */
+    fun downloadTracks(files: List<SoulseekSearchResult>, albumId: String?): Job = work {
+        requireSignedIn(); storage.requireDestination()
+        files.forEach { enqueue(it, albumId) }
+    }
     fun downloadFolder(result: SoulseekSearchResult): Job = previewFolder(result)
-    fun previewFolder(result: SoulseekSearchResult): Job = work {
+    fun previewFolder(result: SoulseekSearchResult): Job = previewFolder(result.username, result.directory)
+    /** Lists [directory] on [username]'s share (`/` separators), as the folder a record card names. */
+    fun previewFolder(username: String, directory: String): Job = work {
         requireSignedIn()
-        val id = UUID.randomUUID().toString(); pendingBrowse.clear(); pendingBrowse[id] = result
-        _folderPreview.value = SoulseekFolderPreview(id, result.username, result.directory)
-        command("browse") { put("id", id); put("username", result.username); put("directory", result.directory) }
+        val id = UUID.randomUUID().toString(); pendingBrowse.clear(); pendingBrowse[id] = BrowseRequest(username, directory)
+        _folderPreview.value = SoulseekFolderPreview(id, username, directory)
+        command("browse") { put("id", id); put("username", username); put("directory", directory) }
     }
     fun closeFolderPreview() { pendingBrowse.clear(); _folderPreview.value = null }
     fun confirmFolderDownload(): Job = work {
@@ -220,16 +284,21 @@ class SoulseekRepository(
         preview.files.forEach { enqueue(it) }
         _folderPreview.value = null
     }
-    private suspend fun enqueue(result: SoulseekSearchResult) {
+    private suspend fun enqueue(result: SoulseekSearchResult, albumId: String? = null) {
         requireSignedIn(); storage.requireDestination()
         require(FlacPolicy.isFlacName(result.fileName) && result.size > 0 && result.size <= 1L shl 40) { "Only FLAC music files can be downloaded." }
         val owner = session.value.username!!
         val id = SoulseekPolicy.accountKey(owner, result.id)
         val previous = dao.transfer(id)
-        if (previous?.state == SoulseekTransferState.COMPLETED.name) return
+        // Done and still in the folder: nothing to do. Done but the file has gone: fetch it again.
+        val redo = previous?.state == SoulseekTransferState.COMPLETED.name
+        if (redo && previous?.let(::stillPublished) == true) return
         if (previous?.state in listOf("DOWNLOADING", "QUEUED", "VALIDATING", "PUBLISHING")) return
-        val row = previous?.copy(state = "QUEUED", error = null, updatedAt = System.currentTimeMillis())
-            ?: TransferRow(id, owner, result.username, result.path, result.size)
+        val row = previous?.copy(
+            state = "QUEUED", error = null, updatedAt = System.currentTimeMillis(), albumId = albumId ?: previous.albumId,
+            failure = null, recovery = null, retryAt = null, retries = 0,
+            bytes = if (redo) 0 else previous.bytes, stagePath = if (redo) null else previous.stagePath, publishedUri = if (redo) null else previous.publishedUri,
+        ) ?: TransferRow(id, owner, result.username, result.path, result.size, albumId = albumId)
         dao.putTransfer(row)
         try { startService(SoulseekTransferService::class.java); startTransfer(row) }
         catch (e: Throwable) { dao.putTransfer(row.copy(state = "PAUSED", error = friendly(e))); throw e }
@@ -266,11 +335,12 @@ class SoulseekRepository(
     private suspend fun pauseOne(id: String) {
         interruptedIds.remove(id)
         val row = ownTransfer(id)
+        seekJobs.remove(id)?.cancel()
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()
         if (activeTransfers.contains(id)) command("pause") { put("id", id) }
         activeTransfers.remove(id)
-        dao.putTransfer(row.copy(state = "PAUSED", speed = 0.0, error = null))
+        dao.putTransfer(row.copy(state = "PAUSED", speed = 0.0, error = null, recovery = null, retryAt = null))
     }
     fun resume(id: String): Job = work { resumeOne(id) }
     private suspend fun resumeOne(id: String) {
@@ -278,13 +348,33 @@ class SoulseekRepository(
         if (row.state == "COMPLETED") return
         check(row.provider == "Soulseek") { "Retry this album from Friday Drops to continue an Internet Archive download." }
         startService(SoulseekTransferService::class.java)
-        if (row.stagePath?.let { File(it).exists() && File(it).length() == row.size } == true) publishAsync(row)
-        else { dao.putTransfer(row.copy(state = "QUEUED", error = null)); startTransfer(row) }
+        // Asked again now, by you or by its timer: nothing is waiting any more.
+        val ready = row.copy(recovery = null, retryAt = null)
+        if (row.stagePath?.let { File(it).exists() && File(it).length() == row.size } == true) { dao.putTransfer(ready); publishAsync(ready) }
+        else { val queued = ready.copy(state = "QUEUED", error = null); dao.putTransfer(queued); startTransfer(queued) }
     }
-    fun retry(id: String): Job = resume(id)
+    /** Your retry: the same peer again, with the full round of automatic retries after it. */
+    fun retry(id: String): Job = work {
+        val row = ownTransfer(id)
+        dao.putTransfer(row.copy(retries = 0, recovery = null, retryAt = null))
+        resumeOne(id)
+    }
+    /** Look for this failed file again from anyone sharing the identical copy. */
+    fun findAnotherCopy(id: String): Job = work { requireSignedIn(); seekAgain(ownTransfer(id)) }
+    /** A record's failed tracks, each looked for again (a folder problem is simply retried). */
+    fun fetchMissing(albumId: String): Job = work {
+        requireSignedIn(); storage.requireDestination()
+        dao.failed(session.value.username!!).filter { it.effectiveAlbumId() == albumId }.forEach { seekAgain(it) }
+    }
+    private suspend fun seekAgain(row: TransferRow) {
+        if (row.provider != "Soulseek" || row.failure == FailureKind.FOLDER.name) { resumeOne(row.id); return }
+        dao.putTransfer(row.copy(state = "PAUSED", recovery = Recovery.SEEK.name, retryAt = null, error = row.error?.removeSuffix(NO_COPY)))
+        seekAsync(row.id)
+    }
     fun cancel(id: String): Job = work {
         interruptedIds.remove(id)
         val row = ownTransfer(id)
+        seekJobs.remove(id)?.cancel()
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()
         if (activeTransfers.contains(id)) command("cancel") { put("id", id) }
@@ -293,6 +383,34 @@ class SoulseekRepository(
         storage.stagingDirectory(id).deleteRecursively()
         // Cancellation never removes music already published to the user's folder.
     }
+    /** Off the list: stopped if it's running, its partial file deleted. Music already in your folder stays. */
+    fun remove(id: String): Job = work {
+        interruptedIds.remove(id)
+        val row = ownTransfer(id)
+        seekJobs.remove(id)?.cancel()
+        publicationJobs.remove(id)?.cancel()
+        archiveJobs.remove(id)?.cancel()
+        if (activeTransfers.contains(id)) command("cancel") { put("id", id) }
+        activeTransfers.remove(id)
+        dao.deleteTransfer(row.id)
+        storage.stagingDirectory(id).deleteRecursively()
+        pumpQueue()
+    }
+    /** Every failed or cancelled download off the list at once. */
+    fun removeFailed(): Job = work {
+        val owner = session.value.username ?: return@work
+        _transfers.value.filter { it.state == SoulseekTransferState.FAILED || it.state == SoulseekTransferState.CANCELLED }.forEach { t ->
+            val row = dao.transfer(t.id)?.takeIf { it.owner == owner } ?: return@forEach
+            seekJobs.remove(row.id)?.cancel()
+            dao.deleteTransfer(row.id)
+            storage.stagingDirectory(row.id).deleteRecursively()
+        }
+    }
+    /** A completed download whose file is still in the folder, whole. */
+    private fun stillPublished(row: TransferRow): Boolean = runCatching {
+        val file = row.publishedUri?.let { DocumentFile.fromSingleUri(context, Uri.parse(it)) } ?: return false
+        file.exists() && file.length() == row.size
+    }.getOrDefault(false)
     private suspend fun ownTransfer(id: String): TransferRow {
         val row = dao.transfer(id) ?: throw IllegalArgumentException("This download no longer exists.")
         check(row.owner == session.value.username) { "Sign in with the account that started this download." }
@@ -342,6 +460,8 @@ class SoulseekRepository(
             val epoch = generation
             if (shareRevision.get() != revision) return@work
             preferences.setSharing(owner, enabled)
+            _waitingForWifi.value = false
+            if (enabled && offWifi(owner)) { holdForWifi(); return@work }
             if (!enabled) { _sharing.value = false; shares.clear(); if (session.value.signedIn) command("shares") { put("files", JSONArray()) }; _uploads.value = emptyList(); updateServices(); return@work }
             requireSignedIn()
             val tree = sharedFolder.value?.let { DocumentFile.fromTreeUri(context, it) } ?: throw IllegalStateException("Choose a folder to share first.")
@@ -373,6 +493,39 @@ class SoulseekRepository(
                 try { command("shares") { put("files", manifest) } } catch (e: Throwable) { _sharing.value = false; shares.clear(); throw e }
             }
         }
+    }
+    /** Wi-Fi only is on and the phone is on mobile data. */
+    private fun offWifi(owner: String) = preferences.wifiOnly(owner) && !onWifi
+    /** Nothing new is offered while off Wi-Fi; an upload already running finishes. */
+    private suspend fun holdForWifi() {
+        shareRevision.incrementAndGet(); _sharing.value = false; shares.clear()
+        _waitingForWifi.value = true
+        if (session.value.signedIn) runCatching { command("shares") { put("files", JSONArray()) } }.onFailure { if (it is CancellationException) throw it }
+    }
+    /** After a network change or a change to Wi-Fi only: share or hold back to match. */
+    private suspend fun applyWifiRule() {
+        val owner = session.value.username ?: return
+        if (!preferences.sharing(owner)) { _waitingForWifi.value = false; return }
+        if (offWifi(owner)) { if (!_waitingForWifi.value) holdForWifi() }
+        else if (_waitingForWifi.value) {
+            _waitingForWifi.value = false
+            if (session.value.connected && preferences.sharedFolder(owner) != null) setSharing(true)
+        }
+    }
+    fun setWifiOnly(enabled: Boolean): Job = work {
+        val owner = session.value.username ?: error("Sign in before choosing how to share.")
+        preferences.setWifiOnly(owner, enabled)
+        applyWifiRule()
+    }
+    /** How many people can download from you at once; applied now if connected, else at sign-in. */
+    fun setUploadSlots(slots: Int): Job = work {
+        val owner = session.value.username ?: error("Sign in before choosing an upload limit.")
+        preferences.setUploadSlots(owner, slots)
+        if (session.value.connected) applyUploadSlots(owner)
+    }
+    private suspend fun applyUploadSlots(owner: String) {
+        runCatching { command("upload_slots") { put("slots", preferences.uploadSlots(owner)) } }
+            .onFailure { if (it is CancellationException) throw it }
     }
     private data class SharedFile(val uri: Uri, val name: String, val size: Long)
     private fun openSharedFile(key: String): Int {
@@ -420,7 +573,7 @@ class SoulseekRepository(
         foreground = isForeground
         connection.foregroundChanged(isForeground)
         // Back in the app: continue downloads Android interrupted while it was in the background.
-        if (isForeground) interruptedIds.keys.toList().forEach { id -> autoResume(id) }
+        if (isForeground) { interruptedIds.keys.toList().forEach { id -> autoResume(id) }; recoverPending() }
     }
 
     @Volatile private var foreground = true
@@ -433,7 +586,7 @@ class SoulseekRepository(
             context.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted == true
 
     private fun interruptionReason(): String =
-        if (backgroundRestricted()) "Android paused this download: Background usage is off for Runout. Allow it in the app's Battery settings, or keep Runout open. It continues when you're back."
+        if (backgroundRestricted()) "Android paused this download: Background usage is off for Sonic. Allow it in the app's Battery settings, or keep Sonic open. It continues when you're back."
         else "Android interrupted this download. Your progress is kept, and it continues by itself."
 
     private fun scheduleAutoResume(id: String) {
@@ -451,7 +604,16 @@ class SoulseekRepository(
         runCatching { resumeOne(id) }.onFailure { if (it is CancellationException) throw it }
     }
     fun onExternalFlow(active: Boolean) { connection.externalFlow(active) }
-    fun onNetworkChanged(available: Boolean): Job = work { connection.networkChanged(available) }
+    /** [newNetwork] is false when the same network only reported new capabilities. */
+    fun onNetworkChanged(available: Boolean, wifi: Boolean = onWifi, newNetwork: Boolean = true): Job = work {
+        val changed = wifi != onWifi
+        onWifi = wifi
+        connection.networkChanged(available, newNetwork)
+        if (changed) applyWifiRule()
+    }
+    /** Something waits on the native client's events: they are polled quickly while it does. */
+    private fun nativeBusy(): Boolean = _searching.value || repairSearches.isNotEmpty() || pendingBrowse.isNotEmpty() ||
+        activeTransfers.isNotEmpty() || _uploads.value.any { it.state == "uploading" || it.state == "queued" }
     private fun hasActiveTransfers() = archiveJobs.isNotEmpty() || transfers.value.any { it.state in listOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING, SoulseekTransferState.VALIDATING, SoulseekTransferState.PUBLISHING) } || uploads.value.any { it.state == "uploading" || it.state == "queued" }
     private fun startService(type: Class<*>) { ContextCompat.startForegroundService(context, Intent(context, type)) }
     private fun stopService(type: Class<*>) { context.stopService(Intent(context, type)) }
@@ -462,7 +624,7 @@ class SoulseekRepository(
     fun onServiceTimeout(): Job = work {
         clearSessionWork(SoulseekDisconnectReason.SERVICE_TIMEOUT.label, false)
         connection.disconnect(SoulseekDisconnectReason.SERVICE_TIMEOUT)
-        _error.value = "Android stopped background activity. Your progress is saved. Open Runout and reconnect."
+        _error.value = "Android stopped background activity. Your progress is saved. Open Sonic and reconnect."
     }
     fun disconnectFromNotification(): Job = work {
         clearSessionWork(SoulseekDisconnectReason.MANUAL.label, false)
@@ -473,6 +635,8 @@ class SoulseekRepository(
         when (event.optString("type")) {
             "session" -> when (event.optString("state")) {
                 "connected" -> {
+                    // First, so an error this branch raises below survives.
+                    clearSessionError()
                     observeOwner(owner)
                     _sharedFolder.value = preferences.sharedFolder(owner)?.let(Uri::parse)
                     if (backgroundConsented()) {
@@ -486,11 +650,23 @@ class SoulseekRepository(
                                 if (app.runout.BuildConfig.DEBUG) android.util.Log.d("RunoutSession", "contact watch rejected")
                             }
                     }
+                    applyUploadSlots(owner)
                     if (preferences.sharing(owner) && preferences.sharedFolder(owner) != null) setSharing(true)
+                    recoverPending()
                 }
                 "error", "disconnected", "paused" -> clearSessionWork(event.optString("reason", "Connection interrupted. Reconnect and resume."), false)
             }
-            "search_result", "search_batch" -> searchMutex.withLock { if (event.optString("id") == searchId) {
+            "search_result", "search_batch" -> {
+                repairSearches[event.optString("id")]?.let { search ->
+                    val files = event.optJSONArray("files") ?: JSONArray().put(event)
+                    for (i in 0 until files.length()) {
+                        val file = files.getJSONObject(i)
+                        val result = parseResult(file, file.optString("username", event.optString("username")))
+                        if (FlacPolicy.isFlacName(result.fileName) && result.size > 0 && search.results.size < 5000) search.results += result
+                    }
+                    return
+                }
+                searchMutex.withLock { if (event.optString("id") == searchId) {
                 val files = event.optJSONArray("files") ?: JSONArray().put(event)
                 for (i in 0 until files.length()) {
                     val file = files.getJSONObject(i)
@@ -498,8 +674,9 @@ class SoulseekRepository(
                     if (FlacPolicy.isFlacName(result.fileName) && result.size > 0 && searchIndex.size < 5000) searchIndex.putIfAbsent(result.id, result)
                 }
                 _searchResults.value = searchIndex.values.toList()
-            } }
-            "search_done" -> searchMutex.withLock { if (event.optString("id") == searchId) {
+                } }
+            }
+            "search_done" -> repairSearches[event.optString("id")]?.done?.complete(event.optBoolean("cancelled")) ?: searchMutex.withLock { if (event.optString("id") == searchId) {
                 _searching.value = false
                 _searchStatus.update { it.copy(phase = if (event.optBoolean("cancelled")) SearchPhase.CANCELLED else SearchPhase.COMPLETE, limited = event.optBoolean("limited") || searchIndex.size >= 5000) }
             } }
@@ -526,11 +703,24 @@ class SoulseekRepository(
                     queuePosition = if (event.has("queuePosition") && !event.isNull("queuePosition")) event.optLong("queuePosition") else null,
                     speed = event.optDouble("speed", 0.0), stagePath = event.optString("path").ifBlank { row.stagePath }, error = if (interrupted) interruptionReason() else nativeError)
                 if (runCatching { SoulseekTransferState.valueOf(updated.state) }.isFailure) return
-                dao.putTransfer(updated)
+                // Only the byte count, speed or queue place moved: written at most once a second
+                // (the newest value follows), since every write re-runs the transfers query and
+                // redraws the notification. A change of state is written at once.
+                if (updated.state in PROGRESS_STATES && updated == row.copy(bytes = updated.bytes, speed = updated.speed, queuePosition = updated.queuePosition)) {
+                    val last = progressWritten[id]
+                    if (last != null && nowMs() - last < PROGRESS_WRITE_MS) { holdProgress(updated, last); return }
+                }
+                // A real failure: decide at once whether to ask again later or look elsewhere.
+                val failed = state == "FAILED"
+                val next = if (failed) recovered(updated, SoulseekPolicy.failureKind(nativeError)) else updated
+                heldProgress.remove(id)
+                dao.putTransfer(next)
+                if (next.state in PROGRESS_STATES) progressWritten[id] = nowMs() else progressWritten.remove(id)
                 if (state == "COMPLETED") { activeTransfers.remove(id); publishAsync(updated) }
                 if (state == "FAILED" || state == "CANCELLED" || state == "PAUSED") activeTransfers.remove(id)
                 if (state == "COMPLETED" || state == "FAILED" || state == "CANCELLED" || state == "PAUSED") pumpQueue()
                 if (interrupted) scheduleAutoResume(id)
+                if (failed) follow(next)
             }
             "message" -> {
                 val serverId = event.getLong("id"); val username = event.getString("username")
@@ -546,19 +736,25 @@ class SoulseekRepository(
             "message_sent" -> dao.messageState(event.getString("clientId"), "SENT")
             "upload" -> {
                 val upload = SoulseekUpload(event.getString("username"), event.getString("path"), event.optLong("bytes"), event.optLong("total"), event.optString("state"))
+                val previous = _uploads.value.firstOrNull { it.username == upload.username && it.path == upload.path }?.state
                 _uploads.update { list -> (list.filterNot { it.username == upload.username && it.path == upload.path } + upload).takeLast(100) }
-                if (upload.state == "uploading" || upload.state == "queued") {
-                    try { startService(SoulseekTransferService::class.java) }
+                val serving = setOf("uploading", "queued")
+                when {
+                    upload.state !in serving -> updateServices()
+                    // Already being served: its progress only moves the notification.
+                    previous in serving -> Unit
+                    else -> try { startService(SoulseekTransferService::class.java) }
                     catch (e: RuntimeException) {
                         _sharing.value = false; shares.clear(); _uploads.value = emptyList()
                         command("shares") { put("files", JSONArray()) }
-                        _error.value = "Android paused background sharing. Open Runout to enable sharing again."
+                        _error.value = "Android paused background sharing. Open Sonic to enable sharing again."
                     }
-                } else updateServices()
+                }
             }
             "presence" -> dao.presence(owner, event.getString("username"), event.optBoolean("online"))
             "error" -> {
                 val id = event.optString("id"); val message = event.optString("error", "Soulseek could not complete this action.")
+                repairSearches[id]?.let { it.done.complete(true); return }
                 if (event.optString("operation") == "message" && id.isNotBlank()) dao.messageState(id, "FAILED")
                 if (id == searchId) { _searching.value = false; _searchStatus.update { it.copy(phase = SearchPhase.FAILED, error = message) } }
                 if (id == folderPreview.value?.requestId) _folderPreview.update { it?.copy(loading = false, error = message) }
@@ -573,7 +769,17 @@ class SoulseekRepository(
         publicationJobs[row.id] = scope.launch(Dispatchers.IO) {
             try { publishSoulseek(row) }
             catch (e: CancellationException) { throw e }
-            catch (e: Throwable) { dao.transfer(row.id)?.let { dao.putTransfer(it.copy(state = "FAILED", error = friendly(e), speed = 0.0)) }; _error.value = friendly(e) }
+            catch (e: Throwable) {
+                val kind = publishFailure(e)
+                dao.transfer(row.id)?.let { current ->
+                    val failed = current.copy(error = friendly(e), speed = 0.0)
+                    val next = if (kind == null) failed.copy(state = "FAILED") else recovered(failed, kind)
+                    dao.putTransfer(next)
+                    if (kind != null) follow(next)
+                }
+                // A broken file fixes itself; a folder problem or a sign-in needs you.
+                if (kind != FailureKind.BROKEN) _error.value = friendly(e)
+            }
             finally { publicationJobs.remove(row.id) }
         }
     }
@@ -584,12 +790,15 @@ class SoulseekRepository(
         require(stage.parentFile == directory && stage.length() == initial.size && FlacPolicy.isFlacName(stage.name)) { "The completed download has an invalid path or size." }
         val info = FlacPolicy.read(stage, wantPicture = true) ?: throw IOException("This file is not valid FLAC music.")
         val remoteDirectory = initial.path.replace('\\', '/').substringBeforeLast('/', "")
-        val albumId = SoulseekPolicy.albumId(initial.username, remoteDirectory)
-        val albumTitle = info.album ?: remoteDirectory.substringAfterLast('/').ifBlank { "Soulseek downloads" }
+        // Aimed at an album already on the shelf: its folder and record, whoever shares the file.
+        val aimed = initial.albumId?.let { dao.album(it) }?.let { AlbumJson.fromJson(JSONObject(it.json)) }
+        // Aimed but not on the shelf yet (a replacement that finished first): it starts that album.
+        val albumId = initial.albumId ?: SoulseekPolicy.albumId(initial.username, remoteDirectory)
+        val albumTitle = aimed?.title ?: info.album ?: remoteDirectory.substringAfterLast('/').ifBlank { "Soulseek downloads" }
         val folder = storage.albumDirectory(albumTitle, albumId)
         var row = dao.transfer(initial.id) ?: return@withLock
         val finalName = initial.id.take(10) + " " + SoulseekPolicy.safeName(stage.name, "Track.flac")
-        val partialName = ".${initial.id}.runout-part"
+        val partialName = ".${initial.id}.sonic-part"
         val target = row.publishedUri?.let { DocumentFile.fromSingleUri(context, Uri.parse(it)) }?.takeIf { it.exists() }
             ?: folder.findFile(partialName)
             ?: folder.createFile("application/octet-stream", partialName)
@@ -605,11 +814,155 @@ class SoulseekRepository(
         val cover = info.picture?.let { bytes -> File(context.filesDir, "soulseek-art/$albumId.jpg").apply { parentFile?.mkdirs(); writeBytes(bytes) }.absolutePath } ?: existing?.coverPath
         val album = rememberCover(Album(albumId, albumTitle, info.albumArtist ?: info.artist ?: existing?.artist ?: "Unknown artist", info.year ?: existing?.year, folder.uri.toString(),
             (existing?.tracks.orEmpty().filterNot { it.id == track.id } + track).sortedWith(compareBy({ it.discNumber }, { it.trackNumber }, { it.fileName })), quality, coverPath = cover,
-            source = Source.SOULSEEK, albumGainDb = info.albumGainDb, owned = false, from = initial.username))
-        db.withTransaction { dao.putAlbum(DownloadAlbumRow(albumId, AlbumJson.toJson(album).toString())); dao.putTransfer(row.copy(state = "COMPLETED", bytes = row.size, speed = 0.0, error = null)) }
+            source = Source.SOULSEEK, albumGainDb = info.albumGainDb, owned = false,
+            // The first source names the record's peer and folder, kept as a pair, even when a
+            // missing track later comes from someone else: a shared record card opens that folder.
+            from = existing?.takeIf { it.remoteFolder != null }?.from ?: initial.username,
+            remoteFolder = existing?.remoteFolder ?: remoteDirectory))
+        db.withTransaction { dao.putAlbum(DownloadAlbumRow(albumId, AlbumJson.toJson(album).toString())); dao.putTransfer(row.copy(state = "COMPLETED", bytes = row.size, speed = 0.0, error = null, failure = null, recovery = null, retryAt = null)) }
         writeDownloadRecord(folder, album, listOf("slsk://${initial.username}/${initial.path}"))
         stage.delete()
     }
+    /**
+     * What happens next to a download that just failed. A peer who went away is asked again after
+     * 1, 5 and 15 minutes (the partial file is kept, so it resumes); after that, or at once when
+     * the peer refused or the file arrived broken, Runout searches for the identical file from
+     * someone else. A folder problem waits for you.
+     */
+    private fun recovered(row: TransferRow, kind: FailureKind): TransferRow {
+        val base = row.copy(speed = 0.0, queuePosition = null, failure = kind.name)
+        return when {
+            row.provider != "Soulseek" || kind == FailureKind.FOLDER -> base.copy(state = "FAILED", recovery = null, retryAt = null)
+            kind == FailureKind.PEER_AWAY && row.retries < retryDelaysMs.size -> base.copy(
+                state = "PAUSED", recovery = Recovery.RETRY.name,
+                retryAt = System.currentTimeMillis() + retryDelaysMs[row.retries], retries = row.retries + 1,
+            )
+            else -> base.copy(
+                state = "PAUSED", recovery = Recovery.SEEK.name, retryAt = null,
+                // Someone who refused, or sent a broken file, is not asked for it again.
+                skip = if (kind == FailureKind.PEER_AWAY) row.skip else (row.skipped() + row.username).joinToString("\n"),
+            )
+        }
+    }
+    private fun follow(row: TransferRow) {
+        if (row.failure == FailureKind.BROKEN.name) storage.stagingDirectory(row.id).deleteRecursively()
+        when (row.recovery) {
+            Recovery.RETRY.name -> scheduleRetry(row.id, row.retryAt ?: 0)
+            Recovery.SEEK.name -> seekAsync(row.id)
+        }
+    }
+    /** Why publishing failed: null when it was the sign-in, not the file or the folder. */
+    private fun publishFailure(e: Throwable): FailureKind? {
+        val message = e.message.orEmpty()
+        return when {
+            e is SecurityException -> FailureKind.FOLDER
+            message.contains("Sign in", ignoreCase = true) -> null
+            listOf("folder", "could not create", "saved flac", "destination").any { message.contains(it, ignoreCase = true) } -> FailureKind.FOLDER
+            else -> FailureKind.BROKEN
+        }
+    }
+    private fun scheduleRetry(id: String, at: Long) {
+        val job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            delay((at - System.currentTimeMillis()).coerceAtLeast(0))
+            // Off the list before resuming, so a retry scheduled by the resume's own failure stands.
+            retryJobs.remove(id, coroutineContext.job)
+            retryDue(id)
+        }
+        retryJobs.put(id, job)?.cancel()
+        job.start()
+    }
+    /** Retries waiting to run; tests read it. */
+    internal val pendingRetries: Int get() = retryJobs.size
+    /** Writes [row]'s held-back progress once a second has passed since [last], unless its state moved on. */
+    private fun holdProgress(row: TransferRow, last: Long) {
+        if (heldProgress.put(row.id, row) != null) return // a write is already on its way
+        scope.launch(Dispatchers.IO) {
+            delay((last + PROGRESS_WRITE_MS - nowMs()).coerceAtLeast(0))
+            val held = heldProgress.remove(row.id) ?: return@launch
+            if (dao.progress(held.id, held.state, held.bytes, held.speed, held.queuePosition) > 0) progressWritten[held.id] = nowMs()
+        }
+    }
+    private suspend fun retryDue(id: String) {
+        val row = dao.transfer(id) ?: return
+        if (row.recovery != Recovery.RETRY.name || (row.retryAt ?: 0) > System.currentTimeMillis() + 1_000) return
+        // Out of the app or signed out: it's asked again when you're back, or at the next sign-in.
+        if (!foreground || !session.value.signedIn || row.owner != session.value.username) return
+        runCatching { resumeOne(id) }.onFailure { if (it is CancellationException) throw it }
+    }
+    /** Retries and searches Runout had under way, after a sign-in or coming back to the app. */
+    private suspend fun recoverPending() {
+        val owner = session.value.username ?: return
+        if (!session.value.signedIn) return
+        dao.recovering(owner).forEach { row ->
+            when (row.recovery) {
+                Recovery.RETRY.name -> scheduleRetry(row.id, row.retryAt ?: 0)
+                Recovery.SEEK.name -> seekAsync(row.id)
+            }
+        }
+    }
+    private fun seekAsync(id: String) {
+        val job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            try { seek(id) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Throwable) { /* Left as it was: looked for again at the next sign-in. */ }
+            finally { seekJobs.remove(id, coroutineContext.job) }
+        }
+        if (seekJobs.putIfAbsent(id, job) == null) job.start() else job.cancel()
+    }
+    /**
+     * Searches for the identical file (same track, same size) from someone else and takes it into
+     * the same album and folder. When no one shares it, the download stays failed, saying so.
+     */
+    private suspend fun seek(id: String) {
+        for (attempt in 1..SEEK_ATTEMPTS) {
+            val row = dao.transfer(id)?.takeIf { it.recovery == Recovery.SEEK.name } ?: return
+            if (!session.value.signedIn || row.owner != session.value.username) return
+            val title = row.effectiveAlbumId()?.let { dao.album(it) }?.let { runCatching { AlbumJson.fromJson(JSONObject(it.json)).title }.getOrNull() }
+                ?: folderNames(row.path.replace('\\', '/').substringBeforeLast('/', "")).second
+            var cutShort = false
+            for (query in SoulseekPolicy.seekQueries(row.path, title)) {
+                val (results, cancelled) = repairSearch(query)
+                SoulseekPolicy.pickCopy(results, row.path, row.size, row.skipped())?.let { takeCopy(row, it); return }
+                cutShort = cutShort || cancelled
+            }
+            if (!cutShort) break
+        }
+        dao.transfer(id)?.takeIf { it.recovery == Recovery.SEEK.name }?.let {
+            dao.putTransfer(it.copy(state = "FAILED", recovery = null, error = (it.error ?: "The download failed.").removeSuffix(NO_COPY) + NO_COPY))
+        }
+    }
+    private suspend fun repairSearch(query: String): Pair<List<SoulseekSearchResult>, Boolean> = seekMutex.withLock {
+        // Soulseek runs one search at a time: never cut a search of yours short, wait for it.
+        _searching.first { !it }
+        val id = "repair-" + UUID.randomUUID()
+        val search = RepairSearch()
+        repairSearches[id] = search
+        try {
+            val started = searchMutex.withLock {
+                if (_searching.value) false
+                else { command("search") { put("id", id); put("query", query); put("timeoutMs", seekTimeoutMs) }; true }
+            }
+            if (!started) return@withLock emptyList<SoulseekSearchResult>() to true
+            val cancelled = withTimeoutOrNull(seekTimeoutMs + 5_000) { search.done.await() } ?: true
+            synchronized(search.results) { search.results.toList() } to cancelled
+        } finally { repairSearches.remove(id) }
+    }
+    /** Swaps a failed download for [copy]: a new download from its peer, into the same album. */
+    private suspend fun takeCopy(row: TransferRow, copy: SoulseekSearchResult) {
+        val id = SoulseekPolicy.accountKey(row.owner, copy.id)
+        // The same peer is back with it: continue the partial file instead.
+        if (id == row.id) { resumeOne(row.id); return }
+        val existing = dao.transfer(id)
+        val next = TransferRow(id, row.owner, copy.username, copy.path, copy.size, albumId = row.effectiveAlbumId(),
+            skip = (row.skipped() + row.username).joinToString("\n"), replaced = row.username)
+        val busy = existing != null && (existing.state in listOf("QUEUED", "DOWNLOADING", "VALIDATING", "PUBLISHING") || (existing.state == "COMPLETED" && stillPublished(existing)))
+        db.withTransaction { dao.deleteTransfer(row.id); if (!busy) dao.putTransfer(next) }
+        storage.stagingDirectory(row.id).deleteRecursively()
+        if (busy) return
+        try { startService(SoulseekTransferService::class.java); startTransfer(next) }
+        catch (e: Throwable) { if (e is CancellationException) throw e; dao.putTransfer(next.copy(state = "PAUSED", error = friendly(e))) }
+    }
+
     /** Internet Archive stays an independent HTTPS source; only publication uses this account gate. */
     suspend fun publishArchiveDownload(album: Album, stagingDir: File): Album = publicationMutex.withLock {
         initialized.await(); requireSignedIn()
@@ -622,7 +975,7 @@ class SoulseekRepository(
             val source = if (track.uri.startsWith("file:")) File(Uri.parse(track.uri).path!!) else File(stagingDir, track.fileName)
             require(source.canonicalFile.parentFile == stagingDir.canonicalFile && FlacPolicy.read(source) != null) { "Internet Archive supplied an invalid FLAC file." }
             val name = SoulseekPolicy.safeName(track.fileName.ifBlank { source.name }, "Track.flac")
-            val partialName = ".runout-${SoulseekPolicy.digest(album.id).take(16)}-$index.part"
+            val partialName = ".sonic-${SoulseekPolicy.digest(album.id).take(16)}-$index.part"
             val target = folder.findFile(name)?.takeIf { it.isFile } ?: folder.findFile(partialName) ?: folder.createFile("application/octet-stream", partialName) ?: throw IOException("Could not create a file in your download folder.")
             storage.copyValidated(source, target.uri, source.length())
             currentCoroutineContext().ensureActive(); requireSignedIn()
@@ -651,10 +1004,13 @@ class SoulseekRepository(
             archiveJobs[id] = job
             val row = TransferRow(id, owner, "Internet Archive", title, 1_000_000L, state = "DOWNLOADING", provider = "Internet Archive")
             dao.putTransfer(row)
+            // Progress reaches the database at most once a second; the last write marks it done.
+            val written = java.util.concurrent.atomic.AtomicLong(nowMs() - PROGRESS_WRITE_MS)
             try {
                 startService(SoulseekTransferService::class.java)
                 val result = block { bytes, total ->
-                    if (total > 0 && !job.isCancelled) scope.launch(Dispatchers.IO) {
+                    val now = nowMs(); val last = written.get()
+                    if (total > 0 && !job.isCancelled && now - last >= PROGRESS_WRITE_MS && written.compareAndSet(last, now)) scope.launch(Dispatchers.IO) {
                         val existing = dao.transfer(id)
                         if (existing != null && existing.state == "DOWNLOADING" && archiveJobs[id] === job) {
                             dao.putTransfer(existing.copy(bytes = bytes.coerceIn(0, total), size = total))
@@ -679,7 +1035,7 @@ class SoulseekRepository(
         catch (e: Throwable) { Result.failure(e) }
     }
     private suspend fun rememberCover(album: Album): Album {
-        if (album.coverPath != null || album.artist.isBlank() || album.title.isBlank()) return album
+        if (album.coverPath != null || album.artist.isBlank() || album.title.isBlank() || !coverLookup()) return album
         val file = runCatching { artwork?.lookupOnline(album.id, album.artist, album.title) }.getOrNull() ?: return album
         return album.copy(coverPath = file.absolutePath)
     }
@@ -687,7 +1043,7 @@ class SoulseekRepository(
     private fun writeDownloadRecord(folder: DocumentFile, album: Album, links: List<String>) {
         runCatching {
             val bytes = java.io.ByteArrayOutputStream().use { out ->
-                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("runout", "Runout", 0), album, sleeve = album.coverPath?.let(::File), sources = links + listOf("thumbnails/${album.id}.jpg"))
+                VinylPackage.write(out, VinylPackage.Kind.CARD, Profile("sonic", "Sonic.", 0), album, sleeve = album.coverPath?.let(::File), sources = links + listOf("thumbnails/${album.id}.jpg"))
                 out.toByteArray()
             }
             storage.writeDocument(folder, "record.vinyl", bytes)
@@ -705,6 +1061,10 @@ class SoulseekRepository(
             if (row == null || row.state == "CANCELLED" || row.state == "COMPLETED") dir.deleteRecursively()
         }
     }
+
+    /** The errors that only say the session was missing: signed out, or offline. */
+    private fun isSessionError(message: String) =
+        message.startsWith("Sign in with your Soulseek account") || message.startsWith("Soulseek is offline")
 
     private fun friendly(e: Throwable): String = when (e) {
         is SecurityException -> "Folder access was lost. Choose the folder again and retry."

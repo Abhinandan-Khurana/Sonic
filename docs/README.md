@@ -1,16 +1,18 @@
 # Documentation
 
-Everything about Runout, grouped by who is looking for it. The [README](../README.md) is the
-front door: what the app does, how to install it, and what changed in each release.
+Everything about Sonic (called Runout before 1.0), grouped by who is looking for it. The
+[README](../README.md) is the front door: what the app does, how to install it, and what changed
+in each release.
 
-## Using Runout
+## Using Sonic
 
 | Document | What it covers |
 | :--- | :--- |
 | [README](../README.md) | The app, the features, and how to install the current release |
+| [Downloads](../release/README.md) | Release files, checksums and how to verify an APK |
 | [The handbook](HANDBOOK.md) | Installing, setting up, and the original v0.3 design history |
 | [Pressing and Friday Drops](PRESSING-AND-DROPS.md) | Claiming weekly drops and the record-pressing model |
-| [Record format](RECORD-FORMAT.md) | The `.vinyl` container: contents, checksums and import rules |
+| [Record format](RECORD-FORMAT.md) | The `.vinyl` container, record cards in chat, checksums and import rules |
 | [Sound and output](SOUND.md) | Pure, Hi-res, ReplayGain, the EQ and the output chain |
 | [The turntable](TURNTABLE.md) | The deck, the platter and the player controls |
 | [Soulseek](SOULSEEK.md) | The protocol, storage, credentials, messages and privacy |
@@ -20,12 +22,14 @@ front door: what the app does, how to install it, and what changed in each relea
 | Document | What it covers |
 | :--- | :--- |
 | [Building](BUILDING.md) | Toolchain, prerequisites, native builds, ABIs and page alignment |
-| [Developer notes](DEVELOPMENT.md) | Where things live, how to run the checks, and local conventions |
+| [Developer notes](DEVELOPMENT.md) | Where things live, decisions and invariants to keep, testing, known gaps |
 | [Architecture](ARCHITECTURE.md) | The layers, the data flow and the boundaries between them |
 | [Native bridge](../native/README.md) | The JNI adapter and the vendored `soulseek-rs` changes |
 | [Contributing](../CONTRIBUTING.md) | Product boundaries and how to propose a change |
 | [Release process](../RELEASE.md) | Building, verifying, tagging and publishing a release |
 | [Changelog](../CHANGELOG.md) | Every notable change, per version |
+| [Security](../.github/SECURITY.md) | What is sensitive and how to report a vulnerability |
+| [Code of conduct](../CODE_OF_CONDUCT.md) | How we expect contributors to treat each other |
 
 ## Testing
 
@@ -36,10 +40,17 @@ front door: what the app does, how to install it, and what changed in each relea
 
 ## Design and history
 
+These are working records from before 1.0, kept as written. They use the old name, Runout.
+
 | Document | What it covers |
 | :--- | :--- |
-| [Design checklist](design/UI-REDESIGN.md) | The screen-by-screen design interview and the status of every change |
-| [Agent handoff](AGENT-HANDOFF.md) | Project context for a coding agent picking the work up |
+| [TE interview](design/TE-INTERVIEW.md) | The screen-by-screen interview behind the current Teenage Engineering-style design |
+| [Design checklist](design/UI-REDESIGN.md) | The earlier redesign interview and the status of every change |
+| [RG-1 deck v3](design/deck-v3-CHANGES.md) | The current 3D deck model and its three colourways |
+| [RG-1 deck v2](design/deck-v2-CHANGES.md) | The previous deck model |
+| [pen.dev prompt](design/PEN-DEV-PROMPT.md) | The brief given for the design enhancement pass |
+
+The design file itself is `design/runout-te.pen`, which opens in pen.dev.
 
 ## Repository map
 
@@ -47,7 +58,7 @@ front door: what the app does, how to install it, and what changed in each relea
 app/      the Android application, its layers and its tests
 native/   the Rust JNI bridge and the vendored Soulseek library
 docs/     this documentation
-scripts/  build and check helpers
+scripts/  build and check helpers, and the deck model scripts
 release/  release notes, checksums and verification reports
 .argent/  saved Android UI flows
 .github/  issue and pull request templates, security policy

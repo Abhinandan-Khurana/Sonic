@@ -88,7 +88,7 @@ class ShareRepository(
     suspend fun exportFriendCard(shelf: List<Album>): File = withContext(Dispatchers.IO) {
         shareDir.mkdirs()
         val me = social.profile.value
-        val file = File(shareDir, safeName("${me.name} on Runout") + ".${VinylPackage.EXTENSION}")
+        val file = File(shareDir, safeName("${me.name} on Sonic") + ".${VinylPackage.EXTENSION}")
         FileOutputStream(file).use { out ->
             VinylPackage.write(out, VinylPackage.Kind.FRIEND, me, album = null, shelf = shelf.take(200).map { ShelfItem.from(it) })
         }
@@ -109,7 +109,7 @@ class ShareRepository(
             try { discardStaging(staging) } catch (cleanup: Exception) { e.addSuppressed(cleanup) }
             // Cancellation and fatal VM errors are not user-facing import failures.
             if (e is CancellationException || e !is Exception) throw e
-            return@withContext ImportResult.Failed(e.message ?: "Not a Runout record")
+            return@withContext ImportResult.Failed(e.message ?: "Not a Sonic record")
         }
         when (contents.kind) {
             VinylPackage.Kind.FRIEND -> {

@@ -3,7 +3,9 @@ package app.runout
 import android.net.Uri
 import android.os.Looper
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.Player
 import androidx.media3.test.utils.FakeClock
+import androidx.media3.test.utils.robolectric.TestPlayerRunHelper
 import app.runout.model.Album
 import app.runout.model.AudioQuality
 import app.runout.model.Track
@@ -15,6 +17,8 @@ import app.runout.sound.SoundEngine
 import app.runout.ui.deck.DeckCamera
 import app.runout.ui.deck.DeckModel
 import app.runout.ui.deck.V3
+import app.runout.ui.DeckLeds
+import app.runout.ui.ledLines
 import app.runout.ui.screenLines
 import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.CoroutineScope
@@ -165,6 +169,187 @@ class TurntableDeckTest {
     }
 
     @Test
+    fun `a held platter rests at the recorded speed, so a play from outside the deck never starts slowed`() {
+        deck.load(album())
+        settle()
+        deck.startStop() // needle down
+        settle()
+        deck.startStop() // hold: the music winds down and stops
+        settle()
+        assertTrue(s.held)
+        assertFalse(player.playWhenReady)
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+        // The notification, a headset or a car kit presses play.
+        player.play()
+        settle()
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+        // Lifting the needle mid-wind-down leaves it at the recorded speed too.
+        deck.startStop()
+        settle(60)
+        deck.liftNeedle()
+        settle()
+        assertEquals(1f, player.playbackParameters.speed, 0.001f)
+    }
+
+    /** A deck on a player whose clock runs by itself, so it really reaches playing (and failing). */
+    private fun runningDeck(): Pair<Deck, ExoPlayer> {
+        val p = PlayerFactory.create(context, engine, handleAudioFocus = false, clock = FakeClock(true)) { ctx, _ -> AudioOutputTest.CapturingOutput(ctx) }
+        return Deck(context, VinylSfx(scope), scope, engine) { ready -> ready(p) } to p
+    }
+
+    @Test
+    fun `a pause from outside holds the platter, so one START spins it up again`() {
+        val (d, p) = runningDeck()
+        try {
+            d.load(album())
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_READY)
+            settle(50)
+            assertTrue(d.state.value.isPlaying)
+            p.playWhenReady = false // the headset button, or Bluetooth headphones switching off
+            settle(50)
+            assertTrue(d.state.value.needleDown)
+            assertTrue("the platter is held", d.state.value.held)
+            d.startStop()
+            settle()
+            assertTrue("one tap plays again", p.playWhenReady)
+            assertFalse(d.state.value.held)
+            // And a play from outside with the needle up lowers it: the deck follows the player.
+            d.liftNeedle()
+            settle(50)
+            p.play()
+            settle(50)
+            assertTrue(d.state.value.needleDown)
+        } finally { p.release() }
+    }
+
+    @Test
+    fun `the needle is only followed while the record plays`() {
+        val (d, p) = runningDeck()
+        try {
+            assertFalse("nothing ticks with nothing on", d.ticking)
+            d.load(album())
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_READY)
+            settle(50)
+            assertTrue(d.state.value.isPlaying)
+            assertTrue(d.ticking)
+            p.playWhenReady = false
+            settle(50)
+            assertFalse("paused: no ticker waking the app", d.ticking)
+            assertEquals("the place it stopped at is kept", p.currentPosition, d.state.value.positionMs)
+            p.play()
+            settle(50)
+            assertTrue(d.ticking)
+        } finally { p.release() }
+    }
+
+    @Test fun `with auto-play on, a record put on the platter starts, cued songs too`() {
+        deck.setAutoPlay(true)
+        deck.load(album())
+        settle()
+        assertTrue(s.needleDown)
+        assertTrue(player.playWhenReady)
+        deck.cueTrack(album().copy(id = "again"), "t4")
+        settle()
+        assertTrue(s.needleDown)
+        assertEquals("B2", s.trackCode)
+        assertEquals("t4", player.currentMediaItem?.mediaId)
+        deck.setAutoPlay(false)
+        deck.load(album().copy(id = "quiet"))
+        settle()
+        assertFalse("off again: the needle waits", s.needleDown)
+    }
+
+    @Test fun `with auto-flip on, side A running out turns the record and plays side B`() {
+        val (d, p) = runningDeck()
+        try {
+            d.setAutoFlip(true)
+            d.load(album())
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_ENDED)
+            settle(50)
+            assertTrue(d.state.value.sideFinished)
+            assertEquals(0, d.state.value.sideIndex)
+            settle(3_000) // the runout groove, then the turn
+            assertEquals(1, d.state.value.sideIndex)
+            assertTrue("side B plays", d.state.value.needleDown)
+            assertEquals("t3", p.currentMediaItem?.mediaId)
+            // The last side rests when it runs out.
+            TestPlayerRunHelper.run(p).untilState(Player.STATE_ENDED)
+            settle(3_000)
+            assertEquals(1, d.state.value.sideIndex)
+            assertFalse(d.state.value.needleDown)
+        } finally { p.release() }
+    }
+
+    @Test fun `every flag is off until you turn it on, and the sleep timer needs sleep mode`() {
+        assertEquals(app.runout.playback.DeckFlags(autoFlip = false, autoPlay = false, sleepMode = false), deck.flags.value)
+        deck.setSleepTimer(15)
+        assertEquals("no timer without sleep mode", null, deck.sleepAt.value)
+        deck.setSleepMode(true)
+        // Kept across launches.
+        val again = Deck(context, VinylSfx(scope), scope, engine) { ready -> ready(player) }
+        assertTrue(again.flags.value.sleepMode)
+    }
+
+    @Test fun `the sleep timer fades the music out and lifts the needle, and can be called off`() {
+        deck.load(album())
+        deck.startStop()
+        settle()
+        deck.setSleepMode(true)
+        deck.setSleepTimer(15)
+        assertTrue(deck.sleepAt.value != null)
+        settle(14 * 60_000L)
+        assertTrue("still playing at 14 minutes", s.needleDown)
+        settle(2 * 60_000L)
+        assertFalse("asleep after 15 minutes and the fade", s.needleDown)
+        assertEquals(null, deck.sleepAt.value)
+        assertEquals("the next record plays at full volume", 1f, player.volume)
+        deck.startStop()
+        settle()
+        deck.setSleepTimer(20)
+        assertTrue(deck.sleepAt.value != null)
+        deck.setSleepTimer(null)
+        settle(25 * 60_000L)
+        assertTrue("off: the music plays on", s.needleDown)
+        deck.setSleepTimer(30)
+        deck.setSleepMode(false)
+        assertEquals("sleep mode off calls the timer off too", null, deck.sleepAt.value)
+    }
+
+    @Test
+    fun `a track that can't be played lifts the needle and says why`() {
+        val (d, p) = runningDeck()
+        try {
+            val record = album()
+            d.load(record)
+            // The file disappears before the player reaches it.
+            record.tracks.forEach { File(Uri.parse(it.uri).path!!).delete() }
+            d.startStop()
+            settle()
+            TestPlayerRunHelper.run(p).untilPlayerError()
+            settle(50)
+            assertFalse(d.state.value.needleDown)
+            assertFalse(d.state.value.isPlaying)
+            assertTrue(d.problem.value.orEmpty().isNotBlank())
+            d.clearProblem()
+            assertEquals(null, d.problem.value)
+        } finally { p.release() }
+    }
+
+    @Test
+    fun `playback errors read as plain words`() {
+        fun error(code: Int) = androidx.media3.common.PlaybackException("x", null, code)
+        assertTrue(Deck.describe(error(androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED)).contains("couldn't be decoded"))
+        assertTrue(Deck.describe(error(androidx.media3.common.PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED)).contains("audio output"))
+        assertTrue(Deck.describe(error(androidx.media3.common.PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)).contains("Couldn't read"))
+    }
+
+    @Test
     fun `records count in words`() {
         assertEquals("1 record", app.runout.ui.recordCount(1))
         assertEquals("5 records", app.runout.ui.recordCount(5))
@@ -181,6 +366,77 @@ class TurntableDeckTest {
         val (top, bottom) = screenLines(s)
         assertEquals("A2 Track 2 · Runout", top)
         assertTrue(bottom, bottom.startsWith("0:00"))
+    }
+
+    @Test
+    fun `a record in hand lands exactly as the record on the platter`() {
+        val cam = DeckCamera(1080f, 628f)
+        val centre = cam.project(V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z))
+        for (degrees in listOf(0f, 42f, 217.5f)) {
+            val held = DeckModel.heldDiscTransform(cam, centre, radiusPx = 180f, landing = 1f, spinDegrees = degrees)
+            val onPlatter = DeckModel.recordTransform(degrees)
+            for (i in held.indices) assertEquals("element $i at $degrees°", onPlatter[i], held[i], 2e-3f)
+        }
+        // Held anywhere on screen, its centre stays right under the finger.
+        val finger = centre + androidx.compose.ui.geometry.Offset(60f, 900f)
+        val inHand = DeckModel.heldDiscTransform(cam, finger, 180f, 0f, 0f)
+        val seen = cam.project(V3(inHand[12], inHand[13], inHand[14]))
+        assertEquals(finger.x, seen.x, 0.5f)
+        assertEquals(finger.y, seen.y, 0.5f)
+    }
+
+    @Test
+    fun `the flat view looks straight down, keeps the deck in its box, and touch still lands`() {
+        for (tilt in listOf(DeckCamera.FLAT_DEG, 12f, DeckCamera.TILT_DEG)) {
+            val cam = DeckCamera(1080f, 628f, tilt)
+            listOf(cam.eye.x, cam.eye.y, cam.eye.z, cam.viewUp.x, cam.viewUp.y, cam.viewUp.z).forEach { assertTrue("finite at $tilt°", it.isFinite()) }
+            // The platter's centre maps to a pixel inside the view and back to the same point.
+            val p = V3(DeckModel.platterCentre.x, DeckModel.RECORD_Y, DeckModel.platterCentre.z)
+            val px = cam.project(p)
+            assertTrue("inside at $tilt°", px.x in 0f..1080f && px.y in 0f..628f)
+            val back = cam.onPlane(px, DeckModel.RECORD_Y)!!
+            assertEquals(p.x, back.x, 1e-3f)
+            assertEquals(p.z, back.z, 1e-3f)
+        }
+        // Straight down, the back of the deck is up the screen.
+        val flat = DeckCamera(1080f, 628f, DeckCamera.FLAT_DEG)
+        assertTrue(flat.project(V3(0f, 0.5f, -1f)).y < flat.project(V3(0f, 0.5f, 1f)).y)
+    }
+
+    @Test
+    fun `turning the record over lifts it edge-on at halfway and lands it back on the mat`() {
+        for (degrees in listOf(0f, 73f)) {
+            val flat = DeckModel.recordTransform(degrees)
+            assertTrue(DeckModel.flipTransform(degrees, 0f).contentEquals(flat))
+            assertTrue(DeckModel.flipTransform(degrees, 1f).contentEquals(flat))
+            // Halfway it's highest and stands on edge: its up axis (column 1) lies flat.
+            val mid = DeckModel.flipTransform(degrees, 0.4999f)
+            assertEquals(DeckModel.RECORD_Y + DeckModel.FLIP_LIFT, mid[13], 1e-3f)
+            assertEquals(0f, mid[5], 2e-3f)
+            // The roll restarts from the other edge, so either side of halfway is the same edge-on pose.
+            val after = DeckModel.flipTransform(degrees, 0.5001f)
+            assertEquals(kotlin.math.abs(mid[6]), kotlin.math.abs(after[6]), 2e-3f)
+            assertEquals(mid[13], after[13], 1e-3f)
+            // At every step the lowest point of the rim stays above the record's own plane.
+            for (k in 1..19) {
+                val m = DeckModel.flipTransform(degrees, k / 20f)
+                val lowest = m[13] - DeckModel.RECORD_R * kotlin.math.abs(m[6])
+                assertTrue("rim dips below the mat at ${k / 20f}", lowest >= DeckModel.RECORD_Y - 1e-3f)
+            }
+        }
+    }
+
+    @Test
+    fun `the LED windows show the track, its code and the time`() {
+        assertEquals(DeckLeds("DROP A RECORD", null, null), ledLines(DeckState()))
+        deck.load(album())
+        settle()
+        assertEquals(DeckLeds("CUE  Track 1", "A1", "0:00"), ledLines(s))
+        deck.nextTrack()
+        settle()
+        val leds = ledLines(s)
+        assertEquals("A2", leds.code)
+        assertTrue(leds.title, leds.title.endsWith("Track 2"))
     }
 
     @Test
@@ -212,7 +468,9 @@ class TurntableDeckTest {
         }
         keys.forEach { k ->
             assertTrue("${k.node} cap inside its zone", k.centre.x in k.zoneMin.first..k.zoneMax.first && k.centre.z in k.zoneMin.second..k.zoneMax.second)
-            assertTrue("${k.node} zone clear of the platter", k.zoneMax.first < DeckModel.platterCentre.x - DeckModel.PLATTER_R)
+            // The keys sit on the right-hand module, past the platter and the tonearm's sweep.
+            assertTrue("${k.node} zone clear of the platter", k.zoneMin.first > DeckModel.platterCentre.x + DeckModel.PLATTER_R)
+            assertTrue("${k.node} zone clear of the tonearm", k.zoneMin.first > DeckModel.pivot.x + 0.5f)
         }
         for ((w, h) in listOf(380f to 245f, 1080f to 697f)) {
             val cam = DeckCamera(w, h)
@@ -222,7 +480,7 @@ class TurntableDeckTest {
                 assertTrue("$p on screen at ${w}x$h", s.x in -0.5f..w + 0.5f && s.y in -0.5f..h + 0.5f)
             }
             // A finger on the record's face finds the same point in the model.
-            val p = V3(0.7f, DeckModel.RECORD_Y, 0.3f)
+            val p = V3(DeckModel.platterCentre.x + 0.7f, DeckModel.RECORD_Y, 0.3f)
             val back = cam.onPlane(cam.project(p), DeckModel.RECORD_Y)!!
             assertEquals(p.x, back.x, 1e-3f)
             assertEquals(p.z, back.z, 1e-3f)

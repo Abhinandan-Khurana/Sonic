@@ -59,14 +59,31 @@ object FlacPolicy {
         when {
             head.isEmpty() -> "The file is empty."
             text.startsWith("fLaC") || text.startsWith("ID3") && text.indexOf("fLaC") in 10..head.size -> "Damaged FLAC: the header or the first audio frame is broken, or the download was cut off."
-            text.startsWith("ID3") -> "An MP3 (or other format) renamed to .flac. Only real FLAC plays in Runout."
+            text.startsWith("ID3") -> "An MP3 (or other format) renamed to .flac. Only real FLAC plays in Sonic."
             text.indexOf("fLaC") in 1..head.size -> "Extra data before the FLAC stream. Re-save or re-rip the file."
-            text.startsWith("RIFF") -> "A WAV file renamed to .flac. Only real FLAC plays in Runout."
-            text.contains("ftyp") -> "An M4A/ALAC file renamed to .flac. Only real FLAC plays in Runout."
-            text.startsWith("OggS") -> "An Ogg file renamed to .flac. Only real FLAC plays in Runout."
+            text.startsWith("RIFF") -> "A WAV file renamed to .flac. Only real FLAC plays in Sonic."
+            text.contains("ftyp") -> "An M4A/ALAC file renamed to .flac. Only real FLAC plays in Sonic."
+            text.startsWith("OggS") -> "An Ogg file renamed to .flac. Only real FLAC plays in Sonic."
             else -> "Not FLAC inside, despite the .flac name."
         }
     }.getOrDefault("Couldn't open the file. Choose the folder again in Settings › Library.")
+
+    /**
+     * Why Android's own FLAC decoder can't play this valid FLAC on this phone, or null when it
+     * can. Android decodes 8, 16 and 24-bit (and 32-bit from Android 10); 12 and 20-bit never.
+     * Before Android 12, audio output stops at 192 kHz.
+     */
+    fun unplayableReason(info: AudioInfo, sdk: Int = android.os.Build.VERSION.SDK_INT): String? {
+        val bits = info.bits
+        val rate = info.sampleRate
+        return when {
+            bits != null && bits !in setOf(8, 16, 24, 32) -> "$bits-bit FLAC isn't supported by Android's decoder. Convert it to 16 or 24-bit."
+            bits == 32 && sdk < 29 -> "32-bit FLAC needs Android 10 or later. Convert it to 24-bit."
+            rate != null && rate > 192_000 && sdk < 31 ->
+                "${AudioQuality.formatRate(rate)} FLAC needs Android 12 or later; this phone plays up to 192 kHz."
+            else -> null
+        }
+    }
 
     fun isValid(input: InputStream): Boolean = read(input) != null
     fun isValid(file: File): Boolean = read(file) != null
@@ -85,6 +102,7 @@ object FlacPolicy {
         return album.copy(tracks = verified.map { it.first }, quality = quality(verified.map { it.second }))
     }
 
+    /** The record's quality: its lowest bit depth and rate, never guessed upwards from one track. */
     fun quality(infos: List<AudioInfo>): AudioQuality = AudioQuality(
         "FLAC", infos.mapNotNull { it.bits }.minOrNull(), infos.mapNotNull { it.sampleRate }.minOrNull(),
         infos.mapNotNull { it.bitrateKbps }.takeIf { it.isNotEmpty() }?.average()?.toInt(),

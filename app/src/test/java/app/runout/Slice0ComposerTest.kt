@@ -43,7 +43,7 @@ class Slice0ComposerTest {
         val actions = RecordingActions()
         open(actions)
         compose.onNodeWithTag("field:Private message").performTextInput("Keep draft")
-        compose.onNodeWithText("Send message").performClick()
+        compose.onNodeWithTag("send-message").performClick()
         assertEquals(1, actions.log.count { it.startsWith("soulseekMessage:") })
         compose.onNodeWithTag("field:Private message").assertTextContains("Keep draft")
     }
@@ -54,10 +54,10 @@ class Slice0ComposerTest {
             override fun sendSoulseekMessage(username: String, text: String, onPersisted: () -> Unit) { persisted = onPersisted }
         })
         compose.onNodeWithTag("field:Private message").performTextInput("Keep draft")
-        compose.onNodeWithText("Send message").performClick()
+        compose.onNodeWithTag("send-message").performClick()
         compose.onNodeWithTag("field:Private message").assertTextContains("Keep draft")
         compose.runOnIdle { persisted!!() }
-        compose.onNodeWithTag("field:Private message").assertTextEquals("", "Private message")
+        compose.onNodeWithTag("field:Private message").assertTextEquals("", "private message")
     }
 
     @Test fun `late durable insert cannot erase text typed after sending`() {
@@ -66,7 +66,7 @@ class Slice0ComposerTest {
             override fun sendSoulseekMessage(username: String, text: String, onPersisted: () -> Unit) { persisted = onPersisted }
         })
         compose.onNodeWithTag("field:Private message").performTextInput("Keep draft")
-        compose.onNodeWithText("Send message").performClick()
+        compose.onNodeWithTag("send-message").performClick()
         compose.onNodeWithTag("field:Private message").performTextInput(" edited")
         compose.runOnIdle { persisted!!() }
         compose.onNodeWithTag("field:Private message").assertTextContains("Keep draft edited")
@@ -77,8 +77,23 @@ class Slice0ComposerTest {
         open(actions)
         val text = "界".repeat(1366)
         compose.onNodeWithTag("field:Private message").performTextInput(text)
-        compose.onNodeWithText("Send message").assertIsNotEnabled()
+        compose.onNodeWithTag("send-message").assertIsNotEnabled()
         compose.onNodeWithTag("field:Private message").assertTextContains(text)
+        assertEquals(0, actions.log.count { it.startsWith("soulseekMessage:") })
+    }
+
+    @Test fun `the keyboard's send key sends the message`() {
+        val actions = RecordingActions()
+        open(actions)
+        compose.onNodeWithTag("field:Private message").performTextInput("Hi from the keyboard")
+        compose.onNodeWithTag("field:Private message").performImeAction()
+        assertEquals(listOf("soulseekMessage:fixture-peer:Hi from the keyboard"), actions.log.filter { it.startsWith("soulseekMessage:") })
+    }
+
+    @Test fun `an empty composer's send key sends nothing`() {
+        val actions = RecordingActions()
+        open(actions)
+        compose.onNodeWithTag("field:Private message").performImeAction()
         assertEquals(0, actions.log.count { it.startsWith("soulseekMessage:") })
     }
 
@@ -87,6 +102,6 @@ class Slice0ComposerTest {
         val text = "a".repeat(4096)
         compose.onNodeWithTag("field:Private message").performTextInput(text)
         compose.onNodeWithTag("field:Private message").assertTextContains(text)
-        compose.onNodeWithText("Send message").assertIsEnabled()
+        compose.onNodeWithTag("send-message").assertIsEnabled()
     }
 }

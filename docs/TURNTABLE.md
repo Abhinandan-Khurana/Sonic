@@ -1,6 +1,6 @@
 # Glass Drive RG-1: Turntable Design & Mechanics
 
-The centerpiece of **Runout** is the **Glass Drive RG-1**, an homage to the legendary direct-drive DJ turntables of the vinyl era, reimagined through frosted liquid glass and modern Android graphics shaders.
+The centerpiece of **Sonic** is the **Glass Drive RG-1**, an homage to the legendary direct-drive DJ turntables of the vinyl era, reimagined through frosted liquid glass and modern Android graphics shaders.
 
 ---
 
@@ -35,7 +35,7 @@ The centerpiece of **Runout** is the **Glass Drive RG-1**, an homage to the lege
 
 ## 1. Tonearm Geometry & The Law of Cosines
 
-In a physical turntable, the stylus is attached to a pivoted arm and traces an arc across the spinning record surface. To deliver authentic playback visuals and accurate seek positions, Runout models this exact mechanical behavior in `Deck.kt`.
+In a physical turntable, the stylus is attached to a pivoted arm and traces an arc across the spinning record surface. To deliver authentic playback visuals and accurate seek positions, Sonic models this exact mechanical behavior in `Deck.kt`.
 
 ### Geometric Model
 Let:
@@ -102,7 +102,7 @@ Built into the frosted glass plinth below the platter is a retro-futuristic 8-bi
 
 ## 5. Synthesised Turntable Sound Effects (`VinylSfx.kt`)
 
-Rather than relying on static audio sample files, Runout's mechanical sound effects are **mathematically synthesised in real-time** via audio generators:
+Rather than relying on static audio sample files, Sonic's mechanical sound effects are **mathematically synthesised in real-time** via audio generators:
 1. **Needle Drop:** A low-frequency impulse (40 Hz damped sinusoidal burst) accompanied by a brief micro-crackle simulating stylus tip impact.
 2. **Surface Noise & Crackle:** Continuous algorithmic Brownian noise mixed with sparse, high-amplitude Poisson-distributed clicks.
 3. **Runout Thump:** A periodic 1.8 Hz low-frequency thud reproducing the physical jolt of the stylus resting in the concentric runout groove.

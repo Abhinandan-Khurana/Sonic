@@ -1,5 +1,6 @@
 package app.runout.soulseek
 
+import app.runout.library.FlacPolicy
 import java.security.MessageDigest
 
 enum class SoulseekConnection { OFFLINE, CONNECTING, RECONNECTING, CONNECTED, PAUSED, ERROR }
@@ -7,7 +8,7 @@ enum class SoulseekDisconnectReason(val label: String) {
     NETWORK_LOST("Connection lost. Reconnecting…"), AUTH_REJECTED("Username or password rejected"),
     DISPLACED("This Soulseek ID connected in another client. Reconnect when you are ready."),
     MANUAL("Disconnected by you"), BACKGROUND_IDLE("Paused while the app is in the background"),
-    SERVICE_TIMEOUT("Android stopped background activity. Open Runout to resume."), PROTOCOL_ERROR("Connection interrupted")
+    SERVICE_TIMEOUT("Android stopped background activity. Open Sonic to resume."), PROTOCOL_ERROR("Connection interrupted")
 }
 data class SoulseekSession(
     val state: SoulseekConnection = SoulseekConnection.OFFLINE,
@@ -43,6 +44,26 @@ data class SoulseekSearchResult(
 }
 
 enum class SoulseekTransferState { QUEUED, DOWNLOADING, PAUSED, VALIDATING, PUBLISHING, COMPLETED, CANCELLED, FAILED }
+
+/** Why a download failed, which decides what Runout does next. */
+enum class FailureKind {
+    /** The peer went offline or the connection dropped: ask them again in a while. */
+    PEER_AWAY,
+    /** The peer won't or can't send this file: ask someone else. */
+    REFUSED,
+    /** The file arrived broken: never take that copy again. */
+    BROKEN,
+    /** Runout couldn't write to your music folder: only you can fix that. */
+    FOLDER,
+}
+
+/** What Runout is doing about a failed download by itself. */
+enum class Recovery {
+    /** Waiting to ask the same peer again, resuming the partial file. */
+    RETRY,
+    /** Searching Soulseek for the identical file from someone else. */
+    SEEK,
+}
 data class SoulseekTransfer(
     val id: String,
     val username: String,
@@ -54,7 +75,16 @@ data class SoulseekTransfer(
     val speed: Double = 0.0,
     val error: String? = null,
     val provider: String = "Soulseek",
+    /** The album on the shelf this file belongs to. */
+    val albumId: String? = null,
+    val failure: FailureKind? = null,
+    val recovery: Recovery? = null,
+    /** When [Recovery.RETRY] asks the peer again, in epoch milliseconds. */
+    val retryAt: Long? = null,
+    /** The peer whose copy failed before this one was found. */
+    val replaced: String? = null,
 ) {
+    val directory: String get() = path.replace('\\', '/').substringBeforeLast('/', "")
     val fileName: String get() = path.replace('\\', '/').substringAfterLast('/')
     val progress: Float get() = if (size <= 0) 0f else (bytes.toDouble() / size).toFloat().coerceIn(0f, 1f)
 }
@@ -70,6 +100,49 @@ data class SoulseekConversation(val username: String, val messages: List<Soulsee
 
 /** Stable identities include the complete remote path, expected size and exact peer name. */
 object SoulseekPolicy {
+    /** How long to wait before asking a peer who went away again: 1, 5, then 15 minutes. */
+    val RETRY_DELAYS_MS = listOf(60_000L, 5 * 60_000L, 15 * 60_000L)
+
+    /** What a native download error means for the next step. Unknown errors are treated as passing. */
+    fun failureKind(error: String?): FailureKind = when {
+        error == null -> FailureKind.PEER_AWAY
+        refusals.any { error.contains(it, ignoreCase = true) } -> FailureKind.REFUSED
+        else -> FailureKind.PEER_AWAY
+    }
+    private val refusals = listOf("upload failed on the other side", "declined", "not shared", "denied", "banned", "too many", "file not found", "no such file")
+
+    /** A file as a track key: no folder, saved-name prefix, extension, leading number or punctuation. */
+    fun fileKey(path: String): String = path.replace('\\', '/').substringAfterLast('/').substringBeforeLast('.')
+        .replace(savedPrefix, "").lowercase(java.util.Locale.ROOT)
+        .replace(leadingNumber, "").filter { it.isLetterOrDigit() }
+    private val savedPrefix = Regex("^[0-9a-f]{10} ")
+    private val leadingNumber = Regex("^[\\s\\d._\\-–()\\[\\]]+(?=\\D)")
+
+    /**
+     * What to search Soulseek for to find this exact file elsewhere: its title words with the album's,
+     * then its title words alone (peers name folders their own way).
+     */
+    fun seekQueries(path: String, albumTitle: String?): List<String> {
+        fun words(s: String?) = s.orEmpty().lowercase(java.util.Locale.ROOT).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 2 && it !in noise }
+        val stem = path.replace('\\', '/').substringAfterLast('/').substringBeforeLast('.').replace(savedPrefix, "")
+        val title = words(stem.replace(leadingNumber, "")).take(6)
+        val album = words(albumTitle).filterNot { it in title }.take(3)
+        return listOf(title + album, title).map { it.joinToString(" ") }
+            .filter { it.toByteArray(Charsets.UTF_8).size in 2..256 }.distinct()
+    }
+    private val noise = setOf("flac", "the", "and", "feat", "ft", "mp3", "wav", "24bit", "16bit", "khz")
+
+    /**
+     * The identical file from someone not in [skip]: the same size and the same track, the most
+     * likely to start soon first (a free slot, then the shortest queue, then the fastest).
+     */
+    fun pickCopy(results: List<SoulseekSearchResult>, path: String, size: Long, skip: Set<String>): SoulseekSearchResult? {
+        val key = fileKey(path)
+        return results.filter { it.size == size && it.username !in skip && fileKey(it.path) == key && FlacPolicy.isFlacName(it.fileName) }
+            .sortedWith(compareByDescending<SoulseekSearchResult> { it.freeSlots > 0 }.thenBy { it.queueLength ?: Long.MAX_VALUE }.thenByDescending { it.uploadSpeed })
+            .firstOrNull()
+    }
+
     /** The native downloader's read was cut by a signal (EINTR), as Android does to paused apps. */
     fun isInterruption(error: String?): Boolean =
         error != null && (error.contains("Interrupted system call", ignoreCase = true) || error.contains("os error 4)"))

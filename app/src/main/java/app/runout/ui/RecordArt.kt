@@ -1,5 +1,11 @@
 package app.runout.ui
 
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.runout.model.Album
@@ -87,7 +96,8 @@ fun fallbackColor(album: Album?): Color {
 
 /**
  * Draws a record: grooves, the smooth gaps between tracks, the label (the album cover, turning
- * with the platter), the label print and a light sheen that stays still while the record spins.
+ * with the platter), the label print and, with [sheen], a light sheen that stays still while the
+ * record spins.
  */
 fun DrawScope.drawRecord(
     center: Offset,
@@ -99,6 +109,7 @@ fun DrawScope.drawRecord(
     trackBoundaries: List<Float>,
     sideText: TextLayoutResult?,
     qualityText: TextLayoutResult?,
+    sheen: Boolean = true,
 ) {
     // Body
     drawCircle(look.base.copy(alpha = look.alpha), radius, center)
@@ -169,18 +180,27 @@ fun DrawScope.drawRecord(
         drawCircle(grooveColor.copy(alpha = a), r, center, style = Stroke(hair))
     }
 
-    // Gaps between tracks show as smooth bands, like on a real record.
+    // Gaps between tracks show as smooth bands, like on a real record: darker than the grooves
+    // either side, with a fine bright edge where the grooves stop. The 3D disc's surface maps
+    // (deck/RecordMaps) put its glossy bands at the same radii.
     val playOuter = radius * 0.95f
     val playInner = radius * 0.43f
+    val band = radius * 0.014f
+    val pictured = look.style == DiscStyle.PICTURE && label != null
     trackBoundaries.forEach { f ->
         val r = playOuter - (playOuter - playInner) * f
-        val pictured = look.style == DiscStyle.PICTURE && label != null
-        drawCircle(look.base.copy(alpha = if (look.alpha < 1f || pictured) 0.35f else 1f), r, center, style = Stroke(radius * 0.011f))
-        drawCircle(Color.White.copy(alpha = 0.08f), r, center, style = Stroke(hair))
+        if (look.alpha < 1f || pictured) {
+            drawCircle(Color.Black.copy(alpha = 0.30f), r, center, style = Stroke(band))
+        } else {
+            drawCircle(look.base, r, center, style = Stroke(band))
+            drawCircle(Color.Black.copy(alpha = 0.22f), r, center, style = Stroke(band))
+        }
+        drawCircle(Color.White.copy(alpha = 0.16f), r + band / 2f, center, style = Stroke(hair))
+        drawCircle(Color.White.copy(alpha = 0.10f), r - band / 2f, center, style = Stroke(hair))
     }
 
     // Light catching the grooves: drawn without rotation, so it stays put as the record turns.
-    rotate(-38f, center) {
+    if (sheen) rotate(-38f, center) {
         drawCircle(
             brush = Brush.sweepGradient(
                 0f to Color.Transparent,
@@ -243,28 +263,25 @@ fun DrawScope.drawRecord(
     drawCircle(Color.Black.copy(alpha = 0.35f), radius * 0.024f, center, style = Stroke(radius * 0.005f))
 }
 
-/** An album sleeve: the cover (or a typographic sleeve if none was found), shrink-wrap sheen, and a Hi-Res sticker. */
+/**
+ * An album sleeve: the cover (or a plain sleeve in the album's colour if none was found), the
+ * shrink-wrap sheen and, on the crate's sleeves, the hi-res sticker and nothing else. The title,
+ * artist and [label] (on the platter, pull up · drag, sleeve · empty) are spoken, not printed.
+ */
 @Composable
-fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true) {
+fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean = true, label: String? = null, missing: Int = 0) {
     val cover by rememberCover(album)
-    val shape = RoundedCornerShape(3.dp)
-    Box(
+    val gap = if (missing > 0) "$missing ${if (missing == 1) "track" else "tracks"} missing" else null
+    BoxWithConstraints(
         modifier
-            .shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.3f))
-            .clip(shape)
-            .background(fallbackColor(album)),
+            .clipToBounds()
+            .background(fallbackColor(album))
+            .semantics { if (album != null) contentDescription = listOfNotNull(album.title, album.artist, label, gap).joinToString(" / ") },
     ) {
+        val k = maxWidth / BOARD_SLEEVE
         val bitmap = cover
         if (bitmap != null) {
-            Image(bitmap = bitmap, contentDescription = album?.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        } else if (album != null) {
-            Column(
-                Modifier.fillMaxSize().padding(12.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                BasicText(album.title, style = Room.Title.copy(fontSize = 15.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold), maxLines = 4)
-                BasicText(album.artist, style = Room.LabelQuiet.copy(color = Room.Ink.copy(alpha = 0.6f)), maxLines = 2)
-            }
+            Image(bitmap = bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
         // Shrink-wrap
         Box(
@@ -278,21 +295,52 @@ fun SleeveArt(album: Album?, modifier: Modifier = Modifier, showSticker: Boolean
                 ),
             ),
         )
-        if (showSticker && album?.quality?.isHiRes == true) {
-            HiResSticker(album.quality.shortLabel, Modifier.align(Alignment.TopEnd).padding(7.dp))
+        // The sticker only where it'd be legible: the crate's sleeves, not the small thumbnails.
+        if (k >= 0.55f && showSticker && album?.quality?.isHiRes == true) {
+            HiResSticker(album.quality.shortLabel, k, Modifier.align(Alignment.TopEnd).padding(top = 6.dp * k, end = 4.dp * k))
+        }
+        if (k >= 0.55f && showSticker && missing > 0) {
+            MissingTag(missing, k, Modifier.align(Alignment.BottomStart).padding(start = 6.dp * k, bottom = 6.dp * k))
         }
     }
 }
 
+/** A download of this record failed and wasn't fixed: a red tab, "1 MISSING", set a hair off true. */
 @Composable
-fun HiResSticker(text: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier.size(34.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Room.Accent),
-        contentAlignment = Alignment.Center,
+fun MissingTag(count: Int, k: Float = 1f, modifier: Modifier = Modifier) {
+    val d = LocalDensity.current
+    fun sp(v: Double) = with(d) { (v.dp * k).toSp() }
+    BasicText(
+        "$count MISSING",
+        style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(6.5), lineHeight = sp(7.0), letterSpacing = sp(0.6)),
+        modifier = modifier.rotate(-2f).background(Room.Danger).padding(horizontal = 5.dp * k, vertical = 3.dp * k).testTag("missing-tag"),
+    )
+}
+
+/** The board's front sleeve, which the stickers are sized against. */
+private val BOARD_SLEEVE = 151.3.dp
+
+/**
+ * The hi-res mark, printed like an official badge: a black rectangle with a 1.5 dp white keyline,
+ * "Hi-Res" over "AUDIO" in white Inter, the spec under a hairline, set a hair off true. It's
+ * printed on the sleeve, so it stays black in the dark room too.
+ */
+@Composable
+fun HiResSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
+    val d = LocalDensity.current
+    fun sp(v: Double) = with(d) { (v.dp * k).toSp() }
+    Column(
+        modifier
+            .rotate(1f)
+            .background(Color.Black)
+            .padding(1.5.dp * k)
+            .border(0.75.dp * k, Color.White)
+            .padding(horizontal = 5.dp * k, vertical = 3.dp * k),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        BasicText(
-            "HI-RES\n$text",
-            style = Room.Label.copy(color = Color.White, fontSize = 6.5.sp, lineHeight = 7.5.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center),
-        )
+        BasicText("Hi-Res", style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(7.5), lineHeight = sp(8.0), letterSpacing = sp(0.1)))
+        BasicText("AUDIO", style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(5.2), lineHeight = sp(6.0), letterSpacing = sp(1.2)))
+        Box(Modifier.padding(vertical = 2.dp * k).size(22.dp * k, 0.75.dp * k).background(Color.White))
+        BasicText(text, style = Room.Sticker.copy(color = Color.White, fontWeight = FontWeight.Bold, fontSize = sp(6.5), lineHeight = sp(7.0)))
     }
 }

@@ -13,11 +13,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.runout"
+        applicationId = "app.sonic"
         minSdk = 28
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.6.0"
+        versionCode = 15
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["runoutLabel"] = "@string/app_name"
     }
@@ -25,7 +25,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".dev"
-            manifestPlaceholders["runoutLabel"] = "Runout Dev"
+            manifestPlaceholders["runoutLabel"] = "Sonic. Dev"
         }
         release {
             isMinifyEnabled = false

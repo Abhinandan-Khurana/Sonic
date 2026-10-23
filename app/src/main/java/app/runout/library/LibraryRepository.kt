@@ -49,7 +49,13 @@ class LibraryRepository(
     fun setCoverLookupEnabled(enabled: Boolean) {
         coverPrefs.edit { putBoolean("enabled", enabled) }
         _coverLookupEnabled.value = enabled
+        // Switched on: look for the missing covers now, not at the next scan. A scan under way
+        // does its own pass when it finishes.
+        if (enabled) synchronized(scanLock) {
+            if (scanJob?.isActive != true && coverJob?.isActive != true) coverJob = scope.launch { findMissingCovers() }
+        }
     }
+    private var coverJob: Job? = null
 
     fun dismissCoverLookupNotice() {
         coverPrefs.edit { putBoolean("notice-pending", false) }
@@ -81,14 +87,38 @@ class LibraryRepository(
         }
     }
 
-    fun setFolder(uri: Uri): Job? {
+    /**
+     * Uses [uri] as the music folder, keeping read access to it across restarts. Picking the same
+     * folder again is a plain rescan that keeps the shelf until the folder has been listed.
+     *
+     * A different folder replaces the shelf: the old folder's records leave the crate at once
+     * (their files are no longer ours to read), the saved index is emptied so a restart mid-scan
+     * reads the new folder instead of showing the old one, and a partial scan never mixes old
+     * records back in. The old folder's read grant is released unless [keepGrant] says another
+     * part of the app (the downloads or shared folder) still uses that same folder.
+     */
+    fun setFolder(uri: Uri, keepGrant: (Uri) -> Boolean = { false }): Job? {
+        // Read to play; write too when Android granted it, so Settings › Storage can delete a record.
         runCatching {
+            context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }.recoverCatching {
             context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        val old = _folder.value
         prefs.edit().putString(KEY_FOLDER, uri.toString()).apply()
         _folder.value = uri
-        // Keep the previous shelf until the selected root has actually been listed.
-        return rescan()
+        if (old == null || old == uri) return rescan()
+        return synchronized(scanLock) {
+            // Stop reading the old folder before giving up access to it.
+            scanJob?.cancel()
+            if (!keepGrant(old)) runCatching {
+                context.contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }.recoverCatching {
+                context.contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            _albums.value = emptyList()
+            startScan(uri, fresh = false, replace = true)
+        }
     }
 
     /**
@@ -115,14 +145,16 @@ class LibraryRepository(
         if (scanJob?.isActive == true) null else startScan(tree, fresh = false)
     }
 
-    private fun startScan(tree: Uri, fresh: Boolean): Job {
+    /** [replace]: the folder changed, so nothing from the shelf before belongs on it any more. */
+    private fun startScan(tree: Uri, fresh: Boolean, replace: Boolean = false): Job {
         // LAZY so that [scanJob] is set before the body can run: a scan that starts late must
         // already be the live one when another scan asks whether anything is running.
         val job = scope.launch(start = CoroutineStart.LAZY) {
             _scan.value = ScanState.Scanning(ScanProgress(0, 0))
             _report.value = null
-            val previous = _albums.value
-            if (fresh) _albums.value = emptyList()
+            val previous = if (replace) emptyList() else _albums.value
+            if (fresh || replace) _albums.value = emptyList()
+            if (replace) withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, emptyList()) }
             val found = mutableListOf<Album>()
             val report = try {
                 scanner.scan(
@@ -158,24 +190,29 @@ class LibraryRepository(
             _albums.value = sortShelf(if (partial && !fresh) mergePartial(previous, found) else found)
             withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
 
-            if (coverLookupEnabled.value) {
-                val missing = _albums.value.filter { it.coverPath == null }
-                missing.forEachIndexed { i, album ->
-                    if (!coverLookupEnabled.value) return@forEachIndexed
-                    _scan.value = ScanState.FindingCovers(i, missing.size)
-                    val file = artwork.lookupOnline(album.id, album.artist, album.title)
-                    if (file != null) {
-                        val updated = withContext(Dispatchers.IO) { album.withCover(file) }
-                        _albums.update { list -> list.map { if (it.id == album.id) updated else it } }
-                    }
-                }
-                if (missing.isNotEmpty()) withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
-            }
+            findMissingCovers()
             _scan.value = null
         }
         scanJob = job
         job.start()
         return job
+    }
+
+    /** With online covers on: MusicBrainz and the Cover Art Archive for each album still without one. */
+    private suspend fun findMissingCovers() {
+        if (!coverLookupEnabled.value) return
+        val missing = _albums.value.filter { it.coverPath == null }
+        missing.forEachIndexed { i, album ->
+            if (!coverLookupEnabled.value) return@forEachIndexed
+            _scan.value = ScanState.FindingCovers(i, missing.size)
+            val file = artwork.lookupOnline(album.id, album.artist, album.title)
+            if (file != null) {
+                val updated = withContext(Dispatchers.IO) { album.withCover(file) }
+                _albums.update { list -> list.map { if (it.id == album.id) updated else it } }
+            }
+        }
+        if (_scan.value is ScanState.FindingCovers) _scan.value = null
+        if (missing.isNotEmpty()) withContext(Dispatchers.IO) { AlbumJson.writeList(cacheFile, _albums.value) }
     }
 
     private fun Album.withCover(file: File?): Album =

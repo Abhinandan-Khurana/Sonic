@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -68,6 +69,13 @@ data class DeckState(
 }
 
 /**
+ * Settings › Flags: the deck's habits. [autoFlip] turns the record over when a side runs out and plays
+ * on; [autoPlay] lowers the needle as soon as a record is on the platter; [sleepMode] puts the moon
+ * in the room's top bar for the sleep timer.
+ */
+data class DeckFlags(val autoFlip: Boolean = false, val autoPlay: Boolean = false, val sleepMode: Boolean = false)
+
+/**
  * The turntable's mechanics. Owns the side that's on the platter and translates turntable
  * gestures (needle drop, lift, hold the platter, flip, start/stop) into player commands. Records
  * always turn at the speed they were recorded at.
@@ -77,6 +85,7 @@ class Deck(
     private val sfx: VinylSfx,
     private val scope: CoroutineScope,
     private val sound: app.runout.sound.SoundEngine? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
     /** How the deck reaches a player: the playback service by default; tests hand it one directly. */
     private val connectPlayer: (onReady: (Player?) -> Unit) -> Unit = { ready -> connectToService(context, ready) },
 ) {
@@ -89,14 +98,84 @@ class Deck(
     private val _crackleOn = MutableStateFlow(prefs.getBoolean("crackle", true))
     val crackleOn: StateFlow<Boolean> = _crackleOn.asStateFlow()
 
+    private val _flags = MutableStateFlow(DeckFlags(prefs.getBoolean("auto_flip", false), prefs.getBoolean("auto_play", false), prefs.getBoolean("sleep_mode", false)))
+    val flags: StateFlow<DeckFlags> = _flags.asStateFlow()
+    private fun saveFlags(next: DeckFlags) {
+        _flags.value = next
+        prefs.edit().putBoolean("auto_flip", next.autoFlip).putBoolean("auto_play", next.autoPlay).putBoolean("sleep_mode", next.sleepMode).apply()
+    }
+    fun setAutoFlip(on: Boolean) = saveFlags(_flags.value.copy(autoFlip = on))
+    fun setAutoPlay(on: Boolean) = saveFlags(_flags.value.copy(autoPlay = on))
+    fun setSleepMode(on: Boolean) {
+        saveFlags(_flags.value.copy(sleepMode = on))
+        if (!on) setSleepTimer(null)
+    }
+
+    /** When the sleep timer stops the music, in epoch milliseconds; null when it isn't set. */
+    private val _sleepAt = MutableStateFlow<Long?>(null)
+    val sleepAt: StateFlow<Long?> = _sleepAt.asStateFlow()
+    private var sleepJob: Job? = null
+
+    /**
+     * Stops the music in [minutes]: it fades out over a few seconds and the needle lifts, like
+     * someone turning the volume down before they leave. Null turns the timer off. Only with sleep
+     * mode on (Settings › Flags, off until you turn it on).
+     */
+    fun setSleepTimer(minutes: Int?) {
+        sleepJob?.cancel()
+        if (minutes == null || !_flags.value.sleepMode) { _sleepAt.value = null; return }
+        val at = clock() + minutes * 60_000L
+        _sleepAt.value = at
+        sleepJob = scope.launch {
+            delay((at - clock()).coerceAtLeast(0))
+            if (_state.value.needleDown) {
+                rampJob?.cancel()
+                for (step in 1..SLEEP_FADE_STEPS) {
+                    withController { c -> c.volume = 1f - step.toFloat() / SLEEP_FADE_STEPS }
+                    delay(SLEEP_FADE_MS / SLEEP_FADE_STEPS)
+                }
+                liftNeedle()
+            }
+            _sleepAt.value = null
+        }
+    }
+
     private var controller: Player? = null
     private val pending = mutableListOf<(Player) -> Unit>()
     private var rampJob: Job? = null
 
+    /** A short note for the listener when playback fails; shown once, then [clearProblem]. */
+    private val _problem = MutableStateFlow<String?>(null)
+    val problem: StateFlow<String?> = _problem.asStateFlow()
+
+    fun clearProblem() { _problem.value = null }
+
     private val listener = object : Player.Listener {
+        // The player is the truth: headset and car-kit buttons, the notification and a Bluetooth
+        // disconnect all reach it without the deck, so the needle and the platter follow it here.
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _state.update { it.copy(isPlaying = isPlaying) }
-            if (isPlaying && _state.value.needleDown && !pure) sfx.startCrackle() else if (!isPlaying) sfx.stopCrackle()
+            val c = controller
+            val ours = rampJob?.isActive == true
+            if (isPlaying) {
+                _state.update { it.copy(isPlaying = true, needleDown = true, held = false, sideFinished = false) }
+                // A play from outside the deck always turns at the recorded speed.
+                if (!ours && c != null && c.playbackParameters.speed != RECORDED_SPEED) {
+                    c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED)
+                }
+            } else {
+                // Paused from outside with the needle down: the platter is held, so START spins it up.
+                val pausedOutside = !ours && c != null && !c.playWhenReady && c.playbackState != Player.STATE_ENDED
+                _state.update { it.copy(isPlaying = false, held = it.held || (it.needleDown && pausedOutside)) }
+            }
+            if (isPlaying && !pure) sfx.startCrackle() else if (!isPlaying) sfx.stopCrackle()
+            followPosition(isPlaying)
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            rampJob?.cancel()
+            sfx.stopCrackle()
+            _state.update { it.copy(needleDown = false, isPlaying = false, held = false) }
+            _problem.value = describe(error)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -104,6 +183,7 @@ class Deck(
                 sfx.stopCrackle()
                 if (!pure) sfx.runout()
                 _state.update { it.copy(needleDown = false, isPlaying = false, sideFinished = true, positionMs = it.side?.durationMs ?: 0) }
+                autoFlip()
             }
         }
     }
@@ -122,28 +202,50 @@ class Deck(
             if (c == null) return@connectPlayer
             controller = c
             c.addListener(listener)
+            if (c.isPlaying) followPosition(true)
             pending.toList().forEach { it(c) }
             pending.clear()
         }
     }
 
+    private var ticker: Job? = null
+
+    /** Whether the needle's place is being followed; only while the record plays. */
+    internal val ticking: Boolean get() = ticker?.isActive == true
+
+    /**
+     * Follows the needle five times a second while the record plays, and not at all otherwise:
+     * the deck lives as long as the app, so a ticker that never stops would wake it for nothing.
+     * Stopping reads the place once more, so the deck shows where it stopped.
+     */
+    private fun followPosition(playing: Boolean) {
+        if (playing) {
+            if (ticker?.isActive == true) return
+            ticker = scope.launch {
+                while (isActive) {
+                    if (controller?.isPlaying == true) updatePosition()
+                    delay(200)
+                }
+            }
+        } else {
+            ticker?.cancel()
+            ticker = null
+            updatePosition()
+        }
+    }
+
+    private fun updatePosition() {
+        val c = controller ?: return
+        val s = _state.value
+        if (!s.needleDown) return
+        val side = s.side ?: return
+        val pos = side.positionOf(c.currentMediaItemIndex, c.currentPosition)
+        _state.update { it.copy(positionMs = pos) }
+    }
+
     init {
         sfx.crackleEnabled = _crackleOn.value
-
-        scope.launch {
-            while (isActive) {
-                val c = controller
-                val s = _state.value
-                if (c != null && s.needleDown && c.isPlaying) {
-                    val side = s.side
-                    if (side != null) {
-                        val pos = side.positionOf(c.currentMediaItemIndex, c.currentPosition)
-                        _state.update { it.copy(positionMs = pos) }
-                    }
-                }
-                delay(200)
-            }
-        }
+        sound?.setCrackle(_crackleOn.value)
     }
 
     private fun withController(block: (Player) -> Unit) {
@@ -161,8 +263,13 @@ class Deck(
         if (!pure) sfx.platterDrop()
     }
 
-    /** A record has been dropped on the platter. Nothing plays until the needle goes down. */
+    /** A record has been dropped on the platter. It plays at once with auto-play on; else it waits for the needle. */
     fun load(album: Album) {
+        put(album)
+        autoStart(0)
+    }
+
+    private fun put(album: Album) {
         val verified = FlacPolicy.filterAlbum(context, album, refreshMetadata = false) ?: return
         val sides = SideSplitter.split(verified.tracks)
         rampJob?.cancel()
@@ -176,7 +283,7 @@ class Deck(
      * song. Nothing plays: the listener lowers the tonearm or presses START on the deck.
      */
     fun cueTrack(album: Album, trackId: String?) {
-        load(album)
+        put(album)
         val loaded = _state.value
         val record = loaded.album ?: return
         if (record.id != album.id) return
@@ -185,8 +292,31 @@ class Deck(
         val side = loaded.sides[sideIndex]
         val trackIndex = side.tracks.indexOfFirst { trackId == null || it.id == trackId }.coerceAtLeast(0)
         _state.update { it.copy(sideIndex = sideIndex, positionMs = side.positionOf(trackIndex, 0), needleDown = false, sideFinished = false) }
-        if (sideIndex != 0) cueSide(record, side) // load() has already cued side A
+        if (sideIndex != 0) cueSide(record, side) // put() has already cued side A
         withController { c -> c.seekTo(trackIndex, 0) }
+        autoStart(trackIndex)
+    }
+
+    /** Auto-play: the needle goes down by itself on the record just put on. */
+    private fun autoStart(trackIndex: Int) {
+        if (_flags.value.autoPlay && _state.value.album != null) dropAt(trackIndex, 0)
+    }
+
+    /**
+     * Auto-flip: the runout groove turns a moment, then the record is turned over and the next side
+     * plays from its first song. After the last side the record rests, as it would on a real deck.
+     */
+    private fun autoFlip() {
+        val ended = _state.value
+        if (!_flags.value.autoFlip || ended.sideIndex >= ended.sides.lastIndex) return
+        scope.launch {
+            delay(AUTO_FLIP_PAUSE_MS)
+            val now = _state.value
+            // Still the same record, side and silence: nobody has stepped in meanwhile.
+            if (now.album?.id != ended.album?.id || now.sideIndex != ended.sideIndex || !now.sideFinished || now.needleDown) return@launch
+            flip()
+            dropAt(0, 0)
+        }
     }
 
     private fun cueSide(album: Album, side: Side?) {
@@ -217,6 +347,8 @@ class Deck(
         rampJob = scope.launch {
             withController { c ->
                 c.volume = 1f
+                // After a playback error the player rests idle until it's prepared again.
+                if (c.playbackState == Player.STATE_IDLE && c.mediaItemCount > 0) c.prepare()
                 c.seekTo(index, offset)
                 c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED)
             }
@@ -230,7 +362,8 @@ class Deck(
         rampJob?.cancel()
         if (!pure) sfx.lift()
         sfx.stopCrackle()
-        withController { c -> c.pause(); c.volume = 1f }
+        // Whatever plays next starts at the recorded speed, even if a wind-down was cut short.
+        withController { c -> c.pause(); c.volume = 1f; c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
         _state.update { it.copy(needleDown = false, held = false) }
     }
 
@@ -242,14 +375,18 @@ class Deck(
         rampJob?.cancel()
         rampJob = scope.launch {
             if (!pure) {
-                val start = RECORDED_SPEED
-                for (step in 1..10) {
-                    val f = (start * (1f - step / 10f)).coerceAtLeast(MIN_SPEED)
+                // Coasting to a stop: fast at first, easing out, from wherever the platter is now.
+                val start = controller?.playbackParameters?.speed ?: RECORDED_SPEED
+                for (step in 1..RAMP_STEPS) {
+                    val t = step / RAMP_STEPS.toFloat()
+                    val f = (start - (start - MIN_SPEED) * (1f - (1f - t) * (1f - t))).coerceAtLeast(MIN_SPEED)
                     withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
-                    delay(45)
+                    delay(RAMP_STEP_MS)
                 }
             }
-            withController { c -> c.pause() }
+            // Paused at the recorded speed, so a play from anywhere (the notification, a headset)
+            // never starts slowed.
+            withController { c -> c.pause(); c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
         }
     }
 
@@ -265,15 +402,21 @@ class Deck(
                 withController { c -> c.play() }
                 return@launch
             }
-            val startF = (end * 0.25f).coerceAtLeast(MIN_SPEED)
-            withController { c ->
-                c.playbackParameters = PlaybackParameters(startF, startF)
-                c.play()
-            }
-            for (step in 1..12) {
-                val f = (startF + (end - startF) * step / 12f)
-                withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
-                delay(50)
+            val startF = MIN_SPEED
+            try {
+                withController { c ->
+                    c.playbackParameters = PlaybackParameters(startF, startF)
+                    c.play()
+                }
+                for (step in 1..RAMP_STEPS) {
+                    val t = step / RAMP_STEPS.toFloat()
+                    val f = startF + (end - startF) * (1f - (1f - t) * (1f - t))
+                    withController { c -> c.playbackParameters = PlaybackParameters(f, f) }
+                    delay(RAMP_STEP_MS)
+                }
+            } finally {
+                // Cut short by anything but a new hold: back to the recorded speed.
+                if (!_state.value.held) withController { c -> c.playbackParameters = PlaybackParameters(RECORDED_SPEED, RECORDED_SPEED) }
             }
         }
     }
@@ -360,6 +503,7 @@ class Deck(
         _crackleOn.value = on
         prefs.edit().putBoolean("crackle", on).apply()
         sfx.crackleEnabled = on
+        sound?.setCrackle(on)
         if (on && _state.value.isPlaying && !pure) sfx.startCrackle()
     }
 
@@ -370,6 +514,28 @@ class Deck(
             val future = MediaController.Builder(context, token).buildAsync()
             future.addListener({ ready(runCatching { future.get() }.getOrNull()) }, ContextCompat.getMainExecutor(context))
         }
+
+        /** What went wrong, in words a listener can act on. */
+        fun describe(error: PlaybackException): String = when (error.errorCode) {
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> "This track couldn't be decoded on this phone. The needle is up."
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED -> "The phone's audio output couldn't play this track. The needle is up."
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+            PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE -> "Couldn't read this track. Is its folder still there?"
+            else -> "This track stopped playing. The needle is up."
+        }
+
+        /** Wind-down and spin-up: small steps, so the pitch glides instead of stepping. */
+        private const val RAMP_STEPS = 25
+        private const val RAMP_STEP_MS = 18L
 
         /** Android's playback-speed control doesn't go much lower without distorting. */
         const val MIN_SPEED = 0.25f
@@ -402,3 +568,9 @@ class Deck(
         }
     }
 }
+
+/** Runout groove, then the turn: how long a finished side spins before auto-flip turns it over. */
+private const val AUTO_FLIP_PAUSE_MS = 2_500L
+/** The sleep timer's fade-out before the needle lifts. */
+private const val SLEEP_FADE_MS = 8_000L
+private const val SLEEP_FADE_STEPS = 32

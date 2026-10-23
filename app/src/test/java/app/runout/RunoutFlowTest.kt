@@ -98,7 +98,7 @@ class RunoutFlowTest {
         val file=SoulseekSearchResult("peer","Artist/Album/01 Song.flac",100)
         compose.setContent { FolderPreview(SoulseekFolderPreview("request","peer","Artist/Album",listOf(file),loading=false),state().copy(soulseekSession=SoulseekSession(SoulseekConnection.CONNECTED,"listener")),RecordingActions()) }
         compose.onNodeWithTag("confirm-folder").assertIsNotEnabled()
-        compose.onNodeWithText("Choose download folder").assertIsDisplayed()
+        compose.onNodeWithText("choose download folder").assertIsDisplayed()
     }
     @Test fun `discovery shows whole album folders and a tap on one opens its preview`() {
         val files=(1..201).map {SoulseekSearchResult("peer","Artist/Album/${it.toString().padStart(3,'0')} Song.flac",100)}
@@ -110,7 +110,7 @@ class RunoutFlowTest {
         // Albums only: no song/album switch and no "all sources".
         compose.onNodeWithText("Songs").assertDoesNotExist()
         compose.onNodeWithText("All sources").assertDoesNotExist()
-        compose.onNodeWithText("FLAC · 201 TRACKS", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("201 tracks", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Preview album folder").assertDoesNotExist()
         compose.onNodeWithTag("preview-folder:peer\u0000Artist/Album").performClick()
         assertTrue(actions.log.any {it.startsWith("soulseekFolder:")})

@@ -1,4 +1,4 @@
-executionPrerequisite: Runout Dev is online with an empty discovery query; this flow performs one public Soulseek search and downloads nothing.
+executionPrerequisite: Sonic Dev is online with an empty discovery query; this flow performs one public Soulseek search and downloads nothing.
 steps:
   - tap: { id: 'nav:DIG' }
   - await: { visible: { id: 'screen:search' } }

@@ -1,8 +1,8 @@
-# Soulseek in Runout
+# Soulseek in Sonic
 
 ## User behavior
 
-Offline FLAC playback requires neither a Soulseek connection nor a Runout account. Soulseek usernames and passwords are used directly for online access. The same successful session gates online Soulseek search, both download providers, messaging and sharing. Local metadata search works offline. Internet Archive requests remain ordinary HTTPS requests and receive no Soulseek credentials.
+Offline FLAC playback requires neither a Soulseek connection nor a Sonic account. Soulseek usernames and passwords are used directly for online access. The same successful session gates online Soulseek search, both download providers, messaging and sharing. Local metadata search works offline. Internet Archive requests remain ordinary HTTPS requests and receive no Soulseek credentials.
 
 The Account screen explains account creation, the absence of password recovery, single-session behavior and plaintext protocol limitations. Remembered credentials are encrypted using an Android Keystore AES-GCM key and stored in `noBackupFilesDir`. Signing out closes the native session, clears saved credentials and pauses work; it leaves completed music alone.
 
@@ -12,7 +12,7 @@ The Account screen explains account creation, the absence of password recovery, 
 
 The adapter provides search, peer-folder listing, queue/progress states, pause/resume/cancel/retry, private messages, presence and explicit shared-folder manifests. It participates in distributed search as a leaf. Direct and server-brokered peer connections are supplied by the core; unreachable peers can still fail, and the app surfaces those states.
 
-`SoulseekTransferService` hosts downloads/uploads as data-sync work. Optional `SoulseekOnlineService` keeps the peer session available using a declared special-use foreground service and visible Disconnect notification. Android service timeouts stop the session and preserve progress. Guided setup offers app-only and stay-online modes with their battery/data tradeoffs. Sharing/background consent and the selected share folder persist per exact account; both begin disabled for a new account. Without stay-online mode, an idle connection pauses after five seconds in the background and automatically resumes when Runout returns. External folder pickers suppress Runout's idle pause. Android may still interrupt a cached app's sockets while the picker is open; the account is retained and the foreground transition prompts an immediate reconnect.
+`SoulseekTransferService` hosts downloads/uploads as data-sync work. Optional `SoulseekOnlineService` keeps the peer session available using a declared special-use foreground service and visible Disconnect notification. Android service timeouts stop the session and preserve progress. Guided setup offers app-only and stay-online modes with their battery/data tradeoffs. Sharing/background consent and the selected share folder persist per exact account; both begin disabled for a new account. Without stay-online mode, an idle connection pauses after five seconds in the background and automatically resumes when Sonic returns. External folder pickers suppress Sonic's idle pause. Android may still interrupt a cached app's sockets while the picker is open; the account is retained and the foreground transition prompts an immediate reconnect.
 
 Temporary network loss retains account identity and retries after 1, 2, 4, 8, 16 and then 30 seconds while connection policy permits. A network becoming available prompts an immediate retry. Rejected credentials and another-client displacement stop automatic retries; explicit reconnect is available. Manual disconnect stays paused across restarts; logout also clears remembered credentials. Active downloads require a live authenticated connection and pause on loss.
 
@@ -24,7 +24,7 @@ Songs, Albums and All change presentation/ranking. Filters expose advertised qua
 
 ### Seeker reference
 
-The source comparison used [Seeker at ff1dcc6](https://github.com/jackBonadies/SeekerAndroid/tree/ff1dcc6de55a412e8d6eadaddf36deca54517413). Its `SearchFragment` receives incremental response callbacks, splits folders, presents queue/free-slot metadata, and avoids expensive full result diffing. Its `SessionService` distinguishes a remembered account from a disconnected transport. These behaviors informed Runout's independent batching, stable-key list, folder grouping and reconnect design. Seeker also uses a response-inactivity timeout; Runout currently keeps a fixed bounded collection window and displays results immediately rather than waiting for completion. No Seeker or Soulseek.NET implementation code is copied; Runout retains its MIT core. This is a source comparison, not a measured speed comparison between the two apps.
+The source comparison used [Seeker at ff1dcc6](https://github.com/jackBonadies/SeekerAndroid/tree/ff1dcc6de55a412e8d6eadaddf36deca54517413). Its `SearchFragment` receives incremental response callbacks, splits folders, presents queue/free-slot metadata, and avoids expensive full result diffing. Its `SessionService` distinguishes a remembered account from a disconnected transport. These behaviors informed Sonic's independent batching, stable-key list, folder grouping and reconnect design. Seeker also uses a response-inactivity timeout; Sonic currently keeps a fixed bounded collection window and displays results immediately rather than waiting for completion. No Seeker or Soulseek.NET implementation code is copied; Sonic retains its MIT core. This is a source comparison, not a measured speed comparison between the two apps.
 
 ## FLAC policy and files
 

@@ -35,8 +35,16 @@ class PlaybackService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val gainListener = object : Player.Listener {
+        // The stream's own tags set ReplayGain at its first sample (see DspAudioSink); the item's
+        // values only stand in for a stream without them.
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            engine.setGains(albumGainOf(mediaItem), trackGainOf(mediaItem))
+            engine.setItemGains(albumGainOf(mediaItem), trackGainOf(mediaItem))
+        }
+
+        // A cheap moment to re-read the output: the system output switcher changes the route
+        // without connecting or disconnecting anything.
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) engine.refreshDevice()
         }
     }
 
@@ -85,7 +93,8 @@ class PlaybackService : MediaSessionService() {
         next.addListener(gainListener)
         if (items.isNotEmpty()) {
             next.setMediaItems(items, old.currentMediaItemIndex.coerceAtLeast(0), old.currentPosition)
-            next.playbackParameters = if (engine.settings.value.pure) androidx.media3.common.PlaybackParameters(1f, 1f) else old.playbackParameters
+            // Always the recorded speed: a wind-down in progress doesn't carry over.
+            next.playbackParameters = androidx.media3.common.PlaybackParameters.DEFAULT
             next.volume = if (engine.settings.value.pure) 1f else old.volume
             next.prepare()
             next.playWhenReady = old.playWhenReady
@@ -112,6 +121,7 @@ class PlaybackService : MediaSessionService() {
             release()
         }
         session = null
+        engine.releaseOutput()
         super.onDestroy()
     }
 

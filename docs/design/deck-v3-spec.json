@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 3,
+  "asset": "app/src/main/assets/deck/turntable.glb (from runout_turntable_white_teal.glb, scripts/deck-v3)",
+  "units": "glTF, +Y up, +Z towards the front edge, +X right",
+  "nodes": {
+    "Turntable_Platter": {
+      "origin": [
+        -1.2575,
+        0.57,
+        -0.0
+      ],
+      "radius": 1.19,
+      "note": "turns about +Y"
+    },
+    "Tonearm_Arm": {
+      "pivot": [
+        0.0225,
+        0.75,
+        -0.96
+      ],
+      "stylusAtRest": [
+        0.2660619,
+        0.643,
+        0.8346232
+      ],
+      "needleDrop": 0.055
+    },
+    "LED_Status": {
+      "origin": [
+        0.83,
+        0.479,
+        -1.14
+      ]
+    }
+  },
+  "record": {
+    "faceY": 0.588,
+    "radius": 1.13
+  },
+  "keys": {
+    "Key_Prev": {
+      "capTopCentre": [
+        1.168,
+        0.522,
+        -0.67
+      ],
+      "width": 0.791,
+      "depth": 0.62,
+      "x": [
+        0.7725,
+        1.5635
+      ],
+      "z": [
+        -0.98,
+        -0.36
+      ],
+      "travel": 0.018
+    },
+    "Key_Next": {
+      "capTopCentre": [
+        1.977,
+        0.522,
+        -0.67
+      ],
+      "width": 0.791,
+      "depth": 0.62,
+      "x": [
+        1.5815,
+        2.3725
+      ],
+      "z": [
+        -0.98,
+        -0.36
+      ],
+      "travel": 0.018
+    },
+    "Key_StartStop": {
+      "capTopCentre": [
+        1.5725,
+        0.522,
+        0.118
+      ],
+      "width": 1.6,
+      "depth": 0.92,
+      "x": [
+        0.7725,
+        2.3725
+      ],
+      "z": [
+        -0.342,
+        0.578
+      ],
+      "travel": 0.018
+    },
+    "Key_Eject": {
+      "capTopCentre": [
+        1.5725,
+        0.522,
+        0.846
+      ],
+      "width": 1.6,
+      "depth": 0.5,
+      "x": [
+        0.7725,
+        2.3725
+      ],
+      "z": [
+        0.596,
+        1.096
+      ],
+      "travel": 0.018
+    }
+  },
+  "keyTray": {
+    "x": [
+      0.7525,
+      2.3925
+    ],
+    "z": [
+      -1.0,
+      1.116
+    ]
+  },
+  "keyGap": 0.018,
+  "screen": {
+    "texture": [
+      1024,
+      256
+    ],
+    "Screen_Display": {
+      "x": [
+        -2.3775,
+        0.3725
+      ],
+      "z": [
+        1.315,
+        1.659
+      ],
+      "y": 0.4735,
+      "uv": "top half of the texture, u 0..1"
+    },
+    "Screen_Time": {
+      "x": [
+        0.7725,
+        2.3725
+      ],
+      "z": [
+        1.315,
+        1.659
+      ],
+      "y": 0.4735,
+      "uv": "bottom half, u 0..0.5813953"
+    },
+    "material": "Screen_Mat (shared): the app draws the emissive and base colour maps"
+  },
+  "LED_Strip": {
+    "uv": "u runs left to right along the front edge"
+  },
+  "chassis": {
+    "solidMin": [
+      -2.5725,
+      0.0,
+      -1.34
+    ],
+    "solidMax": [
+      2.5725,
+      0.843,
+      1.76
+    ]
+  },
+  "view": {
+    "min": [
+      -2.7725,
+      -0.002,
+      -1.54
+    ],
+    "max": [
+      2.7725,
+      0.843,
+      1.96
+    ],
+    "note": "the deck and its contact shadow"
+  }
+}

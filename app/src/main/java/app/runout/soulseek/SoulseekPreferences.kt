@@ -23,7 +23,19 @@ class SoulseekPreferences(context: Context) {
     fun background(owner: String) = prefs.getBoolean(key(owner, "background"), false)
     fun setSharing(owner: String, enabled: Boolean) { prefs.edit().putBoolean(key(owner, "sharing"), enabled).apply(); _revision.value++ }
     fun setBackground(owner: String, enabled: Boolean) { prefs.edit().putBoolean(key(owner, "background"), enabled).apply(); _revision.value++ }
+    /** Uploads only on Wi-Fi (or Ethernet), so sharing never spends mobile data. On unless turned off. */
+    fun wifiOnly(owner: String) = prefs.getBoolean(key(owner, "wifiOnly"), true)
+    fun setWifiOnly(owner: String, enabled: Boolean) { prefs.edit().putBoolean(key(owner, "wifiOnly"), enabled).apply(); _revision.value++ }
+    /** How many people can download from you at the same time. */
+    fun uploadSlots(owner: String) = prefs.getInt(key(owner, "uploadSlots"), DEFAULT_UPLOAD_SLOTS).coerceIn(1, 10)
+    fun setUploadSlots(owner: String, slots: Int) { prefs.edit().putInt(key(owner, "uploadSlots"), slots.coerceIn(1, 10)).apply(); _revision.value++ }
     fun turtle() = prefs.getBoolean("turtle", false)
     fun setTurtle(enabled: Boolean) { prefs.edit().putBoolean("turtle", enabled).apply(); _revision.value++ }
     private fun key(owner: String, option: String) = SoulseekPolicy.digest(owner) + ":" + option
+
+    companion object {
+        const val DEFAULT_UPLOAD_SLOTS = 2
+        /** The choices under Settings › soulseek › uploads at once. */
+        val UPLOAD_SLOT_CHOICES = listOf(1, 2, 3, 5)
+    }
 }

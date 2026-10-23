@@ -459,7 +459,9 @@ impl Client {
                     ClientOperation::PossibleParents(candidates) => {
                         let (dials, ops) = match client_context.write_safe() {
                             Ok(mut ctx) => (
-                                ctx.leaf.consider(candidates),
+                                super::distributed::parent_dials(
+                                    &mut ctx, candidates,
+                                ),
                                 ctx.operations.clone(),
                             ),
                             Err(_) => continue,

@@ -89,7 +89,7 @@ object VinylPackage {
         ZipOutputStream(out).use { zip ->
             val manifest = JSONObject().apply {
                 put("format", FORMAT)
-                put("app", "Runout")
+                put("app", "Sonic")
                 put("kind", kind.name)
                 // Legacy profile usernames may be login identities, not public display names.
                 put("from", from.copy(username = null).toJson())
@@ -185,8 +185,8 @@ object VinylPackage {
                 }
             }
         }
-        val m = manifest ?: throw Invalid("Not a Runout record (no manifest)")
-        if (m.optInt("format", 0) > FORMAT) throw Invalid("Made by a newer version of Runout")
+        val m = manifest ?: throw Invalid("Not a Sonic record (no manifest)")
+        if (m.optInt("format", 0) > FORMAT) throw Invalid("Made by a newer version of Sonic")
         val kind = runCatching { Kind.valueOf(m.getString("kind")) }.getOrElse { throw Invalid("Unknown record kind") }
         val from = Profile.fromJson(m.getJSONObject("from"))
         // A sender's own-music declaration is not an ownership grant to the recipient.

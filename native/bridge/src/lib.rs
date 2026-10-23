@@ -68,7 +68,12 @@ struct Runtime {
     contacts: Mutex<HashMap<String, Option<bool>>>, open: OpenFile,
     share_entries: Mutex<Vec<HostSharedFile>>, seen_loss: AtomicBool,
     uploads: Mutex<HashMap<String, String>>,
+    /// Transfers dropped after their final state was reported, newest last. A pause, resume
+    /// or cancel that races the report still finds nothing to do instead of an unknown id.
+    retired: Mutex<VecDeque<String>>,
 }
+/// How many finished transfer ids are remembered for those late commands.
+const RETIRED_LIMIT: usize = 256;
 
 impl Runtime {
     fn new(open: OpenFile) -> Arc<Self> {
@@ -76,7 +81,8 @@ impl Runtime {
             events: Mutex::new(VecDeque::new()), generation: AtomicU64::new(0), closed: AtomicBool::new(false),
             searches: Mutex::new(HashMap::new()), transfers: Mutex::new(HashMap::new()),
             contacts: Mutex::new(HashMap::new()), open, share_entries: Mutex::new(Vec::new()),
-            seen_loss: AtomicBool::new(false), uploads: Mutex::new(HashMap::new()) })
+            seen_loss: AtomicBool::new(false), uploads: Mutex::new(HashMap::new()),
+            retired: Mutex::new(VecDeque::new()) })
     }
     fn push(&self, event: Value) {
         let mut events = lock(&self.events);
@@ -108,6 +114,7 @@ impl Runtime {
             client.shutdown();
         }
         lock(&self.transfers).clear();
+        lock(&self.retired).clear();
         lock(&self.uploads).clear();
         lock(&self.contacts).clear();
         lock(&self.share_entries).clear();
@@ -274,7 +281,12 @@ impl Runtime {
             "pause" | "resume" | "cancel" => {
                 let client = self.client()?;
                 let mut transfers = lock(&self.transfers);
-                let tx = transfers.get_mut(field(&value,"id")?).ok_or("Unknown transfer")?;
+                let id = field(&value,"id")?;
+                let Some(tx) = transfers.get_mut(id) else {
+                    // Finished and reported already: nothing left to pause, resume or cancel.
+                    if lock(&self.retired).iter().any(|r| r == id) { return Ok(json!({"ok":true})); }
+                    return Err("Unknown transfer".into());
+                };
                 let found = match op { "pause" => client.pause_download(&tx.username,&tx.path),
                     "resume" => client.resume_download(&tx.username,&tx.path),
                     _ => client.cancel_download(&tx.username,&tx.path) };
@@ -296,6 +308,12 @@ impl Runtime {
                 if !valid_username(&username) { return Err("Invalid Soulseek username".into()); }
                 self.client()?.watch_user(&username).map_err(|e|e.to_string())?;
                 lock(&self.contacts).insert(username,None);
+            }
+            // How many peers may download from us at once (the host's upload limit).
+            "upload_slots" => {
+                let client = self.client()?;
+                let slots = value["slots"].as_u64().filter(|n| (1..=10).contains(n)).ok_or("Uploads at once must be 1 to 10")?;
+                client.set_upload_slots(slots as usize);
             }
             "shares" => {
                 let client = self.client()?;
@@ -337,8 +355,11 @@ impl Runtime {
                 if *previous != Some(online) { *previous=Some(online); events.push(json!({"type":"presence","username":name,"online":online})); }
             }
         }
-        let downloads = client.get_all_downloads();
-        for (id, tx) in lock(&self.transfers).iter_mut() {
+        let mut transfers = lock(&self.transfers);
+        // Copying the client's download list is only worth it while something is tracked.
+        let downloads = if transfers.is_empty() { Vec::new() } else { client.get_all_downloads() };
+        let mut finished = Vec::new();
+        for (id, tx) in transfers.iter_mut() {
             while let Ok(update) = tx.receiver.try_recv() { tx.state=update; }
             let download = downloads.iter().find(|d| d.token==tx.token);
             if let Some(download) = download {
@@ -369,7 +390,17 @@ impl Runtime {
                 "queuePosition":download.and_then(|d|d.queue_position),"path":destination,"error":error});
             let signature=event.to_string();
             if signature!=tx.last { tx.last=signature;events.push(event); }
+            // Its final state is in this batch: nothing more will change, so it stops costing
+            // every later poll (and the client's own list) a copy and a comparison.
+            if tx.state.is_terminal() { finished.push(id.clone()); }
         }
+        for id in finished {
+            if let Some(tx) = transfers.remove(&id) { let _ = client.remove_download(&tx.username, &tx.path); }
+            let mut retired = lock(&self.retired);
+            if retired.len() >= RETIRED_LIMIT { retired.pop_front(); }
+            retired.push_back(id);
+        }
+        drop(transfers);
         let mut uploads=lock(&self.uploads);
         for upload in client.uploads() {
             let state=match upload.status { soulseek_rs::UploadStatus::Queued(_)=>"queued",soulseek_rs::UploadStatus::InProgress=>"uploading",soulseek_rs::UploadStatus::Completed=>"completed",soulseek_rs::UploadStatus::Cancelled=>"cancelled",_=>"failed" };

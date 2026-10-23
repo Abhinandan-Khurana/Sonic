@@ -1,4 +1,4 @@
-executionPrerequisite: Runout Dev is connected on its main screen with no dialog open. The Android folder picker starts at the storage root or one folder below it.
+executionPrerequisite: Sonic Dev is connected on its main screen with no dialog open. The Android folder picker starts at the storage root or one folder below it.
 steps:
   - tap: { id: open-account }
   - await: { visible: { id: account-connection } }

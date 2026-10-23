@@ -1,7 +1,123 @@
 # Changelog
 
-All notable changes to **Runout** are documented in this file.
+All notable changes to **Sonic** (formerly Runout) are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+---
+
+## 1.0.0 — Sonic. (2026-10-23)
+
+The first stable release, and the first under the new name. It follows 0.7.0 development.
+
+- **Runout is now Sonic.**
+  - New app id `app.sonic` (`app.sonic.dev` for development builds). It installs beside Runout as a separate app with its own private data.
+  - The launcher name, wordmark, LED, notification, help and error texts, Settings and About all say Sonic. The wordmark's full stop is a round dot in signal orange.
+  - Files Sonic writes carry its name. Record cards are sent as `sonic:record`; cards from Runout still open. The code package, the native library and `.vinyl` keep their old names.
+- **New launcher icon:** the SONIC sleeve from the intro, an orange record on its paper.
+  - It follows the app's theme: a cream sleeve while Sonic is light, a black one while it's dark. The swap happens when Sonic leaves the screen.
+  - Themed icons (Android 13+) get a one-tone sleeve with its grooves, dotted word and arm cut out.
+- **Themes:** Settings › Flags › theme picks phone, light or dark.
+  - Dark is true black for OLED screens, with white ink and the same orange signal and dot type. The window and bar icons follow.
+  - A dark phone no longer flashes white at launch. On Android 13+, a theme pinned in Sonic also sets the next launch screen. Onboarding's step pictures are redrawn on black.
+- **Three decks:** the RG-1 comes in white / teal, mono white and dark, picked in Settings › Flags › deck. By default it matches the theme: white / teal in light, dark in dark.
+- **Intro:**
+  - New art: the SONIC paper sleeve and its record, with a dark sleeve for the dark theme. The record's label is laid over the deck's once it lands, so it looks the same before and after.
+  - It plays slower (about 7 s) and shows the deck the room uses, in any colourway.
+  - Settings › Flags › intro on launch plays it each time the app opens, then the room rises in around the deck. Onboarding ends the same way, on the room's own deck.
+  - While the 3D deck loads, a dotted vinyl turns where the record will be.
+- **The room:**
+  - Sideways is the listening room only. Turning the phone closes Dig, Drops, Friends or Settings, and the tabs ask for the phone upright (Downloads still works). The room fills the screen with bigger sleeves and nothing printed around the deck.
+  - Sleeves carry only the Hi-Res sticker. Title, artist and label are read out by TalkBack instead. A soft shadow sits under the crate.
+  - The top bar shows a green play triangle while a record plays, and a download glyph coloured by status (failed red, in queue orange, done green).
+  - The "rg-1 · side a" line under the deck is gone (the LED shows it), and so is the "now spinning" line above the tabs.
+- **The deck:**
+  - A lamp behind the platter puts a glint and a still wedge of light on the turning record. The grooves are a little glossier.
+  - Two fingers down lay the deck flat; two fingers up stand it back. It's remembered, TalkBack gets a Flat/Angled action, and a one-time hint shows the gesture after onboarding.
+- **Records in hand:**
+  - Hold a record over a playing one for 650 ms to swap. The deck shakes with a tick each time (SWAP on the LED), the old record rises out (EJECT), the new one lands and keeps playing.
+  - Eject still flies the record back to its sleeve in the crate. Let go anywhere off the platter and the disc glides back into its own sleeve.
+  - Swipe the crate with a record out and it slides home first; then the crate catches up with your finger.
+  - The record on the platter can't be pulled out again, and a landing never reloads the record already on the deck. Swaps and ejects cut short by a page, Back or a turn of the phone end cleanly.
+- **Record details:** a long press on a sleeve or the pulled disc opens them, in place of the old menu.
+  - They end with the record's running time and links to put it back, fetch missing tracks or remove it. A share key sends the track list as a picture.
+- **Flags:** three new switches in Settings › Flags, all off by default.
+  - Auto-flip turns the record over when a side runs out and plays the next one. Auto-play starts a record as soon as it's on the platter.
+  - Sleep mode: a dot-matrix moon in the top bar opens a sleep timer (15 to 50 minutes). The music fades, the needle lifts, and the moon shows the minutes left in orange.
+- **Settings:**
+  - Five rows (sound, flags, library, soulseek, about) under a faint wordmark. Library holds the download folder and the cover lookup; soulseek holds account, downloads, sharing and connection.
+  - Pages slide up from below and drop away going back. Inside a section, chat, drop or folder preview, the head reads "← back" and steps back one level. Pages opened from the room or the nav bar keep "close ×".
+  - Tapping the open tab again goes back to its first page (Settings' list, the chats, the week's drops, Dig's search) instead of out to the room.
+- **Storage:** swipe up with two fingers on Settings to open it, down to go back.
+  - It shows what the music and download folders take up, by kind (hi-res FLAC, cd-quality FLAC, other audio, pictures, unfinished downloads), with their records largest first.
+  - Sonic's own covers, cache and data are listed too, with a key to clear the cache.
+  - A record in its own folder can be deleted, after a warning in the other theme's colours ("keep it" / "delete"). The picked folder, or one holding another record, is never offered.
+- **Downloads:**
+  - Three segments with counts: failed (red), completed (green), in queue (orange). Remove queued files, retry or remove failed ones, or clear the lot. Saved music is never touched.
+  - A failed song fixes itself where it can. A peer that went away is asked again after 1, 5 and 15 minutes. A refused or broken file is fetched from someone else with the identical file.
+  - When nobody shares it, the row says so and offers "find another copy" in Dig. Rows name their album and what Sonic is doing ("retrying in 4 min", "now from zoe").
+  - A record missing a track wears a red "1 MISSING" tab and can fetch the rest. A completed track whose file is gone from the folder downloads again.
+  - Adding to the queue pops a short note with a haptic tick and a link to Downloads.
+- **Dig:**
+  - A folder preview knows what's on your shelf. Each track shows a tick, its progress or a download key, and the main key fetches only what's missing into the album you already have.
+  - The head stays put and only the results scroll. A dotted vinyl spins while searching. The search is cleared ten seconds after you leave.
+- **Sharing:** Settings › soulseek › share on Wi-Fi only (on by default) and uploads at once (1, 2, 3 or 5; 2 by default). On mobile data nothing new is offered and a running upload finishes.
+- **Friday Drops:**
+  - From Friday 30 October everyone gets the same ten albums each week; earlier weeks keep their pick. Drops reloads the week each time it opens, so a Friday that passes with the app open brings the new drop.
+  - The 30-second listen streams the archive's MP3, shows buffering, then a stop square, and stops cleanly on errors, timeouts, unplugged headphones or leaving the app.
+  - The orange square on the tab marks a drop you haven't opened. Drops sit on plain white tiles in a black outline. Onboarding has a Friday Drops step.
+- **Friends:**
+  - The tab opens on the chats, on its own page. A line says messages stay on this phone. Record cards open the sender's Soulseek folder.
+  - The composer is boxed and sends on enter, with black and orange bubbles. The sign-in prompt now clears once you're signed in.
+- **Sound:**
+  - Output to 16-bit is rounded, with TPDF dither only when the signal was processed or the source is deeper than the output. Hi-res decodes to float.
+  - Bit-perfect is claimed only on an exact format match on a routed USB device; otherwise the signal path says why. A USB DAC fed a rate it doesn't take, or mixed by Android at a fixed rate (48 kHz on the Pixel 6), reads as resampled.
+  - Pure keeps Android's Spatial Audio off Sonic's stream. Outside Pure, the signal path says when Spatial Audio is reshaping the sound.
+  - Gapless joins and ReplayGain changes no longer click.
+  - The scanner skips FLACs the phone can't decode (12- and 20-bit, 32-bit on Android 9, above 192 kHz before Android 12). An album's quality is its weakest track.
+- **Library and covers:** changing the music folder replaces the shelf, releases the old folder, ejects a record from it, and asks whether sharing should follow.
+  - "find missing covers online" now covers Soulseek downloads and Drops too. Off means no MusicBrainz lookups; turning it on looks straight away.
+- **Haptics:** a detent as each record passes the crate's front. The tonearm lifts with a catch, ticks at track gaps while carried and lands with a thud. EQ faders tick per dB, firmer at 0 dB. The sleep timer confirms when it starts and stops.
+- **Battery and background:**
+  - The Soulseek connection polls once a second when idle instead of ten times. Download progress and the transfer notification update at most once a second.
+  - The native client forgets finished transfers, and its TCP keepalive waits 60 s and probes every 10 s, so the mobile radio can rest.
+  - The 3D deck and the record in hand stop drawing when nothing moves.
+- **Fixes:**
+  - The loader could stay over the 3D deck if the deck settled while frames were being skipped.
+  - In the dark theme, dragging a record showed a grey box on the deck.
+  - Pages left a gap between the keyboard and a text box.
+  - Turning the phone sent the crate back to its first sleeve. It now stays on the record you were looking at.
+  - The Hi-Res sticker printed blank on sleeves in the dark theme.
+
+---
+
+## 0.7.0 development — the TE room (2026-10-22)
+
+- **The whole app is rebuilt to the TE boards** (`docs/design/runout-te.pen`): black ink on white, zero radius, no shadows or glass, 1 dp hairlines.
+  - The dot-matrix type follows the boards' scale: Array at 400 (10/12/16) and its dotted 700 (12 to 132). The stickers on the sleeves use Inter 700/800.
+  - Array is embedded in the APK under its licence. It is not committed to the repository; a source build without it falls back to Silkscreen.
+- **Home:** a top bar shows the side that's up ("side a · a2 · 2 / 4"), the line out, downloads and the record count.
+  - Under the deck sits its band ("rg-1 · side a · 01:12 · 33⅓ rpm").
+  - The crate is redrawn: neighbouring sleeves turned hard away, a floor line, and a faint reflection under the front sleeve. Its stickers are an orange HI-RES round and a black label tab, both slightly tilted.
+  - Below the crate: the album caption, a side-coded track wheel (the playing song sharp, the rest soft), and the "now spinning" line.
+  - First-time "?" helps open help panels. The landscape room mirrors portrait.
+- **Pages:** Dig, Drops, Friends, Settings and Downloads are full pages with the TE screen head ("02 / dig", "close ×") under one nav bar.
+  - Audio quality opens from a long press on the deck's LED. Crackle moves to Settings › Sound.
+  - Dig results are two compact lines without art. Every "?" opens its help panel.
+- **Onboarding:** a 3 s intro tells the needle-drop story and types RUNOUT out (tap to skip; skipped when animations are off). Steps show poster-size numbers, and the welcome greets you by your Soulseek ID over the deck.
+- **The record in your hand is 3D** from the sleeve to the platter. It now:
+  - turns over in 3D when you flip it (about 0.9 s, with FLIP on the LED and a squash on the flat deck);
+  - flies home to its sleeve on Eject (about 1.1 s: EJECT, lift, arc, slide in);
+  - bounces back off a busy platter (a red ring, a double buzz, and "first, remove the current record from the platter." with an eject key).
+
+## RG-1 v3 (in 0.7.0)
+
+- **A wider deck, controls on the right:** the turntable is redrawn as the RG-1 v3. It is wider and shallower, so it now fills the width of the screen.
+  - Its keys sit on the right in TE style: big, flush keys edge to edge for prev, next, START/STOP and eject.
+  - The tonearm, platter and record are unchanged.
+- **Red LED windows:** a long title display under the platter shows the track. A time display under the keys shows the track code and the time in 7-segment digits, with the unlit segments faintly showing. Both replace the small screen and the line of text under the player. TalkBack still reads them.
+- **The record looks the same in your hand and on the platter.** The deck now renders with true colours (linear, calibrated light) instead of a film curve, and the face no longer carries a painted highlight that turned with the platter.
+- **The gaps between tracks show on both records.** The record in your hand now draws side A's gaps; it had none. On the 3D record each gap is a smooth, glossier band in the grooves, so it catches the light.
+- **No more empty deck at launch:** a flat deck stands in while the phone builds the 3D deck's shaders. That takes seconds on an emulator.
 
 ---
 

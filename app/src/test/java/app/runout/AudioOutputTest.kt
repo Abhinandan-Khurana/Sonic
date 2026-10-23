@@ -128,7 +128,8 @@ class AudioOutputTest {
         input.indices.forEach { assertEquals(input[it], got[it], 1.5f / 8_388_608f) }
         // The smallest 24-bit step survives: nothing was folded down to 16-bit.
         assertTrue(got[5] != 0f)
-        assertEquals("24-bit · 96 kHz → 32-bit float", engine.status.value.label)
+        // Nothing is on (the limiter waits for a lift in level), so the samples are untouched.
+        assertEquals("24-bit · 96 kHz → 32-bit float · untouched", engine.status.value.label)
     }
 
     @Test
@@ -204,12 +205,14 @@ class AudioOutputTest {
             player.prepare()
             player.play()
             TestPlayerRunHelper.run(player).untilState(Player.STATE_ENDED)
-            player.release()
 
             val status = engine.status.value
             assertEquals(rate, status.sampleRate)
             assertEquals(bits, status.sourceBits)
             assertTrue(status.floatPath)
+            player.release()
+            // A released player plays nothing, and the readout says so.
+            assertEquals(0, engine.status.value.sampleRate)
             // One second of audio went through the processing chain and out as float.
             assertEquals(rate.toLong(), engine.framesProcessed.get())
             val out = output!!.floats()

@@ -28,13 +28,13 @@ class Slice0CoverNoticeTest {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(notice = true), actions) }
         compose.onNodeWithTag("cover-lookup-notice").assertIsDisplayed()
-        compose.onNodeWithText("OK").performClick()
+        compose.onNodeWithTag("action:OK").performClick()
         assertEquals(listOf("dismissCoverLookupNotice"), actions.log)
     }
 
     @Test fun `the crate shows unavailable record access without claiming valid playback`() {
         val album = Album("missing", "Missing Record", "Artist", 2020, "content://missing", emptyList(), AudioQuality("FLAC"), unavailableReason = "Unavailable · repair access")
         compose.setContent { RoomScreen(state(listOf(album), hasFolder = true), RecordingActions()) }
-        compose.onNodeWithText("Unavailable · repair access").assertIsDisplayed()
+        compose.onNodeWithText("unavailable · repair access").assertIsDisplayed()
     }
 }

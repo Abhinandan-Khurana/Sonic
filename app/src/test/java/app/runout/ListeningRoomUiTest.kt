@@ -1,5 +1,23 @@
 package app.runout
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import app.runout.ui.DeckSkin
+import app.runout.ui.Look
+import app.runout.ui.Room
+import app.runout.ui.ThemeMode
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import app.runout.discovery.remoteAlbums
 
 import app.runout.discovery.SearchSource
@@ -58,7 +76,7 @@ import app.runout.ui.CoverCache
 import app.runout.ui.Panel
 import app.runout.ui.RoomScreen
 import app.runout.ui.RoomState
-import app.runout.ui.SettingsSection
+import app.runout.ui.settings.SettingsSection
 import app.runout.soulseek.*
 import app.runout.sharing.VinylPackage
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -186,37 +204,563 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `landscape room, playing and pulled, renders`() {
-        still("01_landscape_playing", state(deck = playing()), crateIndex = 3)
-        compose.onNodeWithText("Now spinning — Side A", substring = true).assertIsDisplayed()
-        compose.onNodeWithTag("nav:DROPS").assertIsDisplayed()
+    fun `sideways with an empty platter the crate takes the tabs' room`() {
+        still("01c_landscape_empty", state(), crateIndex = 1)
+        val sleeve = compose.onNodeWithTag("sleeve:Night Drive").getBoundsInRoot()
+        assertTrue("a big sleeve: ${sleeve.right - sleeve.left}", (sleeve.right - sleeve.left).value > 150f)
     }
 
     @Test
-    fun `pulling a record, then a long press offers to send it with audio`() {
+    fun `landscape room, playing and pulled, renders`() {
+        still("01_landscape_playing", state(deck = playing()), crateIndex = 3)
+        // Sideways the room is for listening: the places wait for the phone to be upright.
+        compose.onNodeWithTag("landscape-note").assertIsDisplayed()
+        // And nothing printed round the deck: no model label, no speed.
+        compose.onNodeWithText("rg-1 · white / teal").assertDoesNotExist()
+        compose.onNodeWithText("33⅓ rpm").assertDoesNotExist()
+        compose.onNodeWithTag("nav:DROPS").assertDoesNotExist()
+    }
+
+    @Test
+    fun `new downloads pop up a note with the way to the list, ones already saved don't`() {
+        val saved = SoulseekTransfer("old", "maya", "a/old.flac", 10, state = SoulseekTransferState.PAUSED)
+        var room by mutableStateOf(state().copy(soulseekTransfers = listOf(saved)))
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(room, RecordingActions(), initialCrateIndex = 1) }
+        repeat(25) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithTag("downloads-added").assertDoesNotExist()
+        room = room.copy(soulseekTransfers = room.soulseekTransfers + listOf(
+            SoulseekTransfer("a", "maya", "a/01.flac", 10), SoulseekTransfer("b", "maya", "a/02.flac", 10),
+        ))
+        compose.waitForIdle()
+        repeat(6) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithText("2 tracks added to downloads").assertIsDisplayed()
+        repeat(40) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithTag("downloads-added").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a paused record with the needle down reads as stopped, not spinning`() {
+        still("01b_stopped", state(deck = playing().copy(isPlaying = false)))
+        // The line above the tabs is gone; the deck's LED and the top bar say it.
+        compose.onNodeWithTag("now-line").assertDoesNotExist()
+        compose.onNodeWithText("now spinning", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `pulling a record, then a long press opens its details, with no send in sight`() {
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }
         compose.onNodeWithTag("sleeve:Night Drive").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("pulled-disc").assertIsDisplayed()
-        // No buttons beside the disc any more: what you can do lives behind a long press.
-        compose.onNodeWithText("Send with audio").assertDoesNotExist()
         compose.onNodeWithTag("pulled-disc").performTouchInput { longClick() }
-        compose.onNodeWithText("Send with audio").assertIsDisplayed() // Creative Commons
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_menu.png")
-        compose.onNodeWithTag("menu:Send with audio").performClick()
-        assertEquals(listOf("share:Night Drive"), actions.log.filter { it.startsWith("share") })
+        // Straight to the details: no menu in between, and nothing offers to send the record.
+        compose.onNodeWithTag("record-details").assertIsDisplayed()
+        compose.onNodeWithTag("record-menu").assertDoesNotExist()
+        compose.onNodeWithText("send", substring = true).assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/02_landscape_record_details.png")
+        // The record is out of its sleeve, so the details can put it back.
+        compose.onNodeWithTag("details:put-back").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("record-details").assertDoesNotExist()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+        assertTrue(actions.log.none { it.startsWith("share") })
     }
 
     @Test
     fun `a record's details hold the licence the short caption leaves out`() {
         compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
-        compose.onNodeWithText("Vela Park").assertIsDisplayed()
-        compose.onNodeWithText("CC BY 4.0").assertDoesNotExist()
+        // The caption under the crate.
+        compose.onNodeWithTag("caption-artist").assertIsDisplayed().assertTextContains("vela park", substring = true)
+        compose.onNodeWithText("cc by 4.0").assertDoesNotExist()
         compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
-        compose.onNodeWithTag("menu:Details").performClick()
         compose.onNodeWithTag("record-details").assertIsDisplayed()
-        compose.onNodeWithText("CC BY 4.0", substring = true).assertExists()
+        compose.onAllNodesWithText("cc by 4.0", substring = true).onFirst().assertExists()
+    }
+
+    @Test
+    fun `a record's details end with the whole record's running time`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        // 4.2 + 3.9 + 5.1 + 4.4 + 3.6 + 4.8 + 4.0 + 3.7 + 5.3 minutes.
+        compose.onNodeWithTag("record-total").assertTextContains("total").assertTextContains("39:00")
+        // A record from the music folder stays on the shelf: no remove link for it.
+        compose.onNodeWithTag("details:remove").assertDoesNotExist()
+        compose.onNodeWithTag("details:put-back").assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/record_details.png")
+        assertEquals("4:22", app.runout.ui.runningTime(262_000))
+        assertEquals("1:02:33", app.runout.ui.runningTime(3_753_000))
+    }
+
+    @Test
+    fun `a received record's details can remove it, after asking`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 2) }
+        compose.onNodeWithTag("sleeve:Paper Moons").performTouchInput { longClick() }
+        compose.onNodeWithTag("details:remove").assertTextContains("remove record").performClick()
+        compose.onNodeWithTag("record-details").assertDoesNotExist()
+        compose.onNodeWithTag("confirm").assertIsDisplayed()
+        compose.onNodeWithText("REMOVE RECORD?").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the share key in the details sends the sheet as a picture`() {
+        portrait()
+        var shared: Pair<File, String>? = null
+        val actions = object : RecordingActions() { override fun shareImage(file: File, title: String) { shared = file to title } }
+        compose.setContent { RoomScreen(state(), actions, initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        compose.onNodeWithContentDescription("Share as a picture").assertIsDisplayed()
+        compose.onNodeWithTag("details:share").performClick()
+        // Robolectric only draws the window when asked to: a screenshot draws the sheet into the picture.
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/record_details_sharing.png")
+        compose.waitUntil(10_000) { shared != null }
+        val (file, title) = shared!!
+        assertEquals("Night Drive", title)
+        assertTrue(file.path, file.exists() && file.length() > 0)
+        assertEquals(listOf(0x89, 'P'.code, 'N'.code, 'G'.code), file.readBytes().take(4).map { it.toInt() and 0xFF })
+        // The whole sheet, every track, on white: taller than the card's capped list, and its corner is white.
+        val picture = android.graphics.BitmapFactory.decodeFile(file.path)
+        assertTrue("${picture.width} x ${picture.height}", picture.width > 300 && picture.height > picture.width)
+        assertEquals(AColor.WHITE, picture.getPixel(picture.width / 2, 40))
+        file.copyTo(File("build/outputs/roborazzi/record_details_picture.png"), overwrite = true)
+        // Back to the card once the picture is made.
+        compose.onNodeWithTag("record-details").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping the open place again goes to its own page, not out to the room`() {
+        portrait()
+        compose.setContent {
+            RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), RecordingActions(), initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.SOUND)
+        }
+        compose.onNodeWithTag("panel:sound").assertExists()
+        compose.onNodeWithTag("nav:SETTINGS").performClick()
+        compose.onNodeWithTag("settings:SOUND").assertExists()
+        compose.onNodeWithTag("nav:SETTINGS").performClick()
+        compose.onNodeWithTag("panel:settings").assertExists()
+        // Friends: from a chat back to the chats.
+        compose.onNodeWithTag("nav:FRIENDS").performClick()
+        compose.onNodeWithTag("friend:maya").performClick()
+        compose.onNodeWithTag("field:Private message").assertExists()
+        compose.onNodeWithTag("nav:FRIENDS").performClick()
+        compose.onNodeWithTag("field:Private message").assertDoesNotExist()
+        compose.onNodeWithTag("new-chat").assertExists()
+        // Drops: from a drop back to the week.
+        compose.onNodeWithTag("nav:DROPS").performClick()
+        compose.onNodeWithTag("drop:NS050").performScrollTo().performClick()
+        compose.onNodeWithTag("drop-preview").assertExists()
+        compose.onNodeWithTag("nav:DROPS").performClick()
+        compose.onNodeWithTag("drop-preview").assertDoesNotExist()
+        compose.onNodeWithTag("drop:NS050").assertExists()
+    }
+
+    @Test
+    fun `the friends tab leaves an open chat even while the room still reports it`() {
+        portrait()
+        // The closed chat reaches the room a frame late; here it never does.
+        val s = state(contacts = listOf(SoulseekContact("maya", true))).copy(soulseekConversation = "maya")
+        compose.setContent { RoomScreen(s, RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("field:Private message").assertExists()
+        compose.onNodeWithTag("nav:FRIENDS").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("field:Private message").assertDoesNotExist()
+        compose.onNodeWithTag("new-chat").assertExists()
+    }
+
+    @Test
+    fun `settings has flags for auto-flip, auto-play and sleep mode`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setAutoFlip(on: Boolean) { calls += "flip:$on" }
+            override fun setAutoPlay(on: Boolean) { calls += "play:$on" }
+            override fun setSleepMode(on: Boolean) { calls += "sleep:$on" }
+        }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.SETTINGS) }
+        compose.onNodeWithTag("settings:FLAGS").performScrollTo().performClick()
+        compose.onNodeWithTag("panel:flags").assertExists()
+        listOf("Auto-flip", "Auto-play", "Sleep mode").forEach { compose.onNodeWithTag("toggle:$it").performClick() }
+        assertEquals(listOf("flip:true", "play:true", "sleep:true"), calls)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_flags.png")
+    }
+
+    @Test
+    fun `sleep mode puts a moon in the top bar that sets the sleep timer`() {
+        portrait()
+        val set = mutableListOf<Int?>()
+        val actions = object : RecordingActions() { override fun setSleepTimer(minutes: Int?) { set += minutes } }
+        var s by mutableStateOf(state())
+        compose.setContent { RoomScreen(s, actions) }
+        compose.onNodeWithTag("sleep-moon").assertDoesNotExist()
+        s = s.copy(deckFlags = app.runout.playback.DeckFlags(sleepMode = true))
+        compose.onNodeWithTag("sleep-moon").performClick()
+        compose.onNodeWithTag("sleep-timer").assertExists()
+        compose.onNodeWithTag("sleep:40").performClick()
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/sleep_timer.png")
+        compose.onNodeWithTag("sleep-start").performClick()
+        assertEquals(listOf<Int?>(40), set)
+        // Running: the moon turns orange with the minutes left, and the card can turn it off. The
+        // countdown keeps a quarter-minute tick, so the clock only moves when told to from here.
+        compose.mainClock.autoAdvance = false
+        s = s.copy(sleepAt = System.currentTimeMillis() + 23 * 60_000L)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(200)
+        compose.onNodeWithContentDescription("minutes left", substring = true).assertExists()
+        compose.onNodeWithTag("sleep-moon").performClick()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("sleep-off").performClick()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals(listOf<Int?>(40, null), set)
+    }
+
+    @Test
+    fun `leaving dig forgets its search a while later`() {
+        portrait()
+        val cleared = java.util.concurrent.atomic.AtomicInteger()
+        val actions = object : RecordingActions() { override fun clearSearch() { cleared.incrementAndGet() } }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DIG, digForgetMs = 200) }
+        compose.waitForIdle()
+        assertEquals("not while you're in dig", 0, cleared.get())
+        compose.onNodeWithTag("nav:DROPS").performClick()
+        compose.waitForIdle()
+        // The wait is a plain delay on the main looper: run the looper's clock past it.
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
+        compose.waitUntil(5_000) { cleared.get() == 1 }
+    }
+
+    @Test
+    fun `sideways a place closes to the room, and downloads still open`() {
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialPanel = Panel.DIG) }
+        // Dig was open: turned sideways, the room is home and only the nav's note is left.
+        compose.onAllNodesWithTag("landscape-note").assertCountEquals(1)
+        compose.onNodeWithTag("screen:search").assertDoesNotExist()
+        compose.onNodeWithTag("nav:ROOM").assertDoesNotExist()
+        compose.onNodeWithTag("open-downloads").performClick()
+        compose.onNodeWithTag("panel:transfers").assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/landscape_downloads.png")
+    }
+
+    @Test
+    fun `soulseek settings hold wi-fi only and the upload limit`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setSoulseekWifiOnly(enabled: Boolean) { calls += "wifi:$enabled" }
+            override fun setSoulseekUploadSlots(slots: Int) { calls += "slots:$slots" }
+        }
+        val s = state().copy(soulseekSession = SoulseekSession(SoulseekConnection.CONNECTED, "abhi", authenticated = true), soulseekShareConsent = true, soulseekWaitingForWifi = true)
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
+        compose.onNodeWithTag("toggle:Share on Wi-Fi only").performScrollTo().performClick()
+        compose.onNodeWithTag("upload-slots:3").performScrollTo().performClick()
+        assertEquals(listOf("wifi:false", "slots:3"), calls)
+        compose.onNodeWithTag("sharing-waiting-wifi").performScrollTo().assertIsDisplayed()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/soulseek_upload_settings.png")
+    }
+
+    @Test
+    fun `settings run sound, flags, library, soulseek, about, and library keeps the folders and covers`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setCoverLookupEnabled(enabled: Boolean) { calls += "covers:$enabled" }
+            override fun pickDownloadFolder() { calls += "pick-download" }
+        }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.SETTINGS) }
+        val rows = compose.onAllNodes(SemanticsMatcher("a settings row") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("settings:") == true })
+            .fetchSemanticsNodes().map { it.config[SemanticsProperties.TestTag] }
+        assertEquals(listOf("SOUND", "FLAGS", "LIBRARY", "ACCOUNT", "ABOUT").map { "settings:$it" }, rows)
+        compose.onNodeWithTag("settings:LIBRARY").performScrollTo().performClick()
+        compose.onNodeWithText("02 download folder").assertExists()
+        compose.onNodeWithTag("download-folder").performScrollTo().performClick()
+        compose.onNodeWithTag("toggle:Find missing covers online").performScrollTo().performClick()
+        assertEquals(listOf("pick-download", "covers:true"), calls)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_library.png")
+    }
+
+    @Test
+    fun `the look follows the phone and the theme until pinned`() {
+        val look = Look()
+        assertEquals(true, look.dark(phoneDark = true))
+        assertEquals(DeckSkin.DARK, look.deckFor(dark = true))
+        assertEquals(DeckSkin.WHITE_TEAL, look.deckFor(dark = false))
+        assertEquals(false, look.copy(theme = ThemeMode.LIGHT).dark(phoneDark = true))
+        assertEquals(true, look.copy(theme = ThemeMode.DARK).dark(phoneDark = false))
+        assertEquals(DeckSkin.MONO_WHITE, look.copy(deck = DeckSkin.MONO_WHITE).deckFor(dark = true))
+        // Each pinned colourway is a model that ships.
+        DeckSkin.entries.mapNotNull { it.asset }.forEach { Fixtures.context.assets.open(it).close() }
+    }
+
+    @Test
+    fun `Flags sets the theme and the deck, and the dark room is true black`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setTheme(theme: ThemeMode) { calls += "theme:$theme" }
+            override fun setDeckSkin(deck: DeckSkin) { calls += "deck:$deck" }
+        }
+        try {
+            Room.dark = true
+            assertEquals(androidx.compose.ui.graphics.Color.Black, Room.Background)
+            assertEquals(androidx.compose.ui.graphics.Color.White, Room.Ink)
+            compose.setContent { RoomScreen(state().copy(look = Look(ThemeMode.DARK)), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.FLAGS) }
+            compose.onNodeWithTag("theme:LIGHT").performScrollTo().performClick()
+            compose.onNodeWithTag("deck:MONO_WHITE").performScrollTo().performClick()
+            assertEquals(listOf("theme:LIGHT", "deck:MONO_WHITE"), calls)
+            compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_flags_dark.png")
+        } finally {
+            Room.dark = false
+        }
+    }
+
+    @Test
+    fun `with intro on launch the needle drop plays over the room, and a tap gives the room back`() {
+        portrait()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(state().copy(look = Look(introOnLaunch = true)), RecordingActions()) }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onNodeWithTag("onboarding-intro").assertExists().performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithTag("onboarding-intro").assertDoesNotExist()
+        // No setup steps after it: straight to the room.
+        compose.onNodeWithTag("screen:setup").assertDoesNotExist()
+        compose.onNodeWithTag("turntable").assertExists()
+    }
+
+    @Test
+    fun `without the flag the room opens straight away, and Flags turns the intro on`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() { override fun setIntroOnLaunch(on: Boolean) { calls += "intro:$on" } }
+        compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.FLAGS) }
+        compose.onNodeWithTag("onboarding-intro").assertDoesNotExist()
+        compose.onNodeWithTag("toggle:Intro on launch").performScrollTo().performClick()
+        assertEquals(listOf("intro:true"), calls)
+    }
+
+    @Test
+    fun `two fingers on Settings open the storage page, which measures and shows the folders`() {
+        portrait()
+        val asked = java.util.concurrent.atomic.AtomicInteger()
+        val actions = object : RecordingActions() { override fun analyzeStorage() { asked.incrementAndGet() } }
+        val usage = app.runout.library.FolderUsage(
+            "/Music", 212_501_000, 7, 3, 2,
+            mapOf(app.runout.library.StorageKind.FLAC_HI_RES to 120_000_000L, app.runout.library.StorageKind.FLAC_CD to 75_000_000L),
+            listOf(app.runout.library.RecordUsage("Night Drive", "Vela Park", 128_000_000), app.runout.library.RecordUsage("Moon Safari", "Air", 75_000_000)),
+        )
+        val report = app.runout.library.StorageReport(
+            app.runout.library.DeviceUsage(128_000_000_000, 41_000_000_000), usage, null, downloadsInMusic = true,
+            app = app.runout.library.AppUsage(12_000_000, 3_000_000, 1_000_000), at = 0L,
+        )
+        var storage by androidx.compose.runtime.mutableStateOf<app.runout.library.StorageState>(app.runout.library.StorageState.Idle)
+        compose.setContent { RoomScreen(state().copy(storage = storage), actions, initialPanel = Panel.SETTINGS) }
+        // Not on the list.
+        compose.onNodeWithTag("settings:STORAGE").assertDoesNotExist()
+        compose.onNodeWithTag("panel:settings").performTouchInput {
+            down(0, center); down(1, center + androidx.compose.ui.geometry.Offset(120f, 0f))
+            repeat(8) { moveBy(0, androidx.compose.ui.geometry.Offset(0f, -40f)); moveBy(1, androidx.compose.ui.geometry.Offset(0f, -40f)) }
+            up(0); up(1)
+        }
+        compose.onNodeWithTag("panel:storage").assertExists()
+        assertEquals(1, asked.get())
+        storage = app.runout.library.StorageState.Done(report)
+        compose.onNodeWithTag("storage-music").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("night drive").assertExists()
+        compose.onNodeWithText("downloads land inside your music folder, so they're counted above.").performScrollTo().assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/settings_storage.png")
+        // Two fingers down: back to the list.
+        compose.onNodeWithTag("storage-back-hint").assertExists()
+        compose.onNodeWithTag("panel:settings").performTouchInput {
+            down(0, center); down(1, center + androidx.compose.ui.geometry.Offset(120f, 0f))
+            repeat(8) { moveBy(0, androidx.compose.ui.geometry.Offset(0f, 40f)); moveBy(1, androidx.compose.ui.geometry.Offset(0f, 40f)) }
+            up(0); up(1)
+        }
+        compose.onNodeWithTag("panel:storage").assertDoesNotExist()
+        compose.onNodeWithTag("settings:SOUND").assertExists()
+    }
+
+    @Test
+    fun `a record's delete key warns in the other theme's colours, and only delete deletes`() {
+        portrait()
+        val deleted = mutableListOf<String>()
+        val actions = object : RecordingActions() { override fun deleteRecordFolder(record: app.runout.library.RecordUsage) { deleted += record.title } }
+        val night = app.runout.library.RecordUsage("Night Drive", "Vela Park", 128_000_000, "content://x/Night", "a-night", deletable = true)
+        val usage = app.runout.library.FolderUsage("/Music", 128_000_000, 2, 2, 1, mapOf(app.runout.library.StorageKind.FLAC_HI_RES to 128_000_000L), listOf(night))
+        val report = app.runout.library.StorageReport(null, usage, null, downloadsInMusic = true, app = app.runout.library.AppUsage(0, 0, 0), at = 0L)
+        try {
+            Room.dark = true
+            compose.setContent { RoomScreen(state().copy(storage = app.runout.library.StorageState.Done(report)), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.STORAGE) }
+            compose.onNodeWithTag("delete:Night Drive").performScrollTo().performClick()
+            compose.onNodeWithTag("delete-warning").assertExists()
+            compose.onNodeWithText("your album will be deleted.").assertExists()
+            compose.onRoot().captureRoboImage("build/outputs/roborazzi/storage_delete_warning_dark.png")
+            compose.onNodeWithTag("delete-keep").performClick()
+            compose.onNodeWithTag("delete-warning").assertDoesNotExist()
+            assertTrue("keeping it deletes nothing", deleted.isEmpty())
+            compose.onNodeWithTag("delete:Night Drive").performScrollTo().performClick()
+            compose.onNodeWithTag("delete-confirm").performClick()
+            assertEquals(listOf("Night Drive"), deleted)
+        } finally {
+            Room.dark = false
+        }
+    }
+
+    @Test
+    fun `the record on the platter stays on the deck - its sleeve gives up no disc`() {
+        portrait()
+        val cued = DeckState(album = albums[1], sides = SideSplitter.split(albums[1].tracks))
+        compose.setContent { RoomScreen(state(deck = cued), RecordingActions(), initialCrateIndex = 1) }
+        compose.onNodeWithTag("sleeve:Night Drive").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+    }
+
+    @Test
+    fun `let go away from the platter and the record slides back into its sleeve`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialPulledId = "a2", initialCrateIndex = 1) }
+        compose.onNodeWithTag("pulled-disc").assertExists().performTouchInput {
+            down(center); repeat(4) { moveBy(androidx.compose.ui.geometry.Offset(30f, -6f)) }; up()
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+    }
+
+    @Test
+    fun `swiping the crate with a record out puts it back and digs on`() {
+        portrait()
+        compose.setContent { RoomScreen(state(), RecordingActions(), initialPulledId = "a2", initialCrateIndex = 1) }
+        compose.onNodeWithText("NIGHT DRIVE").assertExists()
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+        compose.onNodeWithText("NIGHT DRIVE").assertDoesNotExist()
+    }
+
+    @Test
+    fun `turning the phone keeps the crate on the record in front`() {
+        portrait()
+        val upright = mutableStateOf(true)
+        compose.setContent {
+            // The room turns by its own shape: wider than tall is sideways.
+            Box(Modifier.size(if (upright.value) DpSize(412.dp, 892.dp) else DpSize(412.dp, 300.dp))) { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        }
+        compose.onNodeWithText("NIGHT DRIVE").assertExists()
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        val dug = compose.onNodeWithTag("caption-artist").fetchSemanticsNode().config[SemanticsProperties.Text].joinToString()
+        upright.value = false
+        compose.waitForIdle()
+        compose.onNodeWithText("NIGHT DRIVE").assertDoesNotExist()
+        compose.onNodeWithTag("caption-artist").assertTextContains(dug.substringBefore(" ·"), substring = true)
+    }
+
+    @Test
+    fun `held over a playing deck a record swaps in, and the music carries on`() {
+        portrait()
+        val monsoon = albums[0]
+        var deck by mutableStateOf(DeckState(album = monsoon, sides = SideSplitter.split(monsoon.tracks), needleDown = true, isPlaying = true))
+        val actions = object : RecordingActions() {
+            override fun load(album: Album) { super.load(album); deck = DeckState(album = album, sides = SideSplitter.split(album.tracks)) }
+            override fun eject() { super.eject(); deck = DeckState() }
+            override fun liftNeedle() { super.liftNeedle(); deck = deck.copy(needleDown = false, isPlaying = false) }
+            override fun needleDrop(fraction: Float) { super.needleDrop(fraction); deck = deck.copy(needleDown = true, isPlaying = true) }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(state(deck = deck), actions, initialPulledId = "a2", initialCrateIndex = 1) }
+        repeat(20) { compose.mainClock.advanceTimeBy(100) }
+        // Where the platter is: the deck's own camera over the turntable's box.
+        val box = compose.onNodeWithTag("turntable").getBoundsInRoot()
+        val d = compose.density.density
+        val cam = app.runout.ui.deck.DeckCamera((box.right - box.left).value * d, (box.bottom - box.top).value * d)
+        val c = cam.project(app.runout.ui.deck.V3(app.runout.ui.deck.DeckModel.platterCentre.x, app.runout.ui.deck.DeckModel.RECORD_Y, app.runout.ui.deck.DeckModel.platterCentre.z))
+        val platter = androidx.compose.ui.geometry.Offset(box.left.value * d + c.x, box.top.value * d + c.y)
+        val discBox = compose.onNodeWithTag("pulled-disc").getBoundsInRoot()
+        val discAt = androidx.compose.ui.geometry.Offset((discBox.left.value + discBox.right.value) / 2f * d, (discBox.top.value + discBox.bottom.value) / 2f * d)
+        val step = (platter - discAt) / 10f
+        compose.onNodeWithTag("pulled-disc").performTouchInput { down(center); repeat(10) { moveBy(step) } }
+        // Held there past the shakes: the swap runs with the finger still down.
+        repeat(12) { compose.mainClock.advanceTimeBy(100) }
+        compose.onRoot().performTouchInput { up() }
+        repeat(40) { compose.mainClock.advanceTimeBy(100) }
+        val log = actions.log.toList()
+        assertTrue(log.toString(), log.indexOf("eject") in 0 until log.indexOf("load:Night Drive"))
+        assertTrue("it plays on: $log", log.lastIndexOf("needleDrop") > log.indexOf("load:Night Drive"))
+        compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
+    }
+
+    @Test
+    fun `soulseek settings grey out how you share until sharing is on`() {
+        portrait()
+        val calls = mutableListOf<String>()
+        val actions = object : RecordingActions() {
+            override fun setSoulseekWifiOnly(enabled: Boolean) { calls += "wifi:$enabled" }
+            override fun setSoulseekUploadSlots(slots: Int) { calls += "slots:$slots" }
+            override fun setTurtleMode(enabled: Boolean) { calls += "turtle:$enabled" }
+        }
+        val s = state().copy(soulseekSession = SoulseekSession(SoulseekConnection.CONNECTED, "abhi", authenticated = true), soulseekShareConsent = false)
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
+        compose.onNodeWithText("03 sharing").assertExists()
+        compose.onNodeWithText("04 connection").assertExists()
+        compose.onNodeWithTag("toggle:Share on Wi-Fi only").performScrollTo().assertIsNotEnabled().performClick()
+        compose.onNodeWithTag("upload-slots:3").performScrollTo().performClick()
+        compose.onNodeWithTag("settings-turtle").performScrollTo().performClick()
+        assertEquals(listOf("turtle:true"), calls)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/soulseek_settings.png")
+    }
+
+    private fun broken(id: String, user: String, name: String, state: SoulseekTransferState, error: String, kind: FailureKind, recovery: Recovery? = null, retryAt: Long? = null) =
+        SoulseekTransfer(id, user, "Music/Vela Park - Night Drive (2023)/$name", 1_000, state = state, error = error, albumId = albums.first { it.title == "Night Drive" }.id, failure = kind, recovery = recovery, retryAt = retryAt)
+
+    @Test
+    fun `failed downloads say what runout is doing about them, and a lost one digs for its album`() {
+        portrait()
+        val transfers = listOf(
+            broken("r", "maya", "01 Opening.flac", SoulseekTransferState.PAUSED, "The user went offline", FailureKind.PEER_AWAY, Recovery.RETRY, System.currentTimeMillis() + 4 * 60_000),
+            broken("s", "kai", "02 Lowlight.flac", SoulseekTransferState.PAUSED, "The upload failed on the other side", FailureKind.REFUSED, Recovery.SEEK),
+            broken("f", "lee", "03 Afterglow.flac", SoulseekTransferState.FAILED, "The upload failed on the other side. No one else shares this exact file right now.", FailureKind.REFUSED),
+        )
+        val actions = RecordingActions()
+        compose.setContent { RoomScreen(state().copy(soulseekTransfers = transfers), actions, initialPanel = Panel.DOWNLOADS) }
+        // In the queue: one waiting to ask maya again, one looking elsewhere, both naming their album.
+        compose.onNodeWithText("maya · retrying in 4 min", substring = true).assertExists()
+        compose.onNodeWithText("kai · looking for another copy", substring = true).assertExists()
+        compose.onNodeWithTag("transfer-album:r").assertTextContains("from night drive")
+        compose.onNodeWithTag("retry-now:r").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/downloads_recovering.png")
+        compose.onNodeWithTag("downloads-tab:failed").performClick()
+        compose.onNodeWithText("no one else shares this exact file", substring = true).assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/downloads_failed.png")
+        compose.onNodeWithTag("find-copy:f").performClick()
+        assertTrue(actions.log.toString(), "soulseekSearch:Vela Park Night Drive" in actions.log)
+        compose.onNodeWithTag("panel:transfers").assertDoesNotExist()
+        // Dig, reached from Downloads: "← back" returns there; Downloads itself only closes.
+        compose.onNodeWithTag("action:Back").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("panel:transfers").assertExists()
+        compose.onNodeWithTag("action:Back").assertDoesNotExist()
+        compose.onNodeWithTag("action:Close").assertExists()
+    }
+
+    @Test
+    fun `a record missing a track says so on its sleeve, and its details fetch it`() {
+        portrait()
+        val transfers = listOf(broken("f", "lee", "02 Lowlight.flac", SoulseekTransferState.FAILED, "The user went offline", FailureKind.PEER_AWAY))
+        val fetched = mutableListOf<String>()
+        val actions = object : RecordingActions() { override fun fetchMissingTracks(albumId: String) { fetched += albumId } }
+        compose.setContent { RoomScreen(state().copy(soulseekTransfers = transfers), actions, initialCrateIndex = 1) }
+        compose.onNodeWithTag("missing-tag", useUnmergedTree = true).assertExists().assertTextEquals("1 MISSING")
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/sleeve_missing.png")
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { longClick() }
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/details_fetch_missing.png")
+        compose.onNodeWithTag("details:fetch-missing").assertTextContains("fetch missing track").performClick()
+        assertEquals(listOf(albums.first { it.title == "Night Drive" }.id), fetched)
+        compose.onNodeWithTag("panel:transfers").assertExists()
     }
 
     // ---------------------------------------------------------------------------------------
@@ -240,7 +784,7 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `readme shot of the record menu`() {
+    fun `readme shot of a record's details, opened by a long press`() {
         portrait()
         compose.setContent { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
         compose.onNodeWithTag("sleeve:Night Drive").performClick()
@@ -261,6 +805,27 @@ class ListeningRoomUiTest {
         compose.setContent { RoomScreen(state().copy(discovery = discovery), RecordingActions(), initialPanel = Panel.DIG) }
         compose.waitForIdle()
         readme("dig")
+    }
+
+    @Test
+    fun `Dig spins the dotted vinyl until the first folders arrive`() {
+        portrait()
+        val options = DiscoveryOptions(source = SearchSource.SOULSEEK)
+        val searching = SoulseekSearchStatus("r", "moon safari", SearchPhase.SEARCHING)
+        var s by mutableStateOf(state().copy(discovery = DiscoveryState("moon safari", options, online = searching)))
+        compose.setContent { RoomScreen(s, RecordingActions(), initialPanel = Panel.DIG) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Searching").assertIsDisplayed()
+        compose.onNodeWithText("digging soulseek for “moon safari”…").assertIsDisplayed()
+        compose.onNodeWithTag("stop-search").assertIsDisplayed()
+        compose.onNodeWithTag("search-status").assertTextContains("listening for peers", substring = true)
+        // The first folders replace the vinyl; the status keeps saying the search is still on.
+        val results = moonSafari.take(3).mapIndexed { i, t -> flac("jules", "Music/Air - Moon Safari (1998)/0${i + 1} $t.flac", 30) }
+        s = s.copy(discovery = s.discovery.copy(remote = remoteAlbums("moon safari", results, options)))
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Searching").assertDoesNotExist()
+        compose.onNodeWithTag("remote-results").assertIsDisplayed()
+        compose.onNodeWithTag("search-status").assertTextContains("listening for peers", substring = true)
     }
 
     @Test
@@ -328,6 +893,9 @@ class ListeningRoomUiTest {
         }
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
         compose.waitForIdle()
+        // The real cover fades in over the dotted placeholder, which then goes.
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("drop-placeholder:NS050", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithContentDescription("Another Day, Another Way").assertExists()
         readme("drops")
     }
 
@@ -346,21 +914,19 @@ class ListeningRoomUiTest {
 
     @Test
     fun `Settings opens on Sound, which controls Pure mode, hi-res and the EQ`() {
+        portrait()
         val actions = object : RecordingActions() {
             var sound by mutableStateOf(SoundSettings())
             override fun updateSound(transform: (SoundSettings) -> SoundSettings) { sound = transform(sound) }
         }
         compose.setContent { RoomScreen(state(sound = actions.sound), actions) }
         compose.onNodeWithTag("nav:SETTINGS").performClick()
-        compose.onNodeWithTag("panel-title").assertTextContains("Settings")
-        // A plain list first; Sound is one row of it.
-        compose.onNodeWithTag("settings:SOUND").assertIsDisplayed()
+        compose.onNodeWithTag("panel-title").assertTextContains("SETTINGS")
+        // A plain list first; Sound is one row of it, and the storage page is a two-finger swipe away.
+        compose.onNodeWithTag("storage-hint").assertExists()
+        compose.onNodeWithTag("settings:SOUND").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("settings:SOUND").performClick()
         compose.onNodeWithTag("panel:sound").assertIsDisplayed()
-        // The signal chain: the file, Runout's path, and where it goes out.
-        compose.onNodeWithTag("signal-path").assertIsDisplayed()
-        compose.onNodeWithTag("spec:Track").assertTextContains("24-BIT · 96 KHZ")
-        compose.onNodeWithTag("spec:Runout").assertTextContains("32-BIT FLOAT", substring = true)
 
         compose.onNodeWithTag("fader:1k").performScrollTo().performTouchInput {
             swipe(center, center - Offset(0f, 140f), durationMillis = 300)
@@ -370,7 +936,7 @@ class ListeningRoomUiTest {
         assertEquals("Custom", actions.sound.presetName)
         assertTrue(actions.sound.eqEnabled)
 
-        compose.onNodeWithText("Warm vinyl").performScrollTo().performClick()
+        compose.onNodeWithText("Warm vinyl", ignoreCase = true).performScrollTo().performClick()
         assertTrue(actions.log.contains("preset:Warm vinyl"))
 
         compose.onNodeWithTag("toggle:Hi-res output").performScrollTo().performClick()
@@ -379,41 +945,53 @@ class ListeningRoomUiTest {
         assertEquals(true, actions.sound.pure)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/04_sound_panel.png")
 
-        compose.onNodeWithTag("action:Close").performClick()
+        // Inside a section the head's key goes back to the list, which closes as before.
+        compose.onNodeWithTag("action:Close").assertDoesNotExist()
+        compose.onNodeWithTag("action:Back").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("panel:sound").assertDoesNotExist()
+        compose.onNodeWithTag("settings:SOUND").assertExists()
+        compose.onNodeWithTag("action:Close").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("panel:settings").assertDoesNotExist()
     }
 
     @Test
     fun `Friday Drops shows the week and claims a record`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(), actions, initialPanel = Panel.DROPS) }
-        compose.onNodeWithText("Week of 16 October").assertIsDisplayed()
+        compose.onNodeWithText("Week of 16 October", ignoreCase = true).assertIsDisplayed()
         // Claims left are three TE lights; the drops stand on a shelf as sleeves.
         compose.onNodeWithContentDescription("2 of 3 claims left").assertIsDisplayed()
-        compose.onNodeWithText("In your crate").assertIsDisplayed() // already claimed
+        compose.onNodeWithText("In your crate", ignoreCase = true).assertIsDisplayed() // already claimed
         compose.onNodeWithTag("drop:NS050").assertIsDisplayed()
+        // No cover yet: a dotted record on grey with the drop's number stands in for it.
+        compose.onNodeWithTag("drop-placeholder:NS050", useUnmergedTree = true).assertIsDisplayed()
         compose.onAllNodes(hasText("Claim")).assertCountEquals(0)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/05_drops_panel.png")
         // A tap opens the drop: its licence, its tracks, and Claim inside.
         compose.onNodeWithTag("drop:NS050").performClick()
         compose.onNodeWithTag("drop-preview").assertIsDisplayed()
-        compose.onNodeWithText("CC BY-NC-SA 4.0").assertIsDisplayed()
+        compose.onNodeWithTag("drop-placeholder:NS050", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("CC BY-NC-SA 4.0", ignoreCase = true).assertIsDisplayed()
         compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
         assertTrue(actions.log.toString(), actions.log.contains("claim:NS050"))
     }
 
     @Test
     fun `an unloaded drop asks for this week's records`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(drops = DropState.Idle), actions, initialPanel = Panel.DROPS) }
         compose.waitForIdle()
         assertTrue(actions.log.contains("refreshDrops"))
-        compose.onNodeWithText("Digging through the archive…").assertIsDisplayed()
+        compose.onNodeWithText("Digging through the archive…", ignoreCase = true).assertIsDisplayed()
     }
 
     @Test
     fun `private messages open by Soulseek username and send through the action`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), actions, initialPanel = Panel.FRIENDS) }
         compose.onNodeWithTag("panel:messages").assertIsDisplayed()
@@ -422,13 +1000,56 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("friend:maya").performClick()
         assertTrue(actions.log.contains("soulseekConversation:maya"))
         compose.onNodeWithTag("field:Private message").performTextInput("Hi Maya")
-        compose.onNodeWithText("Send message").performClick()
+        compose.onNodeWithTag("send-message").performClick()
         assertTrue(actions.log.contains("soulseekMessage:maya:Hi Maya"))
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/06_messages_panel.png")
     }
 
     @Test
+    fun `Friends says messages live only on this phone, on its home and not inside a chat`() {
+        portrait()
+        compose.setContent { RoomScreen(state(contacts = listOf(SoulseekContact("maya", true))), RecordingActions(), initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("messages-local-note").assertIsDisplayed()
+        compose.onNodeWithText("messages stay on this phone; uninstalling sonic deletes them.").assertIsDisplayed()
+        compose.onNodeWithTag("friend:maya").performClick()
+        compose.onNodeWithTag("messages-local-note").assertDoesNotExist()
+    }
+
+    @Test
+    fun `only Soulseek downloads can be sent, and their card opens that exact folder`() {
+        portrait()
+        val actions = object : RecordingActions() {
+            override fun openSoulseekFolder(username: String, directory: String) { log += "openFolder:$username:$directory" }
+        }
+        // Nothing from Soulseek yet: the key is off and says why.
+        var s by mutableStateOf(state(contacts = listOf(SoulseekContact("maya", true))).copy(soulseekConversation = "maya"))
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.FRIENDS) }
+        compose.onNodeWithTag("share-record").assertIsNotEnabled()
+        compose.onNodeWithTag("send-record-rule").assertIsDisplayed()
+        // One download from ro's share: the picker offers just that, and the card carries its folder.
+        val download = albums[0].copy(id = "slsk-1", source = Source.SOULSEEK, from = "ro", remoteFolder = "Music/Air/Moon Safari")
+        s = s.copy(albums = albums + download)
+        compose.waitForIdle()
+        compose.onNodeWithTag("send-record-rule").assertDoesNotExist()
+        compose.onNodeWithTag("share-record").performClick()
+        compose.onAllNodesWithTag("pick-record:slsk-1").assertCountEquals(1)
+        compose.onAllNodesWithTag("pick-record:${albums[0].id}").assertCountEquals(0)
+        compose.onNodeWithTag("send-record").performClick()
+        val sent = actions.log.single { it.startsWith("soulseekMessage:maya:") }.removePrefix("soulseekMessage:maya:")
+        val card = app.runout.ui.RecordCard.parse(sent)!!
+        assertEquals("ro" to "Music/Air/Moon Safari", card.peer to card.folder)
+        // A card sent to you names the folder: "open folder" lists it, then Dig shows it.
+        val received = app.runout.ui.RecordCard("Air", "Moon Safari", null, "ro", "Music/Air/Moon Safari").encode()
+        s = s.copy(albums = albums, soulseekConversations = listOf(SoulseekConversation("maya", listOf(SoulseekMessage("9", "maya", received, 1_792_540_000_000L, outgoing = false, state = SoulseekMessageState.RECEIVED, read = true)), 0)))
+        compose.waitForIdle()
+        compose.onNodeWithTag("open-record-folder").performClick()
+        assertTrue(actions.log.toString(), actions.log.contains("openFolder:ro:Music/Air/Moon Safari"))
+        assertTrue(actions.log.none { it.startsWith("soulseekSearch:") })
+    }
+
+    @Test
     fun `Settings sends you to the one sign-in, which checks the ID and always keeps you signed in`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ACCOUNT) }
         // No second sign-in form and no "Remember me": Settings opens the same login as onboarding.
@@ -441,22 +1062,25 @@ class ListeningRoomUiTest {
         compose.onNodeWithTag("field:Soulseek ID").performTextClearance()
         compose.onNodeWithTag("field:Soulseek ID").performTextInput("Abhi_99")
         compose.onNodeWithTag("field:Password").performTextInput("test password")
-        compose.onNodeWithTag("submit-soulseek").performClick()
+        // In landscape the collage stays and the page scrolls down to the key.
+        compose.onNodeWithTag("submit-soulseek").performScrollTo().performClick()
         assertTrue(actions.log.toString(), actions.log.contains("soulseekSignIn:Abhi_99:true"))
         // The ⓘ explains that there is no sign-up page.
-        compose.onNodeWithTag("soulseek-id-info").performClick()
-        compose.onNodeWithText("Soulseek has no sign-up page", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("soulseek-id-info").performScrollTo().performClick()
+        compose.onNodeWithText("Soulseek has no sign-up page", substring = true, ignoreCase = true).assertIsDisplayed()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/12_login.png")
-        compose.onNodeWithTag("soulseek-id-help-close").performClick()
+        // The TE help panel closes with its "got it" key.
+        compose.onNodeWithText("got it").performClick()
         compose.onNodeWithTag("setup-close").performClick()
         compose.onNodeWithTag("screen:setup").assertDoesNotExist()
     }
 
     @Test
     fun `Internet Archive claim actions are disabled without Soulseek sign in`() {
+        portrait()
         val actions = RecordingActions()
         compose.setContent { RoomScreen(state(session = SoulseekSession()), actions, initialPanel = Panel.DROPS) }
-        compose.onNodeWithText("Sign in with Soulseek").assertIsDisplayed()
+        compose.onNodeWithText("Sign in with Soulseek", ignoreCase = true).assertIsDisplayed()
         compose.onNodeWithTag("drop:NS050").performScrollTo().performClick()
         compose.onNodeWithTag("claim:NS050").performScrollTo().performClick()
         assertTrue(actions.log.none { it.startsWith("claim:") })
@@ -480,23 +1104,26 @@ class ListeningRoomUiTest {
 
     @Test
     fun `the footer is four icon tabs and the Pressing Plant is gone`() {
+        portrait()
         compose.setContent { RoomScreen(state(), RecordingActions()) }
         listOf("DIG", "DROPS", "FRIENDS", "SETTINGS").forEach { compose.onNodeWithTag("nav:$it").assertIsDisplayed() }
         compose.onNodeWithTag("nav:PRESSING").assertDoesNotExist()
         compose.onNodeWithText("Pressing Plant").assertDoesNotExist()
-        // The top bar: no clock, no Change folder; the record count stays.
+        // The top bar (TE · Home): no clock, no folder keys (they live in Settings › Library); the count stays.
         compose.onNodeWithText("3:21 PM", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Change folder").assertDoesNotExist()
-        compose.onNodeWithTag("action:Rescan").assertIsDisplayed()
-        compose.onNodeWithText("5 records").assertIsDisplayed()
+        compose.onNodeWithTag("action:Rescan").assertDoesNotExist()
+        compose.onNodeWithText("5 rec").assertIsDisplayed()
     }
 
     @Test
-    fun `panels slide up as sheets in portrait`() {
+    fun `places open as full pages under the nav in portrait`() {
         portrait()
         still("08_portrait_settings", state(), panel = Panel.SETTINGS)
-        val sheet = compose.onNodeWithTag("panel-title").getBoundsInRoot()
-        assertTrue("sheet starts in the lower part of the screen", sheet.top.value > 892 * 0.2f)
+        // TE · Settings: the 44/700 title at the top of the page, the nav bar still at the foot.
+        val title = compose.onNodeWithTag("panel-title").getBoundsInRoot()
+        assertTrue("the page's title sits at the top", title.top.value < 892 * 0.2f)
+        compose.onNodeWithTag("nav:SETTINGS").assertIsDisplayed()
     }
 
     @Test
@@ -505,8 +1132,8 @@ class ListeningRoomUiTest {
         compose.setContent {
             RoomScreen(state(albums = emptyList()).copy(report = report), RecordingActions())
         }
-        compose.onNodeWithTag("empty-title", useUnmergedTree = true).assertTextContains("No albums found")
-        compose.onNodeWithTag("empty-detail", useUnmergedTree = true).assertTextContains("Looked in 3 folders and found no music files (found .m4p ×12)", substring = true)
+        compose.onNodeWithTag("empty-title", useUnmergedTree = true).assertTextContains("NO ALBUMS FOUND")
+        compose.onNodeWithTag("empty-detail", useUnmergedTree = true).assertTextContains("looked in 3 folders and found no music files (found .m4p ×12)", substring = true)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/09_empty_with_report.png")
     }
 

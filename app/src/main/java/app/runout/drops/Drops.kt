@@ -79,6 +79,13 @@ class DropsRepository(
     private val _claimed = MutableStateFlow(claimedThisWeek())
     val claimed: StateFlow<Set<String>> = _claimed.asStateFlow()
 
+    /** This week's drop hasn't been opened yet on this phone: the orange square on the Drops tab. */
+    private val _newDrop = MutableStateFlow(!seen(currentIndex()))
+    val newDrop: StateFlow<Boolean> = _newDrop.asStateFlow()
+    /** Coming back to the app, perhaps on a new Friday. */
+    fun checkWeek() { _newDrop.value = !seen(currentIndex()) }
+    private fun seen(index: Long) = prefs.contains(weekKey(index))
+
     val claimsLeft: Int get() = (CLAIMS_PER_WEEK - _claimed.value.size).coerceAtLeast(0)
 
     fun currentIndex(): Long = weekIndex(Instant.ofEpochMilli(clock()).atZone(zone).toLocalDate())
@@ -89,12 +96,12 @@ class DropsRepository(
         prefs.getString(weekKey(index), null)?.let { cached ->
             runCatching { parseCached(index, cached) }.getOrNull()?.let {
                 _state.value = DropState.Ready(it)
+                _newDrop.value = false
                 return@withContext _state.value
             }
         }
         _state.value = DropState.Loading
-        val page = 1 + (seed(index) % PAGES).toInt()
-        val body = http.get(searchUrl(page))?.toString(Charsets.UTF_8)
+        val body = http.get(searchUrl(pageFor(index), stable = index >= STABLE_FROM))?.toString(Charsets.UTF_8)
         if (body == null) {
             _state.value = DropState.Failed("Couldn't reach Internet Archive. Check your connection.")
             return@withContext _state.value
@@ -103,23 +110,27 @@ class DropsRepository(
             _state.value = DropState.Failed("Internet Archive sent something unexpected.")
             return@withContext _state.value
         }
-        val week = DropWeek(index, opens(index), opens(index).plusDays(7), pick(docs, seed(index)))
+        val week = DropWeek(index, opens(index), opens(index).plusDays(7), pickFor(index, docs))
         prefs.edit().putString(weekKey(index), JSONArray(week.items.map { it.toJson() }).toString()).apply()
         _state.value = DropState.Ready(week)
+        _newDrop.value = false
         _state.value
     }
 
     /**
      * What's on a drop before you spend a claim: its FLAC tracks, each with a streaming address so a
-     * few seconds can be heard. Reads the archive's metadata only; nothing is downloaded.
+     * few seconds can be heard. The address is the archive's own MP3 of the track when it made one,
+     * a fraction of the FLAC's size, so a listen starts quickly; the claim still takes the FLAC.
+     * Reads the archive's metadata only; nothing is downloaded.
      */
     suspend fun preview(item: DropItem): Result<List<DropTrack>> = withContext(Dispatchers.IO) {
         runCatching {
             require(item.identifier.matches(Regex("[A-Za-z0-9_.-]+"))) { "Invalid Internet Archive identifier" }
             val meta = http.get("https://archive.org/metadata/${item.identifier}")?.toString(Charsets.UTF_8)
                 ?: error("Couldn't load the album from Internet Archive")
-            planDownload(JSONObject(meta)).tracks.map { f ->
-                DropTrack(f.title ?: f.name.substringAfterLast('/').substringBeforeLast('.'), fileUrl(item.identifier, f.name), f.lengthMs)
+            val json = JSONObject(meta)
+            planDownload(json).tracks.map { f ->
+                DropTrack(f.title ?: f.name.substringAfterLast('/').substringBeforeLast('.'), fileUrl(item.identifier, listenName(json, f.name)), f.lengthMs)
             }
         }.onFailure { if (it is CancellationException) throw it }
     }
@@ -252,12 +263,43 @@ class DropsRepository(
 
         fun seed(index: Long): Long = (index * 2_654_435_761L) and 0x7FFFFFFF
 
-        fun searchUrl(page: Int): String {
+        /**
+         * The first week picked the stable way. Before it, a page of the archive's most-downloaded
+         * albums was shuffled; but download counts at a page's edges differ by a handful, so the page
+         * (and with it the whole ten) could change during the week, and two people opening Drops on
+         * different days saw different albums. Earlier weeks keep that pick so nobody's week changes.
+         */
+        const val STABLE_FROM = 2965L // Friday 30 October 2026
+        /** Pages of the stable ordering to draw from: the archive's oldest 10,000 such albums. */
+        const val STABLE_PAGES = 100L
+
+        fun pageFor(index: Long): Int = 1 + (seed(index) % (if (index >= STABLE_FROM) STABLE_PAGES else PAGES)).toInt()
+
+        fun pickFor(index: Long, docs: List<DropItem>): List<DropItem> =
+            if (index >= STABLE_FROM) pickStable(docs, index) else pick(docs, seed(index))
+
+        /**
+         * [stable]: by the date each album went public, oldest first, which new uploads don't reorder,
+         * so a page holds the same albums all week. Before [STABLE_FROM]: most downloaded first.
+         */
+        fun searchUrl(page: Int, stable: Boolean = false): String {
             // Only albums the archive lists with FLAC files, so every drop can be claimed.
             val q = "collection:netlabels AND mediatype:audio AND licenseurl:*creativecommons* AND format:flac"
+            val sort = if (stable) "publicdate+asc" else "downloads+desc"
             return "https://archive.org/advancedsearch.php?q=" + URLEncoder.encode(q, "UTF-8") +
                 listOf("identifier", "title", "creator", "year", "licenseurl").joinToString("") { "&fl%5B%5D=$it" } +
-                "&sort%5B%5D=downloads+desc&rows=$ROWS&page=$page&output=json"
+                "&sort%5B%5D=$sort&rows=$ROWS&page=$page&output=json"
+        }
+
+        /**
+         * Ten albums for the week whatever order the page arrives in: each album ranked by a hash of
+         * the week and its identifier, lowest first. An album joining or leaving the page changes the
+         * ten only if it would have been one of them.
+         */
+        fun pickStable(docs: List<DropItem>, index: Long): List<DropItem> {
+            val sha = java.security.MessageDigest.getInstance("SHA-256")
+            fun rank(id: String) = sha.digest("$index\u0000$id".toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+            return docs.distinctBy { it.identifier }.sortedBy { rank(it.identifier) }.take(PER_DROP)
         }
 
         fun fileUrl(identifier: String, name: String): String =
@@ -315,6 +357,17 @@ class DropsRepository(
                 }
             }
             return Plan("NONE", emptyList(), null, null)
+        }
+
+        /**
+         * The file to stream for a listen to the FLAC [flac]: the MP3 the archive derived from it
+         * ("VBR MP3", its `original` naming the FLAC) when there is one, else the FLAC itself.
+         */
+        fun listenName(meta: JSONObject, flac: String): String {
+            val files = meta.optJSONArray("files") ?: return flac
+            return (0 until files.length()).map { files.getJSONObject(it) }.firstOrNull { f ->
+                "MP3" in f.optString("format").uppercase() && f.optString("original") == flac && f.optString("name").isNotBlank()
+            }?.optString("name") ?: flac
         }
 
         fun trackNo(s: String?): Int? = s?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull()

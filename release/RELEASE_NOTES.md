@@ -1,29 +1,43 @@
-The record player is now a 3D turntable: the Runout RG-1, drawn live on the phone.
+Sonic. is an Android player for FLAC albums. Each album is a record in a crate, and you play it on a 3D turntable. Dig finds more music on Soulseek, and every Friday, Drops offers ten Creative Commons albums from the Internet Archive.
 
-## What changed
+This is 1.0.0, the first stable release. The app was called Runout until now.
 
-- **A 3D deck:** a white turntable with teal glass and an anodised-orange START/STOP key, standing in the room on a soft shadow.
-  - The platter and the record turn in 3D. Each record keeps its own look (black, coloured, splatter or picture vinyl, the cover as the label, the gaps between tracks), now on a grooved disc.
-  - The tonearm swings out from its rest, follows the side and drops into the groove. Drag it to start anywhere; tap the record to flip it; hold it to slow it.
-- **A control panel:** START/STOP, ◀◀ ▶▶ and a new **eject** key, which press down under your finger.
-- **Lights and a screen on the deck:** an orange status lamp while a record plays, an LED strip along the front that fills as the side plays, and a small screen showing the track and time.
-- **Library:** a scan you start no longer gets cancelled by the quiet refresh at startup (the shelf could stay empty).
-- If the phone can't draw 3D, a flat deck stands in so the app still works.
-- Startup rendering now requests a redraw even when Filament skips a frame, allowing the texture queue to drain.
+## Highlights
+
+- **A new name and icon.** The launcher icon is the SONIC sleeve: cream while the app is light, black while it's dark, and one-tone as a themed icon on Android 13+.
+- **Light and dark.** Settings › Flags › theme picks phone, light or dark. Dark is true black.
+- **Three decks.** The RG-1 comes in white / teal, mono white and dark. It matches the theme until you pick one.
+- **Swap records by hand.** Hold a record over the one playing and the deck swaps them without stopping the music. Eject still flies a record home to its sleeve.
+- **Two fingers on the deck** lay it flat or stand it back up.
+- **Storage.** Swipe up with two fingers on Settings to see what your music takes up in each folder, records largest first. A record's folder can be deleted from there.
+- **Downloads that mend themselves.** A failed song is asked for again, or fetched from someone else with the identical file. A red tab marks a record missing a track.
+- **Flags.** Auto-flip, auto-play, a sleep timer and the intro on every launch, all off until you switch them on.
+- **Friday Drops** are the same ten albums for everyone each week from 30 October, and a new week arrives even with the app open.
+- **Sharing on Wi-Fi only,** with a limit on uploads at once.
+- **Easier on the battery.** The Soulseek connection and the 3D deck stay quiet when nothing is happening.
+
+The full list is in the [changelog](https://github.com/Abhiroop1122/runout/blob/main/CHANGELOG.md).
 
 ## Install
 
-Download **Runout-0.6.0-development.apk** and check it against the attached SHA-256 file. It installs as **Runout Dev** (`app.runout.dev`) and updates 0.5.x in place (same certificate). Coming from 0.4.x, uninstall it first.
+- Android 9 or newer, on ARM64, ARMv7, x86-64 or x86.
+- Download `Sonic-1.0.0.apk` and `Sonic-1.0.0.apk.sha256` into one folder, then check them:
 
-The APK is about 22 MB larger than 0.5.1: it carries Filament's 3D libraries for the four CPU types.
+  ```bash
+  sha256sum -c Sonic-1.0.0.apk.sha256        # Linux
+  shasum -a 256 -c Sonic-1.0.0.apk.sha256    # macOS
+  ```
 
-## Not tested, and limits
+- It installs as a new app, **Sonic.** (`app.sonic`). It sits next to any Runout install; it doesn't replace it or read its data. Music in your folders is untouched.
+- FLAC only. Other formats, and MP3s renamed to `.flac`, are not picked up.
 
-- Tested on the Android emulator only, not on a phone. How smoothly the deck turns on older phones is unknown.
-- The flying disc doesn't yet morph into the 3D one when you drop it, and flipping is an instant swap, not a 3D turn.
-- Clear vinyl draws solid on the 3D deck.
-- A few printed labels on the deck show a stray mark instead of "·" or "-" (a font problem in the model, fixed in the next model).
-- On the emulator, the deck can take several seconds to appear. A graphics stall encountered during verification cleared after restarting the emulator; phone startup remains unverified.
-- The remote discovery benchmark missed its 250 ms target (403–526 ms on the emulator).
-- The native Soulseek library is reused from the earlier development build; this Mac has no Rust/NDK toolchain. Newer native-source changes are not included. See the verification report.
-- This is a debug-signed development pre-release.
+## Known limits
+
+- The APK is signed with the maintainer's development key, not a production key. Later releases signed the same way update this one. A future build signed with a production key would not, and would need an uninstall, which removes Sonic's library list, chats and settings (not your music).
+- The Soulseek client still reports the experimental version 177/1.
+- Testing has been on emulators and one Pixel 6. Other phones, background policies and mobile networks have not been checked.
+- Bit-perfect USB output needs a phone that offers it. The Pixel 6 mixes USB at 48 kHz, and Sonic shows that as resampled.
+- Dig searches this phone and Soulseek. Internet Archive albums come only through Friday Drops.
+- At the largest font sizes, the deck and sleeve labels are crowded.
+
+Sonic is MIT licensed. Credits for the Soulseek library, the fonts and the projects that informed it are in the [README](https://github.com/Abhiroop1122/runout#license-and-credits).

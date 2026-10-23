@@ -5,228 +5,405 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.runout.R
 import kotlin.math.PI
-import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** How long the intro runs, and how long it holds the finished wordmark before handing over. */
-private const val INTRO_MS = 3400
-private const val HOLD_MS = 450
+/*
+ * The intro, keyed to "TE · Onboarding · Intro storyboard (3 s)" (times in ms):
+ *   0     the sleeve arrives from the right and stops in the middle (by 600);
+ *   300   the disc rises out of it, spinning up a little;
+ *   600   the sleeve leaves, the RG-1 fades up and the disc flies to the spindle;
+ *   1200  it lands with a small thud, its shadow settling;
+ *   1300  the tonearm swings in from its rest and, at 1650, drops into the groove (1800);
+ *   1800  the grooves catch a light sweep;
+ *   2400  RUNOUT types out in dot-matrix with the orange cursor, then holds.
+ * The deck is the real render: the empty and playing RG-1, a loaded RG-1 with the arm lifted out,
+ * and the arm itself as a sprite that turns about its pivot.
+ */
+private const val TYPE_AT = 2400
+private const val LETTER_MS = 100
+private const val INTRO_MS = 3000
+private const val HOLD_MS = 1000
+/** The storyboard plays this much slower than its timings above: unhurried, about 7 s in all. */
+private const val PACE = 1.8f
+/**
+ * The owner's record's printed label, as a share of its diameter (intro-disc's is 39 %); drawn over
+ * the deck renders' own (35 %), which it covers.
+ */
+private const val LABEL = 0.39f
+
+/** The renders' pixel grid: every position below is in these units. */
+private const val SRC_W = 2064f
+private const val SRC_H = 1200f
+
+/** The sleeve at 0.0 s and at 0.6 s, the disc at 0.6 s, the record on the platter, the arm. */
+private const val SLEEVE = 1032f
+private val SLEEVE_FROM = Offset(1069.5f, 281.25f)
+private val SLEEVE_AT = Offset(487.9f, 281.25f)
+private const val DISC = 900.6f
+private val DISC_AT = Offset(1013.2f, 150.3f)
 
 /**
- * The first thing a new listener sees: the whole idea of Runout in three seconds. A sleeve slides
- * in, its disc slides out and settles on a platter, the tonearm swings over and drops, the grooves
- * light up in signal orange, and RUNOUT types itself out in dot-matrix. Tap anywhere to skip.
- * With system animations off it hands over straight away.
+ * Where a set of deck renders puts the record and the arm: the record's centre and size on the
+ * platter, the arm picture's place, its pivot, its turn from rest onto the lead-in groove and the
+ * stretch the camera adds.
+ */
+private class IntroGeometry(
+    val recordCentre: Offset, val recordW: Float, val recordH: Float,
+    val armTopLeft: Offset, val armW: Float, val armH: Float,
+    val armPivot: Offset, val armSwing: Float, val armReach: Float,
+) {
+    companion object {
+        /** The white / teal renders (res/drawable-nodpi/onboarding_deck_*), the arm cropped to itself. */
+        val WhiteTeal = IntroGeometry(Offset(608f, 515f), 744f, 660f, Offset(1001f, 85f), 207f, 717f, Offset(1042f, 182f), 36f, 1.088f)
+        /**
+         * The dark and mono white RG-1's (assets/onboarding/deck-*-dark, -mono), rendered from the
+         * room's own deck by DeckCapture, which logged these points through its camera. Their arm
+         * picture is the whole frame.
+         */
+        val Captured = IntroGeometry(Offset(607.4f, 493.3f), 763f, 684f, Offset.Zero, SRC_W, SRC_H, Offset(1039.5f, 170.2f), 26.8f, 1.031f)
+    }
+}
+
+/** The intro's pictures. */
+private class IntroArt(
+    val geometry: IntroGeometry,
+    val empty: ImageBitmap,
+    val loaded: ImageBitmap,
+    val playing: ImageBitmap,
+    val arm: ImageBitmap,
+    val sleeve: ImageBitmap,
+    val disc: ImageBitmap,
+    /** When the disc is the owner's art (intro-disc), its label, laid over the deck renders' own. */
+    val label: ImageBitmap? = null,
+)
+
+/**
+ * The first thing a new listener sees (and, with Flags › Intro on launch, every opening), about
+ * seven unhurried seconds on the room's paper, white or OLED black: a sleeve arrives, its disc
+ * slides out and lands on the RG-1's platter, the tonearm swings in and drops, the grooves catch
+ * the light, and RUNOUT types itself out in dot-matrix. Tap anywhere to skip. With system
+ * animations off it hands over straight away and draws nothing.
  */
 @Composable
-fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier) {
+fun RunoutIntro(onFinished: () -> Unit, modifier: Modifier = Modifier, deck: DeckSkin = DeckSkin.WHITE_TEAL) {
     val context = LocalContext.current
     val finish by rememberUpdatedState(onFinished)
-    val t = remember { Animatable(0f) }
     val animationsOff = remember {
         runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) == 0f
     }
+    val clock = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         if (animationsOff) { finish(); return@LaunchedEffect }
-        t.animateTo(1f, tween(INTRO_MS, easing = LinearEasing))
-        // Hold the finished wordmark on the frame clock (a delay would not be).
-        Animatable(0f).animateTo(1f, tween(HOLD_MS))
+        // Runs on the frame clock, the hold included, so a tap or a test can step through it.
+        clock.animateTo((INTRO_MS + HOLD_MS).toFloat(), tween(((INTRO_MS + HOLD_MS) * PACE).toInt(), easing = LinearEasing))
         finish()
     }
-    Canvas(
+    if (animationsOff) {
+        Box(modifier.fillMaxSize().background(Room.Background))
+        return
+    }
+    // The sleeve and its record: the owner's art from assets/onboarding (intro-sleeve, intro-disc)
+    // when it's there, else the drawn ones.
+    val ownSleeve = rememberOnboardingPicture("intro-sleeve", 360.dp)
+    val ownDisc = rememberOnboardingPicture("intro-disc", 360.dp)
+    // The renders of the deck the room shows: the dark and mono white RG-1's captured from the room's
+    // own deck (assets/onboarding/deck-*-dark, -mono), read before the first frame so the intro never
+    // opens on another deck; the white / teal ones built in.
+    val px = with(LocalDensity.current) { 600.dp.roundToPx() }
+    val captured = remember(deck) {
+        introDeckPictures(deck)?.map { decodeOnboardingPicture(context.assets, it, px) }?.takeIf { it.all { p -> p != null } }
+    }
+    val art = IntroArt(
+        if (captured != null) IntroGeometry.Captured else IntroGeometry.WhiteTeal,
+        captured?.get(0) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_empty),
+        captured?.get(1) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_loaded),
+        captured?.get(2) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_playing),
+        captured?.get(3) ?: ImageBitmap.imageResource(R.drawable.onboarding_deck_arm),
+        ownSleeve ?: ImageBitmap.imageResource(R.drawable.onboarding_sleeve),
+        ownDisc ?: ImageBitmap.imageResource(R.drawable.onboarding_disc),
+        label = ownDisc,
+    )
+    val letters by remember { derivedStateOf { if (clock.value < TYPE_AT) 0 else ((clock.value - TYPE_AT) / LETTER_MS).toInt() + 1 } }
+    // The cursor is solid while typing, then blinks through the hold.
+    val cursor by remember {
+        derivedStateOf {
+            val ms = clock.value
+            ms >= TYPE_AT - LETTER_MS && (ms < INTRO_MS || ((ms - INTRO_MS) / 250f).toInt() % 2 == 0)
+        }
+    }
+    val lineIn by remember { derivedStateOf { phase(clock.value, 2900f, 3200f) } }
+    // Over the room the deck is drawn exactly where the room's is, so it is already in its place
+    // when you arrive; on its own, as wide as the screen and 132 dp down.
+    val spot = LocalDeckSpot.current
+    BoxWithConstraints(
         modifier
             .fillMaxSize()
-            .testTag("onboarding-intro")
-            .semantics { contentDescription = "Runout. A record drops onto a turntable. Tap to skip." }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { finish() },
-    ) { drawIntro(t.value) }
+            .background(Room.Background)
+            .clearAndSetSemantics {
+                testTag = "onboarding-intro"
+                contentDescription = "Sonic. A record drops onto the platter. Tap to skip."
+                role = Role.Button
+                onClick { finish(); true }
+            }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { finish() },
+    ) {
+        val roomDeck = spot?.rect
+        Canvas(Modifier.fillMaxSize()) {
+            val deck = roomDeck ?: Rect(Offset(0f, 132.dp.toPx()), Size(size.width, size.width * SRC_H / SRC_W))
+            drawNeedleDrop(art, clock.value, deck)
+        }
+        // In landscape the room's deck is on the left band: the wordmark goes in the room's column beside it.
+        val beside = roomDeck != null && maxWidth > maxHeight
+        val besideStart = with(LocalDensity.current) { roomDeck?.right?.toDp() } ?: 0.dp
+        // The wordmark block of TE · Onboarding · Intro: 44 / 22 / 33 / 22 in, 16 apart.
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + if (beside) WindowInsetsSides.End else WindowInsetsSides.Horizontal))
+                .padding(start = 22.dp + if (beside) besideStart else 0.dp, end = 22.dp, top = 44.dp, bottom = 33.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Wordmark(66.sp, letters = letters, cursor = cursor, reserveCursor = true)
+            BasicText("every record you own. one room to play them.", style = OnboardingBody, modifier = Modifier.fillMaxWidth().alpha(lineIn))
+            Row(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                BasicText("a record drops onto the platter", style = Room.LabelQuiet)
+                BasicText("tap to skip →", style = Room.Label)
+            }
+        }
+    }
 }
 
-/** 0 → 1 over [a, b], eased; clamped outside it. */
+/** 0 → 1 over [a, b] ms, eased in and out; clamped outside it. */
 private fun phase(t: Float, a: Float, b: Float): Float {
     val x = ((t - a) / (b - a)).coerceIn(0f, 1f)
     return x * x * (3f - 2f * x)
 }
 
+/** 0 → 1 over [a, b] ms, decelerating: for things that arrive. */
+private fun arrive(t: Float, a: Float, b: Float): Float {
+    val x = ((t - a) / (b - a)).coerceIn(0f, 1f)
+    return 1f - (1f - x) * (1f - x) * (1f - x)
+}
+
 private fun lerp(a: Float, b: Float, f: Float) = a + (b - a) * f
 private fun lerp(a: Offset, b: Offset, f: Float) = Offset(lerp(a.x, b.x, f), lerp(a.y, b.y, f))
 
-internal fun DrawScope.drawIntro(t: Float) {
-    drawRect(Room.Background)
-    val w = size.width
-    val h = size.height
-    val unit = minOf(w, h * 0.62f)
-    // Off centre to the left, leaving room for the tonearm on the right.
-    val center = Offset(w * 0.45f, h * 0.40f)
-    val platterR = unit * 0.29f
-    val recordR = platterR * 0.94f
-
-    // A soft pool of light, so the scene isn't floating on flat white.
-    drawCircle(
-        Brush.radialGradient(listOf(Color(0xFFE6E2FF), Color.Transparent), center = center, radius = unit * 0.85f),
-        radius = unit * 0.85f, center = center,
-    )
-
-    // The platter fades up first: a ring of strobe dots around a smoked mat.
-    val platterIn = phase(t, 0.0f, 0.18f)
-    drawCircle(Color.Black.copy(alpha = 0.08f * platterIn), platterR * 1.06f, center + Offset(0f, unit * 0.02f))
-    drawCircle(Color(0xFFDADCE1).copy(alpha = platterIn), platterR * 1.04f, center)
-    for (i in 0 until 120) {
-        val a = i * (2 * PI / 120).toFloat()
-        drawCircle(Color(0xFF6E717A).copy(alpha = 0.7f * platterIn), unit * 0.0045f, center + Offset(cos(a), sin(a)) * (platterR * 1.02f))
-    }
-    drawCircle(Color(0xFF26272C).copy(alpha = 0.55f * platterIn), platterR, center)
-
-    // Sleeve: slides in from the left, holds while the disc comes out, then slides away.
-    val sleeveSize = recordR * 2.1f
-    val sleeveIn = phase(t, 0.06f, 0.24f)
-    val sleeveOut = phase(t, 0.42f, 0.56f)
-    val sleeveCenter = Offset(lerp(-sleeveSize, w * 0.5f, sleeveIn) - sleeveOut * w, h * 0.74f)
-
-    // Disc: slides up out of the sleeve, then flies to the spindle and lands with a small squash.
-    val out = phase(t, 0.22f, 0.36f)
-    val fly = phase(t, 0.36f, 0.5f)
-    val land = phase(t, 0.5f, 0.56f)
-    val discStart = lerp(sleeveCenter, sleeveCenter - Offset(0f, sleeveSize * 0.55f), out)
-    val discPos = lerp(discStart, center, fly)
-    val squash = 1f - 0.06f * sin(land * PI.toFloat())
-    val spin = phase(t, 0.62f, 1f) * 540f + out * 30f
-
-    if (sleeveIn > 0f && out < 1f) {
-        // Disc behind the sleeve while it is still being drawn out.
-        drawDisc(discPos, recordR * squash, spin, glow = 0f)
-    }
-    if (sleeveIn > 0f && sleeveOut < 1f) {
-        val tl = sleeveCenter - Offset(sleeveSize / 2f, sleeveSize / 2f)
-        drawRect(Color.Black.copy(alpha = 0.10f), topLeft = tl + Offset(0f, unit * 0.02f), size = Size(sleeveSize, sleeveSize))
-        drawRect(
-            Brush.linearGradient(listOf(Color(0xFFE85D9C), Color(0xFF8A4FD8), Color(0xFF3B3FA8)), start = tl, end = tl + Offset(sleeveSize, sleeveSize)),
-            topLeft = tl, size = Size(sleeveSize, sleeveSize),
-        )
-        drawCircle(Color(0xFFFFB37A), sleeveSize * 0.17f, tl + Offset(sleeveSize * 0.5f, sleeveSize * 0.62f))
-        drawRect(Color(0xFF1B1D3A).copy(alpha = 0.8f), topLeft = tl + Offset(0f, sleeveSize * 0.7f), size = Size(sleeveSize, sleeveSize * 0.3f))
-    }
-    if (out >= 1f) {
-        // Out of the sleeve: the grooves light up once the needle is down.
-        val glow = phase(t, 0.66f, 0.82f)
-        drawDisc(discPos, recordR * squash, spin, glow)
+/**
+ * Draws the intro at [ms], the renders filling [frame] (whose shape is theirs, and the room's deck
+ * view's: 1.72 to 1).
+ */
+private fun DrawScope.drawNeedleDrop(art: IntroArt, ms: Float, frame: Rect) {
+    val k = frame.width / SRC_W
+    fun at(p: Offset) = Offset(frame.left + p.x * k, frame.top + p.y * k)
+    val deckOffset = IntOffset(frame.left.roundToInt(), frame.top.roundToInt())
+    val deckSize = IntSize(frame.width.roundToInt(), (SRC_H * k).roundToInt())
+    fun deck(image: ImageBitmap, alpha: Float) {
+        if (alpha > 0f) drawImage(image, dstOffset = deckOffset, dstSize = deckSize, alpha = alpha.coerceIn(0f, 1f))
     }
 
-    // Tonearm: swings in from its rest and drops onto the lead-in groove.
-    val pivot = center + Offset(platterR * 1.22f, -platterR * 0.9f)
-    // Solved for this pivot: at rest the needle sits just off the record; playing, on the lead-in groove.
-    val restAngle = 95f
-    val playAngle = 110f
-    val swing = phase(t, 0.56f, 0.66f)
-    val angle = lerp(restAngle, playAngle, swing)
-    val armLen = platterR * 1.5f
-    val rad = Math.toRadians(angle.toDouble()).toFloat()
-    val tip = pivot + Offset(cos(rad), sin(rad)) * armLen
-    val drop = phase(t, 0.64f, 0.68f)
-    val armIn = phase(t, 0.1f, 0.2f)
-    if (armIn > 0f) {
-        drawCircle(Color(0xFFCBCDD3).copy(alpha = armIn), unit * 0.05f, pivot)
-        drawLine(Color(0xFFB2B6BE).copy(alpha = armIn), pivot, tip, strokeWidth = unit * 0.016f, cap = StrokeCap.Round)
-        drawLine(Color.White.copy(alpha = 0.7f * armIn), pivot, tip, strokeWidth = unit * 0.004f, cap = StrokeCap.Round)
-        // Counterweight and headshell in the deck's soft metal orange.
-        val back = pivot - Offset(cos(rad), sin(rad)) * unit * 0.09f
-        drawLine(Room.Signal.copy(alpha = armIn), pivot, back, strokeWidth = unit * 0.05f, cap = StrokeCap.Butt)
-        rotate(angle + 20f, tip) {
-            drawRoundRect(Color(0xFF16171C).copy(alpha = armIn), topLeft = tip - Offset(unit * 0.01f, unit * 0.022f * (1f - drop * 0.25f)), size = Size(unit * 0.09f, unit * 0.04f), cornerRadius = CornerRadius(unit * 0.008f))
-        }
-        drawCircle(Color.White.copy(alpha = armIn), unit * 0.022f, pivot)
-    }
+    val g = art.geometry
+    val deckIn = phase(ms, 600f, 950f)
+    val landed = phase(ms, 1150f, 1300f)
+    val swing = phase(ms, 1300f, 1650f)
+    val drop = phase(ms, 1650f, 1800f)
 
-    // RUNOUT, typed out letter by letter in dot-matrix under the deck.
-    val typing = phase(t, 0.74f, 0.96f)
-    drawDotWordmark("RUNOUT", Offset(w / 2f, h * 0.76f), dot = unit * 0.016f, shown = typing)
-}
-
-/** A record seen from above: grooves, a label, and (when lit) orange light running round the grooves. */
-private fun DrawScope.drawDisc(c: Offset, r: Float, spin: Float, glow: Float) {
-    drawCircle(Color.Black.copy(alpha = 0.18f), r * 1.02f, c + Offset(0f, r * 0.04f))
-    drawCircle(Color(0xFF17181D), r, c)
-    for (i in 1..14) {
-        val gr = r * (0.42f + i * 0.04f)
-        drawCircle(Color.White.copy(alpha = 0.05f), gr, c, style = Stroke(r * 0.004f))
-    }
-    if (glow > 0f) {
-        rotate(spin, c) {
-            drawCircle(
-                Brush.sweepGradient(listOf(Color.Transparent, Room.Signal.copy(alpha = 0.55f * glow), Color.Transparent, Room.Signal.copy(alpha = 0.35f * glow), Color.Transparent), center = c),
-                radius = r * 0.97f, center = c, style = Stroke(r * 0.5f),
+    // The deck: empty, then loaded with the arm lifted out, then the real playing render.
+    if (landed < 1f) deck(art.empty, deckIn)
+    if (drop < 1f) deck(art.loaded, deckIn * landed)
+    if (landed > 0f && drop < 1f) {
+        val pivot = at(g.armPivot)
+        val reach = lerp(1f, g.armReach, swing)
+        withTransform({
+            rotate(g.armSwing * swing, pivot)
+            scale(reach, reach, pivot)
+        }) {
+            val tl = at(g.armTopLeft)
+            drawImage(
+                art.arm,
+                dstOffset = IntOffset(tl.x.roundToInt(), tl.y.roundToInt()),
+                dstSize = IntSize((g.armW * k).roundToInt(), (g.armH * k).roundToInt()),
+                alpha = landed,
             )
         }
     }
-    rotate(spin, c) {
-        drawCircle(Brush.linearGradient(listOf(Room.SignalLight, Room.Signal), start = c - Offset(r, r) * 0.3f, end = c + Offset(r, r) * 0.3f), r * 0.32f, c)
-        drawLine(Color.White.copy(alpha = 0.8f), c + Offset(r * 0.08f, 0f), c + Offset(r * 0.26f, 0f), strokeWidth = r * 0.02f, cap = StrokeCap.Round)
-    }
-    drawCircle(Color.White, r * 0.025f, c)
-    // A fixed sheen across the vinyl, the way a lamp catches it.
-    drawCircle(
-        Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.10f), Color.Transparent), start = c - Offset(r, r), end = c + Offset(r, r)),
-        r, c,
-    )
-}
+    deck(art.playing, drop)
+    // The owner's record keeps its own label once it's down, turned as it landed.
+    if (landed > 0f) art.label?.let { drawLabel(it, at(g.recordCentre), g.recordW * k, g.recordH * k, LANDED_TURN, alpha = landed) }
+    if (ms >= 1800f) drawGrooveLight(at(g.recordCentre), g.recordW * k / 2f, g.recordH * k / 2f, ms)
 
-/** 5×7 dot glyphs for the wordmark. */
-private val GLYPHS = mapOf(
-    'R' to listOf("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
-    'U' to listOf("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
-    'N' to listOf("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
-    'O' to listOf("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
-    'T' to listOf("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
-)
-
-/** Draws [text] in dot-matrix centred on [center]; [shown] 0–1 types it out left to right. */
-internal fun DrawScope.drawDotWordmark(text: String, center: Offset, dot: Float, shown: Float, color: Color = Room.Ink) {
-    val letters = text.length
-    val letterW = dot * 6f
-    val totalW = letters * letterW - dot
-    val x0 = center.x - totalW / 2f
-    val y0 = center.y - dot * 3.5f
-    val visible = shown * letters
-    text.forEachIndexed { i, ch ->
-        val f = (visible - i).coerceIn(0f, 1f)
-        if (f <= 0f) return@forEachIndexed
-        val rows = GLYPHS[ch] ?: return@forEachIndexed
-        // Each letter pops in with a tiny overshoot.
-        val s = 0.6f + 0.4f * f + 0.08f * sin(f * PI.toFloat())
-        val lc = Offset(x0 + i * letterW + dot * 2.5f, center.y)
-        scale(s, s, pivot = lc) {
-            rows.forEachIndexed { row, bits ->
-                bits.forEachIndexed { col, b ->
-                    val p = Offset(x0 + i * letterW + col * dot + dot / 2f, y0 + row * dot + dot / 2f)
-                    if (b == '1') drawCircle(color.copy(alpha = f), dot * 0.42f, p)
-                    else drawCircle(color.copy(alpha = 0.06f * f), dot * 0.42f, p)
-                }
-            }
+    // The disc: rises out of the sleeve, flies to the spindle, lands and hands over to the deck.
+    val rise = phase(ms, 300f, 600f)
+    val fly = phase(ms, 600f, 1150f)
+    if (rise > 0f && landed < 1f) {
+        val sleeveCentre = SLEEVE_FROM.let { lerp(it, SLEEVE_AT, arrive(ms, 0f, 600f)) } + Offset(SLEEVE / 2f, SLEEVE / 2f)
+        val start = lerp(sleeveCentre, DISC_AT, rise)
+        // A small arc on the way over, and the platter's perspective as it comes down.
+        val centre = lerp(start, g.recordCentre, fly) - Offset(0f, 160f * sin(PI.toFloat() * fly))
+        val thud = 1f - 0.035f * sin(PI.toFloat() * phase(ms, 1150f, 1250f))
+        val w = lerp(DISC, g.recordW, fly) * k * thud
+        val h = lerp(DISC, g.recordH, fly) * k * thud
+        val spin = rise * 40f + fly * 160f
+        val c = at(centre)
+        // Its shadow drops away from it in flight and settles under it on landing.
+        val lift = sin(PI.toFloat() * fly)
+        if (fly > 0f) {
+            drawOval(
+                Color.Black.copy(alpha = 0.10f * lift * (1f - landed)),
+                topLeft = c + Offset(-w / 2f, -h / 2f + 70f * k * lift),
+                size = androidx.compose.ui.geometry.Size(w, h),
+            )
+        }
+        withTransform({
+            scale(1f, h / w, c)
+            rotate(spin, c)
+        }) {
+            drawImage(
+                art.disc,
+                dstOffset = IntOffset((c.x - w / 2f).roundToInt(), (c.y - w / 2f).roundToInt()),
+                dstSize = IntSize(w.roundToInt(), w.roundToInt()),
+                alpha = 1f - landed,
+            )
         }
     }
+
+    // The sleeve: arrives from the right, stops in the middle, then drops away as the deck comes up.
+    val leave = phase(ms, 600f, 1000f)
+    if (leave < 1f) {
+        val p = lerp(SLEEVE_FROM, SLEEVE_AT, arrive(ms, 0f, 600f)) + Offset(0f, 700f * leave)
+        val tl = at(p)
+        drawImage(
+            art.sleeve,
+            dstOffset = IntOffset(tl.x.roundToInt(), tl.y.roundToInt()),
+            dstSize = IntSize((SLEEVE * k).roundToInt(), (SLEEVE * k).roundToInt()),
+            alpha = 1f - leave,
+        )
+    }
+}
+
+/** How far the disc has turned by the time it lands (rise × 40° + fly × 160°). */
+private const val LANDED_TURN = 200f
+
+/**
+ * The centre [LABEL] of [disc] as a printed label on a record [w] × [h] px (the platter's
+ * perspective) at [c], turned [degrees]; drawn a hair larger so the render's own label can't show.
+ */
+private fun DrawScope.drawLabel(disc: ImageBitmap, c: Offset, w: Float, h: Float, degrees: Float, alpha: Float) {
+    val side = minOf(disc.width, disc.height)
+    val src = (side * LABEL).roundToInt()
+    val d = w * LABEL * 1.04f
+    val clip = androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, d / 2f)) }
+    withTransform({
+        scale(1f, h / w, c)
+        rotate(degrees, c)
+    }) {
+        clipPath(clip) {
+            drawImage(
+                disc,
+                srcOffset = IntOffset((disc.width - src) / 2, (disc.height - src) / 2),
+                srcSize = IntSize(src, src),
+                dstOffset = IntOffset((c.x - d / 2f).roundToInt(), (c.y - d / 2f).roundToInt()),
+                dstSize = IntSize(d.roundToInt(), d.roundToInt()),
+                alpha = alpha.coerceIn(0f, 1f),
+            )
+        }
+    }
+}
+
+/**
+ * Light running round the grooves of the record on the platter: a soft white sweep that passes
+ * once and leaves a faint sheen, kept off the label.
+ */
+private fun DrawScope.drawGrooveLight(c: Offset, rx: Float, ry: Float, ms: Float) {
+    val glow = phase(ms, 1800f, 2400f)
+    val angle = -60f + 300f * phase(ms, 1800f, 3000f)
+    val inner = rx * 0.40f
+    val outer = rx * 0.97f
+    val band = outer - inner
+    scale(1f, ry / rx, c) {
+        rotate(angle, c) {
+            drawCircle(
+                Brush.sweepGradient(
+                    0f to Color.Transparent,
+                    0.08f to Color.White.copy(alpha = 0.30f * glow),
+                    0.16f to Color.Transparent,
+                    0.5f to Color.Transparent,
+                    0.58f to Color.White.copy(alpha = 0.18f * glow),
+                    0.66f to Color.Transparent,
+                    1f to Color.Transparent,
+                    center = c,
+                ),
+                radius = inner + band / 2f,
+                center = c,
+                style = Stroke(band),
+            )
+        }
+    }
+}
+
+/**
+ * A deck's captured renders in assets/onboarding, in [IntroArt]'s order (empty, loaded, playing,
+ * arm); null for white / teal, whose renders are built in.
+ */
+internal fun introDeckPictures(deck: DeckSkin): List<String>? {
+    val suffix = when (deck) {
+        DeckSkin.DARK -> "dark"
+        DeckSkin.MONO_WHITE -> "mono"
+        else -> return null
+    }
+    return listOf("empty", "loaded", "playing", "arm").map { "deck-$it-$suffix" }
 }

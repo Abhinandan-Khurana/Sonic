@@ -1,4 +1,4 @@
-executionPrerequisite: Runout is in the room with an empty discovery query. The Night Drive fixture album is available in the selected local music folder; emulator handwriting is disabled as documented. No account is needed.
+executionPrerequisite: Sonic is in the room with an empty discovery query. The Night Drive fixture album is available in the selected local music folder; emulator handwriting is disabled as documented. No account is needed.
 steps:
   - await: { visible: { id: open-account } }
   - tap: { id: 'nav:DIG' }

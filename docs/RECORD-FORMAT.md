@@ -1,6 +1,6 @@
 # The `.vinyl` Package Specification
 
-Runout introduces the **`.vinyl`** container format: a single, self-contained file bundle capable of transporting an entire album, its artwork, metadata, liner notes, and cryptographic checksums between devices.
+Sonic introduces the **`.vinyl`** container format: a single, self-contained file bundle capable of transporting an entire album, its artwork, metadata, liner notes, and cryptographic checksums between devices.
 
 ---
 
@@ -23,7 +23,7 @@ album-release.vinyl (ZIP Archive)
 
 ## 1. Package Types
 
-Runout defines three discrete package types in `manifest.json`:
+Sonic defines three discrete package types in `manifest.json`:
 
 | Type | Audio Included | Intended Use Case |
 | :--- | :---: | :--- |
@@ -55,7 +55,7 @@ Runout defines three discrete package types in `manifest.json`:
       "accentColor": "#2B6BFF",
       "labelColor": "#FFFFFF"
     },
-    "notes": "Pressed in the Runout Plant from original studio masters.",
+    "notes": "Pressed in the Sonic Plant from original studio masters.",
     "sides": [
       {
         "side": "A",
@@ -104,4 +104,18 @@ To ensure bit-perfect audio delivery across wireless channels, every audio file 
 To comply with Google Play Developer Policies and copyright laws:
 - **Audio Travels:** Only for your own music (`"I made this music"` flag) and Creative Commons licensed records.
 - **Cards Travel:** For all commercial copyrighted music found in local folders.
-- This policy ensures Runout operates as a **personal player and legal trading platform**, not an illegal file-sharing service.
+- This policy ensures Sonic operates as a **personal player and legal trading platform**, not an illegal file-sharing service.
+
+---
+
+## 6. Record cards in chat
+
+A record sent in a Soulseek private message is plain text, not a `.vinyl` file. Any Soulseek client shows the first line (`♪ Album — Artist · FLAC 24/96`); Sonic also reads the last line:
+
+```text
+sonic:record?artist=…&album=…&q=…&u=…&d=…
+```
+
+Values are URL-encoded. `q` is the quality label; `u` and `d` are the Soulseek peer and folder the album came from, so tapping the card opens that folder. Older cards leave them out. Cards sent by Runout (the app's name before 1.0) use the `runout:record` prefix and are still recognised.
+
+The `.vinyl` extension and its manifest are unchanged by the rename.

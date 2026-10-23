@@ -1,5 +1,5 @@
 steps:
-  - launch: app.runout.dev
+  - launch: app.sonic.dev
   - when: { visible: { id: onboarding-intro } }
     steps:
       - tap: { id: onboarding-intro }

@@ -1,6 +1,6 @@
 > Historical v0.3 documentation: Soulseek replaces the online Nostr features in v0.4, and music is FLAC-only. See [current Soulseek behavior](SOULSEEK.md) and [build instructions](BUILDING.md).
 
-# Runout — Project Handbook
+# Sonic — Project Handbook
 
 > **A vinyl listening room and record-collecting app for Android**  
 > *The idea, how it works, what's built, what's next.*  
@@ -17,24 +17,17 @@
    - [4.1 The Listening Room and the Glass Turntable](#41-the-listening-room-and-the-glass-turntable)
    - [4.2 Your Music Folder](#42-your-music-folder)
    - [4.3 Sound: Lossless, Hi-Res, EQ, Pure Mode](#43-sound-lossless-hi-res-eq-pure-mode)
-   - [4.4 Accounts, Usernames, and Profiles (No Server)](#44-accounts-usernames-and-profiles-with-no-server)
+   - [4.4 Accounts, Usernames, and Profiles (No Server)](#44-accounts-usernames-and-profiles-no-server)
    - [4.5 Friends](#45-friends)
-   - [4.6 Sending Records to Friends](#46-sending-records-to-friends-and-300400-mb-albums)
-   - [4.7 Pressing Plant: Make Your Own Vinyl](#47-pressing-plant-make-your-own-vinyl)
+   - [4.6 Sending Records to Friends](#46-sending-records-to-friends)
+   - [4.7 Pressing Plant (removed)](#47-pressing-plant-removed)
    - [4.8 Friday Drops](#48-friday-drops)
-   - [4.9 The Collecting Game (Planned)](#49-the-collecting-game-planned)
 5. [How It Works Under the Hood](#5-how-it-works-under-the-hood)
 6. ["No Server": Exactly Where Everything Lives](#6-no-server-exactly-where-everything-lives)
 7. [Tech Stack and Licences](#7-tech-stack-and-licences)
-8. [Look and Feel](#8-look-and-feel)
-9. [Testing and Quality](#9-testing-and-quality)
-10. [Version History](#10-version-history)
-11. [Honest Limits and Risks](#11-honest-limits-and-risks)
-12. [What to Build Next](#12-what-to-build-next)
-13. [Questions People Will Ask (and Answers)](#13-questions-people-will-ask-and-answers)
-14. [Numbers Cheat Sheet](#14-numbers-cheat-sheet)
-15. [Glossary](#15-glossary)
-16. [Project Files, Installing, and Building](#16-project-files-installing-and-building)
+8. [Testing and Quality](#8-testing-and-quality)
+9. [Numbers Cheat Sheet](#9-numbers-cheat-sheet)
+10. [Glossary](#10-glossary)
 
 ---
 
@@ -44,7 +37,7 @@
 A free vinyl app: your own albums become records you pull from a crate, drop on a glass turntable and play, lossless, and share with friends, with no server behind it.
 
 ### 30 Seconds
-Streaming made music endless and weightless. Runout brings back the ritual of records. Pick the folder where your albums live and each one becomes a record on your shelf, with its real cover printed on the vinyl. You flick through a crate, pull a record out, drag it onto a see-through turntable and lower the needle. It plays in full quality, up to 24-bit/192 kHz, with a pro-grade EQ. Every Friday ten free Creative Commons albums drop, and you can claim three. You can find friends by username, see their shelves, and send records phone to phone. There's no company server: everything lives on the phones, and the little that's public sits on free community relays.
+Streaming made music endless and weightless. Sonic brings back the ritual of records. Pick the folder where your albums live and each one becomes a record on your shelf, with its real cover printed on the vinyl. You flick through a crate, pull a record out, drag it onto a see-through turntable and lower the needle. It plays in full quality, up to 24-bit/192 kHz, with a pro-grade EQ. Every Friday ten free Creative Commons albums drop, and you can claim three. You can find friends by username, see their shelves, and send records phone to phone. There's no company server: everything lives on the phones, and the little that's public sits on free community relays.
 
 ### 2 Minutes
 - **A collecting app, not a streaming app:** You only play what you own: your folder, drops you claimed, records friends sent you, and records you pressed yourself.
@@ -82,7 +75,7 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 ## 3. What Using It Feels Like (A Walkthrough)
 
 ### First Launch
-1. **A white room:** Glass turntable on the left, an empty crate on the right, tiny labels in the corners (`RUNOUT · your room`, the time, `Choose a folder to begin`).
+1. **A white room:** Glass turntable on the left, an empty crate on the right, tiny labels in the corners (`SONIC · your room`, the time, `Choose a folder to begin`).
 2. **Pick your folder:** Tap the empty sleeve and pick your music folder with Android's folder picker (SAF). No broad storage permission is needed; the app gets access to that one folder only.
 3. **Crate populates:** Albums appear in the crate one by one as the folder is read. Each gets its cover: from inside the files, from a `cover.jpg` in the folder, or found online via MusicBrainz / Cover Art Archive.
 4. **Empty folder reporting:** If a folder has no music, the empty sleeve states what it found instead (e.g. `found .m4p ×12`).
@@ -104,8 +97,8 @@ Streaming made music endless and weightless. Runout brings back the ritual of re
 - **Friends:** Your account and handle, search people by username, open their profiles and shelves.
 - **Sound:** Pure mode, hi-res output, EQ, ReplayGain, limiter, warmth.
 
-### Sending a Record
-Pull a record out of the crate and press **"Send with audio"** (for your own music or Creative Commons) or **"Send as a card"** (anything else). Android's share sheet opens: Quick Share, Telegram, WhatsApp, Drive. Your friend taps the file and the record lands on their shelf.
+### A Record's Details
+Long-press a sleeve or a pulled record to open its details: format, licence, the running order by side and the total running time. The share key in the corner sends the details as a picture; Android's share sheet opens (Quick Share, Telegram, WhatsApp, Drive). Under the details: put back, fetch missing tracks, and remove record (not for music from your folder).
 
 ---
 
@@ -206,7 +199,7 @@ YOUR ANDROID PHONE
 │  Custom Pressings ─────────────────────────────────┘      ▼            │
 │                                                   Turntable (Deck)     │
 │                                                           │            │
-│  ExoPlayer (Media3) ──► Runout DSP Sink ──────────────────┼────────────► Speakers / DAC
+│  ExoPlayer (Media3) ──► Sonic DSP Sink ──────────────────┼────────────► Speakers / DAC
 │                         (32-bit float, EQ, Limiter, Pure) │            │
 │                                                           │            │
 │  Local Keychain (nsec)    Settings & EQ    Covers Cache   │            │
@@ -247,7 +240,7 @@ YOUR ANDROID PHONE
 
 ## 8. Testing and Quality
 
-Runout maintains a strict testing regime with **12 test suites, 106 tests, and 0 Android Lint errors**:
+Sonic maintains a strict testing regime with **12 test suites, 106 tests, and 0 Android Lint errors**:
 
 | Suite | Focus Area |
 | :--- | :--- |
@@ -287,5 +280,5 @@ Runout maintains a strict testing regime with **12 test suites, 106 tests, and 0
 - **nsec / npub:** Bech32-encoded private and public keys used in the Nostr protocol.
 - **Picture Disc:** A vinyl record where full-color artwork is pressed beneath the audio grooves.
 - **Pure Mode:** Signal path where EQ, ReplayGain, warmth, and pitch modifiers are completely bypassed.
-- **Runout Groove:** The spiral groove at the end of a record side where the tonearm rests once music ends.
+- **Sonic Groove:** The spiral groove at the end of a record side where the tonearm rests once music ends.
 - **Storage Access Framework (SAF):** Android's sandboxed document provider granting scoped access to a single user-chosen directory.

@@ -1,6 +1,7 @@
 package app.runout.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -41,130 +42,12 @@ import app.runout.soulseek.SoulseekSession
 import app.runout.soulseek.SoulseekTransfer
 import app.runout.soulseek.SoulseekTransferState
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 
 /** A light tick for keys, tabs and toggles: the room is meant to feel like hardware. */
 @Composable
 internal fun rememberTick(type: HapticFeedbackType = HapticFeedbackType.SegmentTick): () -> Unit {
     val haptics = LocalHapticFeedback.current
     return remember(haptics, type) { { haptics.performHapticFeedback(type) } }
-}
-
-/**
- * The room's footer: one glass bar of icon tabs that always fits. A small signal-orange dot marks
- * a new Friday Drop or an unread message.
- */
-@Composable
-internal fun TabBar(
-    backdrop: Backdrop,
-    badges: Set<Panel>,
-    onOpen: (Panel) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val tick = rememberTick()
-    Row(
-        modifier
-            .widthIn(max = 420.dp)
-            .fillMaxWidth()
-            .height(58.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { RoundedCornerShape(22.dp) },
-                effects = { vibrancy(); blur(6.dp.toPx()); lens(10.dp.toPx(), 18.dp.toPx()) },
-                onDrawSurface = { drawRect(Color.White.copy(alpha = 0.55f)) },
-            ),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Panel.entries.filter { it.inStrip }.forEach { p ->
-            Column(
-                Modifier
-                    .weight(1f)
-                    .testTag("nav:${p.name}")
-                    .semantics(mergeDescendants = true) { contentDescription = p.nav + if (p in badges) ", new" else "" }
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) {
-                        tick(); onOpen(p)
-                    }
-                    .padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Box {
-                    Canvas(Modifier.size(22.dp)) { drawTabIcon(p, Room.Ink) }
-                    if (p in badges) Canvas(Modifier.size(7.dp).align(Alignment.TopEnd)) {
-                        drawCircle(Room.Signal)
-                    }
-                }
-                BasicText(p.nav, style = Room.Label.copy(fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp))
-            }
-        }
-    }
-}
-
-/** Thin line icons drawn in code, so they stay crisp at any size. */
-private fun DrawScope.drawTabIcon(panel: Panel, color: Color) {
-    val w = size.width
-    val s = Stroke(width = w * 0.075f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-    when (panel) {
-        // A magnifier: digging through the crates.
-        Panel.DIG -> {
-            drawCircle(color, w * 0.28f, Offset(w * 0.43f, w * 0.43f), style = s)
-            drawLine(color, Offset(w * 0.63f, w * 0.63f), Offset(w * 0.86f, w * 0.86f), s.width, StrokeCap.Round)
-        }
-        // A record dropping into a tray.
-        Panel.DROPS -> {
-            drawCircle(color, w * 0.2f, Offset(w * 0.5f, w * 0.32f), style = s)
-            drawCircle(color, w * 0.04f, Offset(w * 0.5f, w * 0.32f))
-            val tray = Path().apply {
-                moveTo(w * 0.14f, w * 0.62f); lineTo(w * 0.14f, w * 0.84f); lineTo(w * 0.86f, w * 0.84f); lineTo(w * 0.86f, w * 0.62f)
-            }
-            drawPath(tray, color, style = s)
-        }
-        // A speech bubble.
-        Panel.FRIENDS -> {
-            val bubble = Path().apply {
-                addRoundRect(androidx.compose.ui.geometry.RoundRect(Rect(Offset(w * 0.12f, w * 0.16f), Size(w * 0.76f, w * 0.52f)), w * 0.14f, w * 0.14f))
-                moveTo(w * 0.32f, w * 0.68f); lineTo(w * 0.26f, w * 0.88f); lineTo(w * 0.48f, w * 0.68f)
-            }
-            drawPath(bubble, color, style = s)
-        }
-        // Three sliders, like a mixer.
-        else -> {
-            listOf(0.25f to 0.62f, 0.5f to 0.32f, 0.75f to 0.55f).forEach { (y, knob) ->
-                drawLine(color, Offset(w * 0.12f, w * y), Offset(w * 0.88f, w * y), s.width, StrokeCap.Round)
-                drawCircle(Room.Background, w * 0.09f, Offset(w * knob, w * y))
-                drawCircle(color, w * 0.09f, Offset(w * knob, w * y), style = s)
-            }
-        }
-    }
-}
-
-/** Rescan, as a small circular-arrow key in signal orange. */
-@Composable
-internal fun RefreshKey(onClick: () -> Unit) {
-    val tick = rememberTick()
-    Box(
-        Modifier
-            .testTag("action:Rescan")
-            .semantics { contentDescription = "Rescan" }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { tick(); onClick() }
-            .touchHeight()
-            .size(28.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(16.dp)) {
-            val w = size.width
-            val s = Stroke(width = w * 0.12f, cap = StrokeCap.Round)
-            drawArc(Room.Signal, startAngle = -60f, sweepAngle = 300f, useCenter = false, topLeft = Offset(w * 0.12f, w * 0.12f), size = Size(w * 0.76f, w * 0.76f), style = s)
-            val head = Path().apply {
-                moveTo(w * 0.62f, w * 0.02f); lineTo(w * 0.86f, w * 0.18f); lineTo(w * 0.6f, w * 0.34f); close()
-            }
-            drawPath(head, Room.Signal)
-        }
-    }
 }
 
 /** Downloads waiting: grey when idle or paused, green while bytes move, red when one needs you. */
@@ -184,20 +67,23 @@ internal fun connectionColor(session: SoulseekSession): Color = when (session.st
     else -> Room.Quiet
 }
 
-/** A coloured status dot followed by a quiet label, tappable as one. */
+/** A square status lamp followed by a quiet label, tappable as one; [description] reads it out when there's no label. */
 @Composable
-internal fun StatusDot(text: String, color: Color, tag: String, onClick: () -> Unit) {
+internal fun StatusDot(text: String, color: Color, tag: String, onClick: () -> Unit, description: String? = null) {
     Row(
         Modifier
             .testTag(tag)
-            .semantics(mergeDescendants = true) {}
+            .semantics(mergeDescendants = true) { if (description != null) contentDescription = description }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClick)
             .touchHeight()
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Canvas(Modifier.size(7.dp)) { drawCircle(color) }
-        BasicText(text, style = Room.LabelQuiet.copy(fontSize = 10.sp, color = if (color == Room.Quiet) Room.Quiet else Room.Ink))
+        // A square lamp: filled when something's live, hollow when idle.
+        Canvas(Modifier.size(8.dp)) {
+            if (color == Room.Quiet) drawRect(Room.Ink, style = Stroke(1.dp.toPx())) else drawRect(color)
+        }
+        if (text.isNotEmpty()) BasicText(text, style = Room.Label.copy(color = if (color == Room.Quiet) Room.Quiet else Room.Ink))
     }
 }

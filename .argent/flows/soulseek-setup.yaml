@@ -1,4 +1,4 @@
-executionPrerequisite: Runout Dev is onboarded and signed out, with the supplied account configured as local Argent secrets.
+executionPrerequisite: Sonic Dev is onboarded and signed out, with the supplied account configured as local Argent secrets.
 steps:
   - tap: { id: open-account }
   - await: { visible: { id: 'field:Soulseek ID' } }
