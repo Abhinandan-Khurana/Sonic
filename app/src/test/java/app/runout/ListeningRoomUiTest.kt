@@ -9,6 +9,12 @@ import app.runout.ui.Room
 import app.runout.ui.ThemeMode
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -634,6 +640,24 @@ class ListeningRoomUiTest {
         compose.waitForIdle()
         compose.onNodeWithTag("pulled-disc").assertDoesNotExist()
         compose.onNodeWithText("NIGHT DRIVE").assertDoesNotExist()
+    }
+
+    @Test
+    fun `turning the phone keeps the crate on the record in front`() {
+        portrait()
+        val upright = mutableStateOf(true)
+        compose.setContent {
+            // The room turns by its own shape: wider than tall is sideways.
+            Box(Modifier.size(if (upright.value) DpSize(412.dp, 892.dp) else DpSize(412.dp, 300.dp))) { RoomScreen(state(), RecordingActions(), initialCrateIndex = 1) }
+        }
+        compose.onNodeWithText("NIGHT DRIVE").assertExists()
+        compose.onNodeWithTag("sleeve:Night Drive").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        val dug = compose.onNodeWithTag("caption-artist").fetchSemanticsNode().config[SemanticsProperties.Text].joinToString()
+        upright.value = false
+        compose.waitForIdle()
+        compose.onNodeWithText("NIGHT DRIVE").assertDoesNotExist()
+        compose.onNodeWithTag("caption-artist").assertTextContains(dug.substringBefore(" ·"), substring = true)
     }
 
     @Test

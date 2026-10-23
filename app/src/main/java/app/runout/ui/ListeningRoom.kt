@@ -645,7 +645,8 @@ fun RoomScreen(
                     geometry = geometry,
                     label = { if (it.id == state.deck.album?.id) "on the platter" else null },
                     onFront = { frontId = it?.id },
-                    initialIndex = initialCrateIndex,
+                    // Turning the phone builds the crate again: it opens on the record that was in front.
+                    initialIndex = state.albums.indexOfFirst { it.id == frontId }.takeIf { it >= 0 } ?: initialCrateIndex,
                     scrollTo = crateTarget,
                     missing = { missingBy[it.id] ?: 0 },
                     putBack = { putBackPulled() },
