@@ -322,7 +322,8 @@ private val BOARD_SLEEVE = 151.3.dp
 
 /**
  * The hi-res mark, printed like an official badge: a black rectangle with a 1.5 dp white keyline,
- * "Hi-Res" over "AUDIO" in white Inter, the spec under a hairline, set a hair off true.
+ * "Hi-Res" over "AUDIO" in white Inter, the spec under a hairline, set a hair off true. It's
+ * printed on the sleeve, so it stays black in the dark room too.
  */
 @Composable
 fun HiResSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
@@ -331,7 +332,7 @@ fun HiResSticker(text: String, k: Float = 1f, modifier: Modifier = Modifier) {
     Column(
         modifier
             .rotate(1f)
-            .background(Room.Ink)
+            .background(Color.Black)
             .padding(1.5.dp * k)
             .border(0.75.dp * k, Color.White)
             .padding(horizontal = 5.dp * k, vertical = 3.dp * k),
