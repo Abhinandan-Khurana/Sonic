@@ -1,7 +1,7 @@
 # Sonic downloads
 
 Releases are published on this repository's
-[releases page](https://github.com/Abhiroop1122/runout/releases). The newest stable release is
+[releases page](https://github.com/Abhiroop1122/Sonic/releases). The newest stable release is
 marked *Latest*.
 
 | Kind | Tag | Assets |

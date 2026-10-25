@@ -13,14 +13,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Abhiroop1122/runout/releases/latest"><img src="https://img.shields.io/github/v/release/Abhiroop1122/runout?label=release&color=F05A24" alt="Latest release" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhiroop1122/runout?label=licence&color=111111" alt="MIT licence" /></a>
+  <a href="https://github.com/Abhiroop1122/Sonic/releases/latest"><img src="https://img.shields.io/github/v/release/Abhiroop1122/Sonic?label=release&color=F05A24" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhiroop1122/Sonic?label=licence&color=111111" alt="MIT licence" /></a>
   <img src="https://img.shields.io/badge/Android-9%2B-111111?logo=android&logoColor=white" alt="Android 9 or newer" />
   <img src="https://img.shields.io/badge/FLAC-only-111111" alt="FLAC only" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/Abhiroop1122/runout/releases/latest"><b>Download Sonic 1.0.0</b></a>
+  <a href="https://github.com/Abhiroop1122/Sonic/releases/latest"><b>Download Sonic 1.1.0</b></a>
   &nbsp;·&nbsp; <a href="#what-it-does">What it does</a>
   &nbsp;·&nbsp; <a href="#build-it">Build it</a>
   &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
@@ -150,12 +150,12 @@ choose, where they stay if you uninstall Sonic.
 
 ## Get it
 
-Download `Sonic-1.0.0.apk` from the [latest release](https://github.com/Abhiroop1122/runout/releases/latest)
+Download `Sonic-1.1.0.apk` from the [latest release](https://github.com/Abhiroop1122/Sonic/releases/latest)
 and check it against its checksum:
 
 ```bash
-sha256sum -c Sonic-1.0.0.apk.sha256        # Linux
-shasum -a 256 -c Sonic-1.0.0.apk.sha256    # macOS
+sha256sum -c Sonic-1.1.0.apk.sha256        # Linux
+shasum -a 256 -c Sonic-1.1.0.apk.sha256    # macOS
 ```
 
 - Android 9 or newer, on ARM64, ARMv7, x86-64 or x86.
@@ -183,8 +183,8 @@ with 16 KiB page alignment.
 [build guide](docs/BUILDING.md) has the details.
 
 ```bash
-git clone https://github.com/Abhiroop1122/runout.git
-cd runout
+git clone https://github.com/Abhiroop1122/Sonic.git
+cd Sonic
 
 ./gradlew testDebugUnitTest assembleDebug
 cargo +1.91.0 test --manifest-path native/Cargo.toml --workspace --lib --locked
@@ -222,11 +222,12 @@ release/     release notes, checksums, verification reports
 
 | Version | | |
 | :--- | :--- | :--- |
-| **[1.0.0](https://github.com/Abhiroop1122/runout/releases/tag/v1.0.0)** | **Current** | Sonic. Themes, three decks, Storage, swaps by hand. |
-| [0.6.0](https://github.com/Abhiroop1122/runout/releases/tag/v0.6.0-dev.1) | Development | The RG-1 3D turntable, rendered with Filament. |
-| [0.5.1](https://github.com/Abhiroop1122/runout/releases/tag/v0.5.1) | Release | Soulseek and FLAC, the redesigned room. |
-| [0.4.0 – 0.5.0](https://github.com/Abhiroop1122/runout/releases) | Development | Each step kept as a pre-release. |
-| [0.3.0](https://github.com/Abhiroop1122/runout/releases/tag/v0.3.0) | Release | The Glass Turntable, as Runout. |
+| **[1.1.0](https://github.com/Abhiroop1122/Sonic/releases/tag/v1.1.0)** | **Current** | The track wheel picker, update checks with stable and development builds, a clearer signal chain. |
+| [1.0.0](https://github.com/Abhiroop1122/Sonic/releases/tag/v1.0.0) | Release | Sonic. Themes, three decks, Storage, swaps by hand. |
+| [0.6.0](https://github.com/Abhiroop1122/Sonic/releases/tag/v0.6.0-dev.1) | Development | The RG-1 3D turntable, rendered with Filament. |
+| [0.5.1](https://github.com/Abhiroop1122/Sonic/releases/tag/v0.5.1) | Release | Soulseek and FLAC, the redesigned room. |
+| [0.4.0 – 0.5.0](https://github.com/Abhiroop1122/Sonic/releases) | Development | Each step kept as a pre-release. |
+| [0.3.0](https://github.com/Abhiroop1122/Sonic/releases/tag/v0.3.0) | Release | The Glass Turntable, as Runout. |
 
 ## Contributing
 

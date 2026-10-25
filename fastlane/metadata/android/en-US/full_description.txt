@@ -1,0 +1,30 @@
+Music is one search away now. Type a name and the song plays, then the next one, then the next. It's effortless, which is exactly why it never feels like a collection.
+
+It used to take intention. Records piled up next to the turntable, and you flipped through them until one fit the evening. You slid the disc out of its sleeve, set the needle down, and got up to turn it over when side A ended.
+
+Sonic brings that ritual back to your phone. It's built for downloading, keeping and truly listening to FLAC albums only. If you want any song in two seconds, a streaming app will serve you better.
+
+<b>The room</b>
+<ul>
+<li>Every album in your folder becomes a record in a crate, its sides and resolution printed on the sleeve.</li>
+<li>Pull one out, drop it on the 3D turntable, play side A and turn it over for side B.</li>
+<li>Three decks (white and teal, mono white, dark), light or true-black dark, portrait or a full-screen landscape room.</li>
+</ul>
+
+<b>The sound</b>
+<ul>
+<li>Lossless FLAC decoding, hi-res at the file's own sample rate.</li>
+<li>Pure mode leaves the samples untouched, and asks Android for bit-perfect output to a USB DAC (Android 14 and later).</li>
+<li>A signal path that shows each step from the file to your ears, including when the phone resamples or Bluetooth compresses.</li>
+<li>10-band EQ, AutoEq headphone profiles, ReplayGain and a limiter, all off in Pure.</li>
+</ul>
+
+<b>Growing the crate</b>
+<ul>
+<li>Dig searches Soulseek for whole FLAC album folders (optional, needs a Soulseek account).</li>
+<li>Friday Drops: ten Creative Commons albums from the Internet Archive every week.</li>
+<li>Friends: chat with Soulseek listeners and send a record as a card.</li>
+<li>Storage shows what your music takes up, records largest first.</li>
+</ul>
+
+No account is needed to listen: give Sonic a folder of FLAC albums and it plays them offline. It has no server of its own, and cover lookups are off until you turn them on.

@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## 1.1.0 (2026-10-25)
+
+Feedback from the first week of 1.0.0, and updates from inside the app.
+
+- **The track wheel is a picker.** Scroll the songs under the bar in the middle: the one there is inverted, with "tap to play" in orange ("playing" for the song that's on). Only that song plays on a tap; tapping another rolls it under the bar first. A song on the other side turns the record over and plays; it used to turn it over and stop.
+- **Updates.** Settings › About checks GitHub for a newer release, and Settings › Flags › updates does it once a day (on by default).
+  - The first check asks which builds you want: **stable** (tested releases) or **development** (pre-releases too). Both are the same app and update each other; change it any time in Flags.
+  - A newer one shows at the top of Settings, with an orange square on its tab; "get it" opens its page in the browser. Sonic never downloads or installs anything itself.
+  - Versions follow Semantic Versioning; development builds are `x.y.z-dev.n`, published as GitHub pre-releases.
+- **Audio quality.** The signal chain heads Settings › Sound again. In it and in the Audio quality panel, only the step that changes the sound says why; the others show their format.
+- **Storage** opens on your music beside the whole phone: one line ("your music takes … of …, … free") and one bar. The introduction is gone.
+- **Shared record pictures** carry the SONIC sleeve, small, in their top-right corner.
+- **Downloads:**
+  - Pause all also stops downloads Sonic would restart by itself (a retry or a search waiting, or a resume after an interruption), and pending retry timers.
+  - Resume all starts every paused download even when one of them can't start.
+  - While files move, the phone and its Wi-Fi stay awake, so a dozing phone with the screen off no longer stalls them.
+- **Friends:** no gap between the message box and the keyboard.
+- **Getting ready for F-Droid:** store text and pictures in `fastlane/`, a draft recipe in `fdroid/`, no dependency metadata in the APK, and builds without the update check (`-Psonic.updates=false`). See docs/FDROID.md.
+
+---
+
 ## 1.0.0 — Sonic. (2026-10-23)
 
 The first stable release, and the first under the new name. It follows 0.7.0 development.
