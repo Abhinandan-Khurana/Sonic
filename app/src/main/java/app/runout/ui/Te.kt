@@ -53,14 +53,13 @@ import androidx.compose.ui.unit.sp
  */
 
 /**
- * TE Screen Head: 22 dp in (11 at the foot), "02 / dig" in 10/400 grey and "close ×" in 12/400 on
- * one line, then the title in 44/700, 11 dp apart.
+ * TE Screen Head: 22 dp in (11 at the foot), "close ×" (or "← back") in 12/400 at the right, then
+ * the title in 44/700, 11 dp apart.
  */
 @Composable
-fun TeScreenHead(index: String, title: String, onClose: (() -> Unit)?, modifier: Modifier = Modifier, onBack: () -> (() -> Unit)? = { null }) {
+fun TeScreenHead(title: String, onClose: (() -> Unit)?, modifier: Modifier = Modifier, onBack: () -> (() -> Unit)? = { null }) {
     Column(modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(index, style = Room.LabelQuiet, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             HeadKey(onClose, onBack)
         }
         BasicText(title.uppercase(), style = Room.Display, maxLines = 1, modifier = Modifier.testTag("panel-title").semantics { heading() })

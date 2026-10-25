@@ -1113,7 +1113,7 @@ fun RoomScreen(
             // Dig and Friends scroll their own lists; the rest scroll as one page.
             // Sideways, the places that need the phone upright say so instead; turned back, the page is as it was.
             val upright = portrait || shown !in UPRIGHT_ONLY
-            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = upright && shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
+            FullPage(title, onClose = { closePanel() }, pageSheets, scroll = upright && shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
                 if (!upright) UprightNote(Modifier.fillMaxWidth().weight(1f), large = true)
                 else CompositionLocalProvider(LocalPageSteps provides pageSteps) { key(shown, home) { panelContent(shown) } }
             }
@@ -1459,12 +1459,12 @@ private fun PanelSheet(
 }
 
 /**
- * A place with its own page: the TE screen head ("02 / dig", "close ×", the 44/700 title), then the
+ * A place with its own page: the TE screen head ("close ×" over the 44/700 title), then the
  * body 11 dp below it and 22 dp in, above the keyboard and the nav bar.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, onBack: () -> (() -> Unit)? = { null }, content: @Composable ColumnScope.() -> Unit) {
+private fun FullPage(title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, onBack: () -> (() -> Unit)? = { null }, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
         Column(
             Modifier
@@ -1474,7 +1474,7 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
                 // the larger of the two, never both.
                 .windowInsetsPadding(pageBottom(navRoom)),
         ) {
-            TeScreenHead(index, title, onClose, onBack = onBack)
+            TeScreenHead(title, onClose, onBack = onBack)
             val body = Modifier.fillMaxWidth().weight(1f)
             // With the keyboard up the body sits right on it: no foot margin between a text box and the keys.
             val foot = if (WindowInsets.isImeVisible) 0.dp else 22.dp
