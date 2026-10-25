@@ -30,6 +30,13 @@ abstract class SoulseekForegroundService : Service() {
     protected abstract val notificationId: Int
     protected abstract val online: Boolean
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /**
+     * While files move, the CPU and the Wi-Fi radio stay awake: a foreground service keeps Sonic
+     * alive, but with the screen off the phone would otherwise doze and the download would stall.
+     * Held only by the transfer service, which runs only while a download or upload is under way.
+     */
+    private var wake: android.os.PowerManager.WakeLock? = null
+    private var wifi: android.net.wifi.WifiManager.WifiLock? = null
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
@@ -40,6 +47,7 @@ abstract class SoulseekForegroundService : Service() {
         val type = if (online && Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             else if (!online && Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
         ServiceCompat.startForeground(this, notificationId, notification(if (online) "Soulseek online" else "Downloading FLAC music"), type)
+        if (!online) holdAwake()
         val repo = SoulseekRuntime.repository
         if (repo == null) { stopSelf(); return }
         if (online) scope.launch {
@@ -90,11 +98,29 @@ abstract class SoulseekForegroundService : Service() {
         SoulseekRuntime.repository?.onServiceTimeout()
         stopSelf()
     }
-    override fun onDestroy() { scope.cancel(); super.onDestroy() }
+    private fun holdAwake() {
+        wake = getSystemService(android.os.PowerManager::class.java)
+            ?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "Sonic:downloads")
+            ?.apply { setReferenceCounted(false); acquire(WAKE_LIMIT_MS) }
+        // Low latency where it exists; out of the foreground Android treats it as a high-performance lock.
+        @Suppress("DEPRECATION")
+        val mode = if (Build.VERSION.SDK_INT >= 29) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY else android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        wifi = applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+            ?.createWifiLock(mode, "Sonic:downloads")
+            ?.apply { setReferenceCounted(false); acquire() }
+    }
+    override fun onDestroy() {
+        runCatching { wake?.takeIf { it.isHeld }?.release() }
+        runCatching { wifi?.takeIf { it.isHeld }?.release() }
+        scope.cancel()
+        super.onDestroy()
+    }
     companion object {
         private const val CHANNEL = "soulseek"
         private const val DISCONNECT = "app.runout.soulseek.DISCONNECT"
         private const val NOTIFY_INTERVAL_MS = 1_000L
+        /** A safety cap; the lock goes as soon as the last transfer ends and the service stops. */
+        private const val WAKE_LIMIT_MS = 6 * 60 * 60 * 1000L
     }
 }
 class SoulseekTransferService : SoulseekForegroundService() {

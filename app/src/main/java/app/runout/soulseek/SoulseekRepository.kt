@@ -321,10 +321,18 @@ class SoulseekRepository(
         val next = dao.resumable(owner).firstOrNull { it.state == "QUEUED" && it.error == null } ?: return
         startTransfer(next)
     }
+    /**
+     * Stops every download that's moving or about to: queued or downloading, and also the paused
+     * ones Sonic would start again by itself (a retry or a search for another copy waiting, or a
+     * resume after Android interrupted it). One that can't be paused doesn't stop the rest.
+     */
     fun pauseAll(): Job = work {
         requireSignedIn()
-        val ids = _transfers.value.filter { it.state in setOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING) }.map { it.id }
-        ids.forEach { pauseOne(it) }
+        val ids = _transfers.value.filter {
+            it.state == SoulseekTransferState.QUEUED || it.state == SoulseekTransferState.DOWNLOADING ||
+                (it.state == SoulseekTransferState.PAUSED && (it.recovery != null || interruptedIds.containsKey(it.id)))
+        }.map { it.id }
+        ids.forEach { id -> runCatching { pauseOne(id) }.onFailure { if (it is CancellationException) throw it } }
     }
     fun resumeAll(): Job = work {
         requireSignedIn()
@@ -335,6 +343,7 @@ class SoulseekRepository(
     private suspend fun pauseOne(id: String) {
         interruptedIds.remove(id)
         val row = ownTransfer(id)
+        retryJobs.remove(id)?.cancel()
         seekJobs.remove(id)?.cancel()
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()
