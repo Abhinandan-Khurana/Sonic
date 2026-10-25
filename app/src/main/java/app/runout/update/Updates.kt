@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** Where Sonic's builds are published: the project's GitHub releases. */
@@ -38,8 +39,15 @@ data class Version(val major: Int, val minor: Int, val patch: Int, val pre: Int?
     }
 }
 
+/**
+ * Which builds you're offered. Both are the same app (app.sonic) and update each other in place:
+ * stable is GitHub's latest release ("v1.1.0"); development also takes the pre-releases
+ * ("v1.2.0-dev.1"), the newest features first, with rougher edges.
+ */
+enum class UpdateChannel(val label: String) { STABLE("stable"), DEVELOPMENT("development") }
+
 /** A published release newer than the build on the phone. */
-data class Release(val version: Version, val name: String, val page: String)
+data class Release(val version: Version, val name: String, val page: String, val development: Boolean = false)
 
 /** Settings › About › updates, and the notice on Settings when there's one. */
 sealed interface UpdateState {
@@ -51,11 +59,12 @@ sealed interface UpdateState {
 }
 
 /**
- * Asks the project's GitHub releases for the latest stable build and compares it with
- * [installed]. Nothing is downloaded or installed here: a newer release is offered as its page,
- * opened in the browser, where its APK and checksum are. Once a day on launch when [auto] is on
- * (Settings › Flags), or whenever you ask in Settings › About. Only the request itself reaches
- * GitHub; no account, nothing about you or your music.
+ * Asks the project's GitHub releases for a build newer than [installed], on the [channel] you chose
+ * (asked the first time you check; until then, the one the installed build came from). Nothing is
+ * downloaded or installed here: a newer release is offered as its page, opened in the browser,
+ * where its APK and checksum are. Once a day on launch when [auto] is on (Settings › Flags), or
+ * whenever you ask in Settings › About. Only the request itself reaches GitHub; no account,
+ * nothing about you or your music.
  */
 class Updates(
     context: Context,
@@ -68,6 +77,17 @@ class Updates(
     val state: StateFlow<UpdateState> = _state.asStateFlow()
     private val _auto = MutableStateFlow(prefs.getBoolean(AUTO, true))
     val auto: StateFlow<Boolean> = _auto.asStateFlow()
+    /** Null until you've chosen; checks then follow the installed build's own channel. */
+    private val _channel = MutableStateFlow(prefs.getString(CHANNEL, null)?.let { runCatching { UpdateChannel.valueOf(it) }.getOrNull() })
+    val channel: StateFlow<UpdateChannel?> = _channel.asStateFlow()
+
+    fun setChannel(channel: UpdateChannel) {
+        _channel.value = channel
+        prefs.edit().putString(CHANNEL, channel.name).apply()
+    }
+
+    private fun effectiveChannel(): UpdateChannel =
+        _channel.value ?: if (Version.parse(installed)?.pre != null) UpdateChannel.DEVELOPMENT else UpdateChannel.STABLE
 
     fun setAuto(on: Boolean) {
         _auto.value = on
@@ -85,10 +105,15 @@ class Updates(
         if (_state.value == UpdateState.Checking) return
         val before = _state.value
         _state.value = UpdateState.Checking
-        val body = withContext(Dispatchers.IO) { http.get("https://api.github.com/repos/$UPDATE_REPO/releases/latest") }
+        val channel = effectiveChannel()
+        val url = when (channel) {
+            UpdateChannel.STABLE -> "https://api.github.com/repos/$UPDATE_REPO/releases/latest"
+            UpdateChannel.DEVELOPMENT -> "https://api.github.com/repos/$UPDATE_REPO/releases?per_page=30"
+        }
+        val body = withContext(Dispatchers.IO) { http.get(url) }
         val result = when {
             body == null -> UpdateState.Failed("couldn't reach github. check your connection and try again.")
-            else -> runCatching { latest(String(body), installed) }.fold(
+            else -> runCatching { if (channel == UpdateChannel.STABLE) latest(String(body), installed) else newest(String(body), installed) }.fold(
                 onSuccess = { release ->
                     val now = clock()
                     prefs.edit().putLong(CHECKED, now).apply()
@@ -103,6 +128,7 @@ class Updates(
     companion object {
         private const val CHECKED = "checked_at"
         private const val AUTO = "auto"
+        private const val CHANNEL = "channel"
         private const val DAY_MS = 24 * 60 * 60 * 1000L
 
         /** GitHub's latest release, when it's a newer stable build than [installed]; else null. */
@@ -117,6 +143,25 @@ class Updates(
                 name = r.optString("name").ifBlank { "Sonic $version" },
                 page = r.optString("html_url").ifBlank { RELEASES_PAGE },
             )
+        }
+
+        /** For the development channel: the newest release in GitHub's list, pre-releases too, when newer than [installed]. */
+        fun newest(json: String, installed: String): Release? {
+            val current = Version.parse(installed) ?: return null
+            val list = JSONArray(json)
+            return (0 until list.length()).map { list.getJSONObject(it) }
+                .filter { !it.optBoolean("draft") }
+                .mapNotNull { r -> Version.parse(r.optString("tag_name"))?.let { it to r } }
+                .filter { (v, _) -> v > current }
+                .maxByOrNull { (v, _) -> v }
+                ?.let { (v, r) ->
+                    Release(
+                        version = v,
+                        name = r.optString("name").ifBlank { "Sonic $v" },
+                        page = r.optString("html_url").ifBlank { RELEASES_PAGE },
+                        development = r.optBoolean("prerelease"),
+                    )
+                }
         }
     }
 }

@@ -38,6 +38,35 @@ class UpdatesTest {
         assertNull("a draft", Updates.latest(release("v2.0.0", draft = true), "1.0.0"))
     }
 
+    @Test fun `the development channel also takes pre-releases, newest first`() {
+        val list = "[" + listOf(release("v1.2.0-dev.2", prerelease = true), release("v1.1.0"), release("v1.2.0-dev.1", prerelease = true), release("v1.3.0-dev.1", draft = true)).joinToString(",") + "]"
+        val newer = Updates.newest(list, "1.1.0")
+        assertEquals("1.2.0-dev.2", newer?.version.toString())
+        assertTrue(newer!!.development)
+        assertNull("nothing newer", Updates.newest(list, "1.2.0-dev.2"))
+        // A release outranks its own development builds.
+        assertEquals("1.2.0", Updates.newest("[" + release("v1.2.0") + "," + release("v1.2.0-dev.2", prerelease = true) + "]", "1.2.0-dev.2")?.version.toString())
+    }
+
+    @Test fun `stable asks for the latest release, development for the list, and a dev build starts on development`() = runBlocking {
+        val asked = mutableListOf<String>()
+        val http = object : Http {
+            override fun get(url: String): ByteArray? { asked += url; return (if (url.endsWith("/latest")) release("v1.1.0") else "[" + release("v1.2.0-dev.1", prerelease = true) + "]").toByteArray() }
+            override fun download(url: String, to: File, onBytes: (Long) -> Unit) = false
+        }
+        val context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("updates", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        val dev = Updates(context, http, "1.2.0-dev.0")
+        dev.check()
+        assertTrue(asked.last().endsWith("releases?per_page=30"))
+        assertEquals("1.2.0-dev.1", (dev.state.value as UpdateState.Available).release.version.toString())
+        val stable = Updates(context, http, "1.0.0")
+        stable.setChannel(app.runout.update.UpdateChannel.STABLE)
+        stable.check()
+        assertTrue(asked.last().endsWith("releases/latest"))
+        assertEquals("1.1.0", (stable.state.value as UpdateState.Available).release.version.toString())
+    }
+
     @Test fun `the daily check runs once a day, keeps quiet when github can't be reached, and can be switched off`() = runBlocking {
         var now = 1_000_000_000L
         var body: String? = release("v1.0.1")

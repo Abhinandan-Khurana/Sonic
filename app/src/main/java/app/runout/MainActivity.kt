@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIncoming(intent)
         if (BuildConfig.DEBUG && intent.getBooleanExtra("capture_intro_deck", false)) app.runout.ui.deck.DeckCapture.requested = true
         // Once a day, when it's on: is there a newer release on GitHub? Quiet if it can't tell.
-        if (savedInstanceState == null) graph.scope.launch { graph.updates.checkIfDue() }
+        if (savedInstanceState == null && BuildConfig.UPDATE_CHECK) graph.scope.launch { graph.updates.checkIfDue() }
 
         val graph = graph
         // A track that fails to play lifts the needle; the room says why.
@@ -99,6 +99,7 @@ class MainActivity : ComponentActivity() {
             val storage by graph.storage.state.collectAsStateWithLifecycle()
             val update by graph.updates.state.collectAsStateWithLifecycle()
             val autoUpdates by graph.updates.auto.collectAsStateWithLifecycle()
+            val updateChannel by graph.updates.channel.collectAsStateWithLifecycle()
             val dark = look.dark(androidx.compose.foundation.isSystemInDarkTheme())
             LaunchedEffect(dark) { applyTheme(dark) }
             // The next launch screen in the pinned theme's paper too (with "phone", Android's own).
@@ -243,6 +244,7 @@ class MainActivity : ComponentActivity() {
                     override fun setIntroOnLaunch(on: Boolean) = graph.look.setIntroOnLaunch(on)
                     override fun checkForUpdates() { graph.scope.launch { graph.updates.check() } }
                     override fun setAutoUpdates(enabled: Boolean) = graph.updates.setAuto(enabled)
+                    override fun setUpdateChannel(channel: app.runout.update.UpdateChannel) = graph.updates.setChannel(channel)
                     override fun openUpdate(page: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(page))) } }
                     override fun analyzeStorage() {
                         graph.scope.launch { graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value) }
@@ -381,6 +383,7 @@ class MainActivity : ComponentActivity() {
                     storage = storage,
                     update = update,
                     autoUpdates = autoUpdates,
+                    updateChannel = updateChannel,
                     sleepAt = sleepAt,
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,

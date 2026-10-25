@@ -47,6 +47,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -210,6 +211,8 @@ data class RoomState(
     val update: app.runout.update.UpdateState = app.runout.update.UpdateState.Idle,
     /** The daily update check (Settings › Flags). */
     val autoUpdates: Boolean = true,
+    /** Stable or development builds; null until you've chosen (asked at your first check). */
+    val updateChannel: app.runout.update.UpdateChannel? = null,
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -288,6 +291,7 @@ interface RoomActions : DeckActions {
     /** Asks GitHub for a newer release (Settings › About). */
     fun checkForUpdates() {}
     fun setAutoUpdates(enabled: Boolean) {}
+    fun setUpdateChannel(channel: app.runout.update.UpdateChannel) {}
     /** Opens a release's page in the browser, where its APK is. */
     fun openUpdate(page: String) {}
     /** Empties Sonic's cache (not covers, not the library). */
@@ -1458,6 +1462,7 @@ private fun PanelSheet(
  * A place with its own page: the TE screen head ("02 / dig", "close ×", the 44/700 title), then the
  * body 11 dp below it and 22 dp in, above the keyboard and the nav bar.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, onBack: () -> (() -> Unit)? = { null }, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
@@ -1471,9 +1476,11 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
         ) {
             TeScreenHead(index, title, onClose, onBack = onBack)
             val body = Modifier.fillMaxWidth().weight(1f)
+            // With the keyboard up the body sits right on it: no foot margin between a text box and the keys.
+            val foot = if (WindowInsets.isImeVisible) 0.dp else 22.dp
             CompositionLocalProvider(LocalPageSheetHost provides sheets) {
                 Column(
-                    (if (scroll) body.verticalScroll(rememberScrollState()) else body).padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = 22.dp),
+                    (if (scroll) body.verticalScroll(rememberScrollState()) else body).padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = foot),
                     content = content,
                 )
             }
@@ -1707,7 +1714,8 @@ private fun EmptyRoom(state: RoomState, actions: RoomActions, modifier: Modifier
  * The record's songs, coded by side (a1, a2, b1…), as a picker: the rows snap to the middle, where
  * the song under the bar is inverted with "tap to play" (or "playing" for the one that's on). The
  * playing song's code stays orange wherever it is; the rest soften with distance from the middle.
- * A tap on any song plays it, turning the record over first when it's on the other side.
+ * Only the song under the bar plays on a tap, turning the record over first when it's on the other
+ * side; tapping another song rolls it under the bar.
  */
 @Composable
 private fun TrackWheel(state: RoomState, actions: RoomActions, rows: Int, help: @Composable (Modifier) -> Unit = {}) {
@@ -1733,6 +1741,7 @@ private fun TrackWheel(state: RoomState, actions: RoomActions, rows: Int, help: 
         }
     }
     val tick = rememberTick()
+    val wheelScope = rememberCoroutineScope()
     val detent = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
     LaunchedEffect(scroll) {
         var last = -1
@@ -1759,9 +1768,10 @@ private fun TrackWheel(state: RoomState, actions: RoomActions, rows: Int, help: 
                         if (underBar) Modifier.background(Room.Ink)
                         else Modifier.blur(if (distance == 1) 0.6.dp else 1.dp).alpha(if (distance == 1) 0.45f else 0.25f),
                     )
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = "play") {
+                    // Like a wheel: only the song under the bar plays. Another one rolls under the bar first.
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = if (underBar) "play" else "move here") {
                         tick()
-                        actions.playTrack(sideIndex, i)
+                        if (underBar) actions.playTrack(sideIndex, i) else wheelScope.launch { scroll.animateScrollToItem(n) }
                     }
                     .padding(horizontal = 8.dp)
                     .testTag("track:${'A' + sideIndex}${i + 1}"),

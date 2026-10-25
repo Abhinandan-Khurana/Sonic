@@ -678,7 +678,19 @@ class ListeningRoomUiTest {
     }
 
     @Test
-    fun `the track wheel is a picker, the song under the bar says tap to play, and a tap on any side plays it`() {
+    fun `the first check asks which builds you want, then checks`() {
+        portrait()
+        val actions = RecordingActions()
+        compose.setContent { RoomScreen(state().copy(update = app.runout.update.UpdateState.Idle), actions, initialPanel = Panel.SETTINGS, initialSettings = SettingsSection.ABOUT) }
+        compose.onNodeWithTag("about-update-check").performScrollTo().performClick()
+        compose.onNodeWithTag("channel-choose:DEVELOPMENT").assertIsDisplayed()
+        compose.onNodeWithTag("channel-choose:STABLE").performClick()
+        assertEquals(listOf("channel:STABLE", "checkUpdates"), actions.log.filter { it.startsWith("channel:") || it == "checkUpdates" })
+        compose.onNodeWithTag("channel-choose:STABLE").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the track wheel is a picker, only the song under the bar plays, another rolls under it first`() {
         portrait()
         val actions = RecordingActions()
         compose.mainClock.autoAdvance = false
@@ -686,13 +698,22 @@ class ListeningRoomUiTest {
         repeat(10) { compose.mainClock.advanceTimeBy(100) }
         // The song on is under the bar to begin with.
         compose.onNodeWithTag("wheel-playing", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("track-wheel").performTouchInput { swipeUp(startY = bottom - 4f, endY = centerY, durationMillis = 400) }
+        val tags = compose.onAllNodes(SemanticsMatcher("a wheel row") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("track:") == true })
+            .fetchSemanticsNodes().map { it.config[SemanticsProperties.TestTag] }
+        val row = SemanticsMatcher("a wheel row") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("track:") == true }
+        val playingTag = compose.onNode(row and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasTestTag("wheel-playing")), useUnmergedTree = true)
+            .fetchSemanticsNode().config[SemanticsProperties.TestTag]
+        val other = tags.first { it != playingTag }
+        // A tap on a song off the bar doesn't play it: it rolls under the bar.
+        compose.onNodeWithTag(other).performTouchInput { click(center) }
         repeat(20) { compose.mainClock.advanceTimeBy(100) }
+        assertTrue(actions.log.toString(), actions.log.none { it.startsWith("play:") })
         compose.onNodeWithTag("wheel-tap-to-play", useUnmergedTree = true).assertExists()
-        // A tap plays that song (Deck.playTrack turns the record over when it's on the other side).
-        compose.onNodeWithTag("track:A2").performTouchInput { click(center) }
+        // Under the bar now, a tap plays it.
+        compose.onNodeWithTag(other).performTouchInput { click(center) }
         repeat(5) { compose.mainClock.advanceTimeBy(100) }
-        assertTrue(actions.log.toString(), "play:0:1" in actions.log)
+        val (side, track) = other.removePrefix("track:").let { (it[0] - 'A') to (it.drop(1).toInt() - 1) }
+        assertTrue(actions.log.toString(), "play:$side:$track" in actions.log)
     }
 
     @Test

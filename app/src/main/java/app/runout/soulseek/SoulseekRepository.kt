@@ -334,9 +334,14 @@ class SoulseekRepository(
         }.map { it.id }
         ids.forEach { id -> runCatching { pauseOne(id) }.onFailure { if (it is CancellationException) throw it } }
     }
+    /** Starts every paused or queued Soulseek download again; one that can't start doesn't hold up the rest. */
     fun resumeAll(): Job = work {
         requireSignedIn()
-        dao.resumable(session.value.username!!).filter { it.provider == "Soulseek" }.forEach { resumeOne(it.id) }
+        var failure: Throwable? = null
+        dao.resumable(session.value.username!!).filter { it.provider == "Soulseek" }.forEach { row ->
+            runCatching { resumeOne(row.id) }.onFailure { if (it is CancellationException) throw it; failure = failure ?: it }
+        }
+        failure?.let { throw it }
     }
     fun setTurtle(enabled: Boolean) { preferences.setTurtle(enabled) }
     fun pause(id: String): Job = work { pauseOne(id); pumpQueue() }

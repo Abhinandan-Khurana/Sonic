@@ -1,5 +1,6 @@
 package app.runout.ui.settings
 
+import app.runout.update.UpdateChannel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -102,6 +103,7 @@ private val HelpUpdates = TeHelp("help · flags", "check for updates", listOf(
     "once a day, when sonic opens, it asks github for the latest release of sonic. nothing about you or your music is sent.",
     "when there's a newer one, settings shows it with a link to its page, where the apk is. you install it yourself; sonic never downloads it.",
     "off, it only checks when you ask in settings › about.",
+    "stable offers tested releases. development also offers pre-releases, the newest features first. both are the same app and update each other.",
 ))
 
 private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
@@ -111,7 +113,8 @@ private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
 
 /**
  * Settings › Flags: 01 the deck's habits, each a switch; 02 the theme (the phone's, or light or
- * dark pinned); 03 which RG-1 stands in the room (the theme's, or one of the three pinned).
+ * dark pinned); 03 which RG-1 stands in the room (the theme's, or one of the three pinned);
+ * 04 updates: the daily check and which builds it looks for.
  */
 @Composable
 internal fun FlagsPage(state: RoomState, actions: RoomActions) {
@@ -124,7 +127,6 @@ internal fun FlagsPage(state: RoomState, actions: RoomActions) {
                 HelpToggle("Auto-play", "A record on the platter starts playing.", f.autoPlay, actions::setAutoPlay) { help = HelpAutoPlay }
                 HelpToggle("Sleep mode", "A moon in the room for the sleep timer.", f.sleepMode, actions::setSleepMode) { help = HelpSleep }
                 HelpToggle("Intro on launch", "The needle drop, each time sonic opens.", state.look.introOnLaunch, actions::setIntroOnLaunch) { help = HelpIntro }
-                HelpToggle("Check for updates", "Once a day, sonic asks github for a newer release.", state.autoUpdates, actions::setAutoUpdates) { help = HelpUpdates }
             }
         }
         PageSection("02 theme") {
@@ -134,6 +136,20 @@ internal fun FlagsPage(state: RoomState, actions: RoomActions) {
         PageSection("03 deck") {
             BasicText("theme puts the dark deck in a dark room and white / teal in a light one.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
             Segments(DeckSkin.entries, state.look.deck, { it.label }, tag = { "deck:${it.name}" }, onSelect = actions::setDeckSkin)
+        }
+        // F-Droid builds leave the updates to F-Droid.
+        if (app.runout.BuildConfig.UPDATE_CHECK) PageSection("04 updates") {
+            Column(Modifier.fillMaxWidth()) {
+                HelpToggle("Check for updates", "Once a day, sonic asks github for a newer release.", state.autoUpdates, actions::setAutoUpdates) { help = HelpUpdates }
+            }
+            BasicText("stable gets tested releases. development gets the newest features first, with rougher edges.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+            Segments(
+                UpdateChannel.entries,
+                state.updateChannel ?: UpdateChannel.STABLE,
+                { it.label },
+                tag = { "channel:${it.name}" },
+                onSelect = actions::setUpdateChannel,
+            )
         }
     }
     TeHelpSheet(help) { help = null }

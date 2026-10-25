@@ -624,6 +624,16 @@ class SoulseekRepositoryTest {
         assertEquals("PAUSED", db.soulseek().transfer("runout-test:retry")!!.state)
     }
 
+    @Test fun `resume all starts every paused download even when one of them can't start`() = runBlocking {
+        login(); destination()
+        db.soulseek().putTransfer(TransferRow("runout-test:a", "runout-test", "maya", "Music\\Night Drive\\01.flac", 1000, state = "PAUSED"))
+        db.soulseek().putTransfer(TransferRow("runout-test:b", "runout-test", "maya", "Music\\Night Drive\\02.flac", 1000, state = "PAUSED"))
+        transport.onCommand = { c -> if (c.optString("op") == "download" && c.optString("id") == "runout-test:a") error("peer refused") }
+        repo.resumeAll().join()
+        assertTrue("the second still starts", transport.commands.any { it.optString("op") == "download" && it.optString("id") == "runout-test:b" })
+        assertNotNull("and the failure is still told", repo.error.value)
+    }
+
     @Test fun `a download waiting to retry has one timer however often you come back`() = runBlocking {
         login()
         db.soulseek().putTransfer(TransferRow("runout-test:wait", "runout-test", "maya", "Music\\Night Drive\\01.flac", 1000,

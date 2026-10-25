@@ -447,7 +447,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.AboutPage(state: Room
     Column(Modifier.fillMaxWidth().hairlineTop(Room.Ink).padding(top = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
         BrandText(brandMark() + androidx.compose.ui.text.AnnotatedString(" $VERSION"), Room.Display.copy(fontSize = 33.sp))
         BasicText(if (BuildConfig.DEBUG) "development build · rg-1 v3" else "rg-1 v3", style = Room.LabelQuiet)
-        UpdateLine(state.update, actions)
+        UpdateLine(state, actions)
     }
 }
 
@@ -464,20 +464,63 @@ private fun UpdateNotice(release: app.runout.update.Release, actions: RoomAction
     }
 }
 
-/** Under the version in About: where the last check left things, and a way to check again. */
+/**
+ * Under the version in About: where the last check left things, and a way to check again. The
+ * first check asks which builds you want (UpdateChannelSheet). F-Droid builds leave it to F-Droid.
+ */
 @Composable
-private fun UpdateLine(update: UpdateState, actions: RoomActions) {
+private fun UpdateLine(state: RoomState, actions: RoomActions) {
+    val update = state.update
+    var choosing by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().testTag("about-update"), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (!BuildConfig.UPDATE_CHECK) {
+            BasicText("updates come through f-droid.", style = Room.LabelQuiet, modifier = Modifier.weight(1f))
+            return@Row
+        }
+        val channel = state.updateChannel?.let { "${it.label} · " }.orEmpty()
         val (text, colour) = when (update) {
-            UpdateState.Idle -> "not checked yet." to Room.Quiet
+            UpdateState.Idle -> "${channel}not checked yet." to Room.Quiet
             UpdateState.Checking -> "asking github…" to Room.Quiet
-            is UpdateState.UpToDate -> "up to date. checked ${checkedWhen(update.at)}." to Room.Quiet
+            is UpdateState.UpToDate -> "${channel}up to date. checked ${checkedWhen(update.at)}." to Room.Quiet
             is UpdateState.Available -> "${update.release.version} is out." to Room.Signal
             is UpdateState.Failed -> update.reason to Room.Danger
         }
         BasicText(text, style = Room.Label.copy(color = colour, lineHeight = 15.sp), modifier = Modifier.weight(1f))
         if (update is UpdateState.Available) TeLink("get it", { actions.openUpdate(update.release.page) }, tag = "about-update-get", color = Room.Signal)
-        else if (update != UpdateState.Checking) TeLink("check", actions::checkForUpdates, tag = "about-update-check")
+        else if (update != UpdateState.Checking) TeLink("check", { if (state.updateChannel == null) choosing = true else actions.checkForUpdates() }, tag = "about-update-check")
+    }
+    if (choosing) UpdateChannelSheet(
+        onDismiss = { choosing = false },
+        onChoose = { channel ->
+            choosing = false
+            actions.setUpdateChannel(channel)
+            actions.checkForUpdates()
+        },
+    )
+}
+
+/** Asked once, at the first check: stable releases, or development builds too. Changeable in Flags. */
+@Composable
+private fun UpdateChannelSheet(onDismiss: () -> Unit, onChoose: (app.runout.update.UpdateChannel) -> Unit) {
+    PageSheet("update-channel", onDismiss, title = "which builds?") {
+        BasicText("you can change this later in settings › flags.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+        listOf(
+            app.runout.update.UpdateChannel.STABLE to "tested releases. the one to pick if you just want to listen.",
+            app.runout.update.UpdateChannel.DEVELOPMENT to "the newest features first, as pre-releases. rougher edges; you can go back to stable anytime.",
+        ).forEach { (channel, line) ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Room.Ink)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { onChoose(channel) }
+                    .padding(16.dp)
+                    .testTag("channel-choose:${channel.name}"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                BasicText(channel.label, style = Room.Strong)
+                BasicText(line, style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+            }
+        }
     }
 }
 
