@@ -98,6 +98,12 @@ private val HelpIntro = TeHelp("help · flags", "intro on launch", listOf(
     "tap anywhere to skip it. it plays in light or dark, on the deck you're using.",
 ))
 
+private val HelpUpdates = TeHelp("help · flags", "check for updates", listOf(
+    "once a day, when sonic opens, it asks github for the latest release of sonic. nothing about you or your music is sent.",
+    "when there's a newer one, settings shows it with a link to its page, where the apk is. you install it yourself; sonic never downloads it.",
+    "off, it only checks when you ask in settings › about.",
+))
+
 private val HelpSleep = TeHelp("help · flags", "sleep mode", listOf(
     "puts a moon in the room's top bar. tap it to stop the music in 15 to 50 minutes.",
     "when the time is up the music fades out over a few seconds and the needle lifts.",
@@ -118,6 +124,7 @@ internal fun FlagsPage(state: RoomState, actions: RoomActions) {
                 HelpToggle("Auto-play", "A record on the platter starts playing.", f.autoPlay, actions::setAutoPlay) { help = HelpAutoPlay }
                 HelpToggle("Sleep mode", "A moon in the room for the sleep timer.", f.sleepMode, actions::setSleepMode) { help = HelpSleep }
                 HelpToggle("Intro on launch", "The needle drop, each time sonic opens.", state.look.introOnLaunch, actions::setIntroOnLaunch) { help = HelpIntro }
+                HelpToggle("Check for updates", "Once a day, sonic asks github for a newer release.", state.autoUpdates, actions::setAutoUpdates) { help = HelpUpdates }
             }
         }
         PageSection("02 theme") {

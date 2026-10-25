@@ -125,22 +125,25 @@ internal object SoundHelp {
 }
 
 /**
- * Settings › Sound, as the TE · Settings · Sound board less its signal section (that now heads the
- * Settings list): 01 output (crackle first), 02 equaliser and 03 loudness, 22 dp apart. Each "?"
- * opens its help panel.
+ * Settings › Sound, as the TE · Settings · Sound board: 01 signal (how what's playing reaches you,
+ * the chain from the Audio quality panel), 02 output (crackle first), 03 equaliser and 04 loudness,
+ * 22 dp apart. Each "?" opens its help panel.
  */
 @Composable
-fun SoundPanel(s: SoundSettings, crackleOn: Boolean, actions: RoomActions) {
+fun SoundPanel(s: SoundSettings, crackleOn: Boolean, actions: RoomActions, output: app.runout.sound.OutputStatus = app.runout.sound.OutputStatus()) {
     var help by remember { mutableStateOf<TeHelp?>(null) }
     val dsp = !s.pure
     Column(Modifier.fillMaxWidth().testTag("panel:sound"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        PageSection("01 output") {
+        PageSection("01 signal") {
+            SignalChain(signalPath(output, s))
+        }
+        PageSection("02 output") {
             // Crackle moved here from the home screen: it's part of how the deck sounds.
             ToggleRow("Crackle", "Surface noise under the music.", crackleOn, { actions.toggleCrackle() })
             HelpToggle("Pure", "The music, untouched.", s.pure, { on -> actions.updateSound { it.copy(pure = on) } }) { help = SoundHelp.PURE }
             HelpToggle("Hi-res output", "Keeps 24-bit detail all the way to the output.", s.hiResOutput, { on -> actions.updateSound { it.copy(hiResOutput = on) } }) { help = SoundHelp.HI_RES }
         }
-        PageSection("02 equaliser") {
+        PageSection("03 equaliser") {
             HelpToggle(
                 "EQ",
                 if (s.useParametric) "AutoEq headphone profile · ${s.parametric.size} filters" else "10-band graphic EQ · ${s.presetName}",
@@ -179,7 +182,7 @@ fun SoundPanel(s: SoundSettings, crackleOn: Boolean, actions: RoomActions) {
                 if (s.useParametric) FlatLink("use graphic eq", { actions.updateSound { it.copy(useParametric = false, presetName = "Custom") } }, tag = "use-graphic-eq", enabled = dsp)
             }
         }
-        PageSection("03 loudness") {
+        PageSection("04 loudness") {
             Column(
                 Modifier.fillMaxWidth().alpha(if (dsp) 1f else 0.4f).hairlineTop().padding(vertical = 11.dp),
                 verticalArrangement = Arrangement.spacedBy(11.dp),

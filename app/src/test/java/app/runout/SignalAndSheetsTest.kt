@@ -106,6 +106,9 @@ class SignalAndSheetsTest {
         compose.onNodeWithTag("signal-path").assertExists()
         compose.onNodeWithTag("signal-verdict").assertTextEquals("lossless, resampled to 48 khz")
         compose.onNodeWithTag("spec:Track").assertExists()
+        // Only the station that changes the music says why: here the output resamples, the file doesn't.
+        compose.onNodeWithTag("why:Output", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("why:Track", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test fun `Settings is the rows and the way to storage, and Sound starts at output with crackle first`() {
@@ -118,10 +121,12 @@ class SignalAndSheetsTest {
         compose.onNodeWithTag("settings:SOUND").performScrollTo().performClick()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/36_sound_output.png")
         compose.onNodeWithTag("panel:sound").assertExists()
-        compose.onNodeWithTag("signal-path").assertDoesNotExist()
-        compose.onNodeWithText("01 output").assertExists()
-        compose.onNodeWithText("02 equaliser").assertExists()
-        compose.onNodeWithText("03 loudness").assertExists()
+        // The chain heads Settings › Sound: how what's playing reaches you, before what shapes it.
+        compose.onNodeWithTag("signal-path").assertExists()
+        compose.onNodeWithText("01 signal").assertExists()
+        compose.onNodeWithText("02 output").assertExists()
+        compose.onNodeWithText("03 equaliser").assertExists()
+        compose.onNodeWithText("04 loudness").assertExists()
         compose.onNodeWithText("05 the deck").assertDoesNotExist()
         assertTrue(compose.onNodeWithTag("toggle:Crackle").getBoundsInRoot().top < compose.onNodeWithTag("toggle:Pure").getBoundsInRoot().top)
         // "import autoeq…" is an outlined key now.

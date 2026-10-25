@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity() {
         applyTheme(graph.look.look.value.dark(phoneDark))
         if (savedInstanceState == null) handleIncoming(intent)
         if (BuildConfig.DEBUG && intent.getBooleanExtra("capture_intro_deck", false)) app.runout.ui.deck.DeckCapture.requested = true
+        // Once a day, when it's on: is there a newer release on GitHub? Quiet if it can't tell.
+        if (savedInstanceState == null) graph.scope.launch { graph.updates.checkIfDue() }
 
         val graph = graph
         // A track that fails to play lifts the needle; the room says why.
@@ -95,6 +97,8 @@ class MainActivity : ComponentActivity() {
             val deckFlags by graph.deck.flags.collectAsStateWithLifecycle()
             val look by graph.look.look.collectAsStateWithLifecycle()
             val storage by graph.storage.state.collectAsStateWithLifecycle()
+            val update by graph.updates.state.collectAsStateWithLifecycle()
+            val autoUpdates by graph.updates.auto.collectAsStateWithLifecycle()
             val dark = look.dark(androidx.compose.foundation.isSystemInDarkTheme())
             LaunchedEffect(dark) { applyTheme(dark) }
             // The next launch screen in the pinned theme's paper too (with "phone", Android's own).
@@ -195,6 +199,7 @@ class MainActivity : ComponentActivity() {
                     override fun cueTrack(album: Album, trackId: String?) = graph.deck.cueTrack(album, trackId)
                     override fun toggleCrackle() = graph.deck.toggleCrackle()
                     override fun needleDrop(fraction: Float) = graph.deck.needleDrop(fraction)
+                    override fun playTrack(sideIndex: Int, trackIndex: Int) = graph.deck.playTrack(sideIndex, trackIndex)
                     override fun liftNeedle() = graph.deck.liftNeedle()
                     override fun holdPlatter() = graph.deck.holdPlatter()
                     override fun releasePlatter() = graph.deck.releasePlatter()
@@ -236,6 +241,9 @@ class MainActivity : ComponentActivity() {
                     override fun setTheme(theme: app.runout.ui.ThemeMode) = graph.look.setTheme(theme)
                     override fun setDeckSkin(deck: app.runout.ui.DeckSkin) = graph.look.setDeck(deck)
                     override fun setIntroOnLaunch(on: Boolean) = graph.look.setIntroOnLaunch(on)
+                    override fun checkForUpdates() { graph.scope.launch { graph.updates.check() } }
+                    override fun setAutoUpdates(enabled: Boolean) = graph.updates.setAuto(enabled)
+                    override fun openUpdate(page: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(page))) } }
                     override fun analyzeStorage() {
                         graph.scope.launch { graph.storage.analyze(graph.library.folder.value, graph.soulseek.destination.value, graph.shelf.value) }
                     }
@@ -371,6 +379,8 @@ class MainActivity : ComponentActivity() {
                     deckFlags = deckFlags,
                     look = look,
                     storage = storage,
+                    update = update,
+                    autoUpdates = autoUpdates,
                     sleepAt = sleepAt,
                     soulseekWifiOnly = wifiOnly,
                     soulseekUploadSlots = uploadSlots,

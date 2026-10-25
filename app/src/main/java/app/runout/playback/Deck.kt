@@ -453,6 +453,16 @@ class Deck(
         }
     }
 
+    /**
+     * A song picked from the track wheel ("tap to play"): the needle goes to it and it plays,
+     * turning the record over first when the song is on the other side.
+     */
+    fun playTrack(sideIndex: Int, trackIndex: Int) {
+        val s = _state.value
+        if (s.album == null || s.sides.getOrNull(sideIndex)?.tracks?.getOrNull(trackIndex) == null) return
+        jumpTo(sideIndex, trackIndex)
+    }
+
     private fun jumpTo(sideIndex: Int, trackIndex: Int) {
         val s = _state.value
         val album = s.album ?: return

@@ -9,6 +9,8 @@ import app.runout.ui.Room
 import app.runout.ui.ThemeMode
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.click
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateOf
@@ -658,6 +660,39 @@ class ListeningRoomUiTest {
         compose.waitForIdle()
         compose.onNodeWithText("NIGHT DRIVE").assertDoesNotExist()
         compose.onNodeWithTag("caption-artist").assertTextContains(dug.substringBefore(" ·"), substring = true)
+    }
+
+    @Test
+    fun `a newer release shows on settings, dots its tab and opens its page`() {
+        portrait()
+        val actions = RecordingActions()
+        val release = app.runout.update.Release(app.runout.update.Version(1, 0, 1), "Sonic. 1.0.1", "https://github.com/Abhiroop1122/Sonic/releases/tag/v1.0.1")
+        val s = state().copy(update = app.runout.update.UpdateState.Available(release))
+        compose.setContent { RoomScreen(s, actions, initialPanel = Panel.SETTINGS) }
+        compose.onNodeWithTag("settings-update").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Settings, new", substring = true).assertExists()
+        compose.onNodeWithTag("settings-update-get").performClick()
+        assertTrue(actions.log.toString(), "openUpdate:${release.page}" in actions.log)
+        compose.onNodeWithTag("settings:ABOUT").performClick()
+        compose.onNodeWithTag("about-update-get").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun `the track wheel is a picker, the song under the bar says tap to play, and a tap on any side plays it`() {
+        portrait()
+        val actions = RecordingActions()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { RoomScreen(state(deck = playing()), actions) }
+        repeat(10) { compose.mainClock.advanceTimeBy(100) }
+        // The song on is under the bar to begin with.
+        compose.onNodeWithTag("wheel-playing", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("track-wheel").performTouchInput { swipeUp(startY = bottom - 4f, endY = centerY, durationMillis = 400) }
+        repeat(20) { compose.mainClock.advanceTimeBy(100) }
+        compose.onNodeWithTag("wheel-tap-to-play", useUnmergedTree = true).assertExists()
+        // A tap plays that song (Deck.playTrack turns the record over when it's on the other side).
+        compose.onNodeWithTag("track:A2").performTouchInput { click(center) }
+        repeat(5) { compose.mainClock.advanceTimeBy(100) }
+        assertTrue(actions.log.toString(), "play:0:1" in actions.log)
     }
 
     @Test
