@@ -39,10 +39,10 @@ import app.runout.library.StorageState
 import app.runout.ui.*
 
 /**
- * Settings › Storage, the page two fingers find on Settings: the phone's space with the music and
- * downloads in it, each folder by kind (hi-res and cd-quality flac, other audio, pictures,
- * unfinished downloads, the rest) with its largest records, and Sonic's own files. It measures
- * when it opens; nothing is deleted here but Sonic's cache.
+ * Settings › Storage, the page two fingers find on Settings: the music and download folders, each
+ * by kind (hi-res and cd-quality flac, other audio, pictures, unfinished downloads, the rest) with
+ * its records largest first, and Sonic's own files. It measures when it opens; nothing is deleted
+ * here but Sonic's cache and the records you choose.
  */
 @Composable
 internal fun StoragePage(state: RoomState, actions: RoomActions) {
@@ -112,30 +112,17 @@ private fun SheetKey(text: String, ink: Color, fill: Color, modifier: Modifier, 
 
 @Composable
 private fun Report(r: StorageReport, actions: RoomActions, onDelete: (RecordUsage) -> Unit) {
-    val music = r.music?.bytes ?: 0L
-    val downloads = r.downloads?.bytes ?: 0L
-    r.device?.let { d ->
-        PageSection("01 phone") {
-            val used = (d.total - d.free).coerceAtLeast(0L)
-            StatsStrip(listOf(bytes(d.total) to "total", bytes(used) to "used", bytes(d.free) to "free"))
-            UsageBar(listOf(music to Room.Signal, downloads to Room.Accent, (used - music - downloads).coerceAtLeast(0L) to Room.Quiet, d.free to Room.HairlineSoft))
-            Legend(Room.Signal, "your music", music, d.total)
-            if (r.downloads != null) Legend(Room.Accent, "downloads", downloads, d.total)
-            Legend(Room.Quiet, "everything else", (used - music - downloads).coerceAtLeast(0L), d.total)
-            Legend(Room.HairlineSoft, "free", d.free, d.total)
-        }
-    }
-    PageSection("02 music folder" + (r.music?.label?.let { " · ${it.lowercase()}" } ?: "")) {
+    PageSection("01 music folder" + (r.music?.label?.let { " · ${it.lowercase()}" } ?: "")) {
         r.music?.let { Folder(it, "storage-music", onDelete) } ?: Quiet("no music folder yet. choose one in library.")
     }
-    PageSection("03 download folder" + (r.downloads?.label?.let { " · ${it.lowercase()}" } ?: "")) {
+    PageSection("02 download folder" + (r.downloads?.label?.let { " · ${it.lowercase()}" } ?: "")) {
         when {
             r.downloadsInMusic -> Quiet("downloads land inside your music folder, so they're counted above.")
             r.downloads != null -> Folder(r.downloads, "storage-downloads", onDelete)
             else -> Quiet("no download folder yet. choose one in library.")
         }
     }
-    PageSection("04 sonic") {
+    PageSection("03 sonic") {
         StatsStrip(listOf(bytes(r.app.covers) to "covers", bytes(r.app.cache) to "cache", bytes(r.app.data) to "data"))
         Quiet("covers are the sleeves sonic has kept; data is its library list, chats and settings. the cache is safe to clear.")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
