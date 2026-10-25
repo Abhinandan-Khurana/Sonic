@@ -22,6 +22,7 @@ Feedback from the first week of 1.0.0, and updates from inside the app.
   - Resume all starts every paused download even when one of them can't start.
   - While files move, the phone and its Wi-Fi stay awake, so a dozing phone with the screen off no longer stalls them.
 - **Friends:** no gap between the message box and the keyboard.
+- **Page heads** lose their numbered label ("05 / settings"); close or back stands alone above the title.
 - **Getting ready for F-Droid:** store text and pictures in `fastlane/`, a draft recipe in `fdroid/`, no dependency metadata in the APK, and builds without the update check (`-Psonic.updates=false`). See docs/FDROID.md.
 
 ---
