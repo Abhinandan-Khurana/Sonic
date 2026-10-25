@@ -1,0 +1,6 @@
+- The track wheel turns like a picker: scroll a song under the bar, tap to play it, on either side.
+- Check for updates in Settings, stable or development builds.
+- The signal chain heads Settings › Sound; the audio quality page says only what changes the sound.
+- Storage sets your music beside the whole phone.
+- Shared record pictures carry the Sonic sleeve.
+- Fixes: pause all and resume all, downloads with the screen off, the gap above the keyboard in chats.

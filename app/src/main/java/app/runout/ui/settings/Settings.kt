@@ -1,5 +1,6 @@
 package app.runout.ui.settings
 
+import app.runout.update.UpdateState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.animateFloat
@@ -149,14 +150,17 @@ fun SettingsPanel(
         },
         label = "settings-page",
     ) { shown ->
-        if (shown == null) SettingsHome(state, onSection)
+        if (shown == null) SettingsHome(state, actions, onSection)
         else SettingsPage(state, actions, shown, onSection, onDownloads, onSetup, onOffline)
     }
 }
 
-/** The list: the five rows, the way to the storage page, and the wordmark set faint at the foot. */
+/**
+ * The list: a newer release when there is one, the five rows, the way to the storage page, and the
+ * wordmark set faint at the foot.
+ */
 @Composable
-private fun SettingsHome(state: RoomState, onSection: (SettingsSection?) -> Unit) {
+private fun SettingsHome(state: RoomState, actions: RoomActions, onSection: (SettingsSection?) -> Unit) {
     val found = rememberTick(HapticFeedbackType.GestureThresholdActivate)
     Column(
         Modifier
@@ -167,6 +171,7 @@ private fun SettingsHome(state: RoomState, onSection: (SettingsSection?) -> Unit
             .testTag("panel:settings"),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
+        (state.update as? UpdateState.Available)?.let { UpdateNotice(it.release, actions) }
         Column(Modifier.fillMaxWidth()) {
             LISTED_SECTIONS.forEachIndexed { i, s ->
                 TeRow("%02d".format(i + 1), s.label.lowercase(), summary(s, state), { onSection(s) }, Modifier.testTag("settings:${s.name}"))
@@ -220,14 +225,14 @@ private fun SettingsPage(
     ) {
         PageBackLink("← settings", "settings-back") { onSection(null) }
         when (section) {
-            SettingsSection.SOUND -> SoundPanel(state.sound, state.crackleOn, actions)
+            SettingsSection.SOUND -> SoundPanel(state.sound, state.crackleOn, actions, state.output)
             SettingsSection.ACCOUNT -> {
                 ConnectionNotice(state, actions, onSetup)
                 SoulseekAccountPanel(state, actions, onOffline, onSignIn = onSetup, onDownloads = onDownloads)
             }
             SettingsSection.LIBRARY -> LibraryPage(state, actions)
             SettingsSection.FLAGS -> FlagsPage(state, actions)
-            SettingsSection.ABOUT -> AboutPage()
+            SettingsSection.ABOUT -> AboutPage(state, actions)
             SettingsSection.STORAGE -> StoragePage(state, actions)
         }
     }
@@ -249,7 +254,8 @@ private fun summary(s: SettingsSection, state: RoomState): String = when (s) {
         "auto-flip".takeIf { state.deckFlags.autoFlip }, "auto-play".takeIf { state.deckFlags.autoPlay }, "sleep".takeIf { state.deckFlags.sleepMode },
         "intro".takeIf { state.look.introOnLaunch },
     ).joinToString(" · ").ifEmpty { "all off" } + (if (state.look.theme != ThemeMode.PHONE) " · ${state.look.theme.label}" else "")
-    SettingsSection.ABOUT -> "sonic $VERSION · rg-1"
+    SettingsSection.ABOUT -> "sonic $VERSION · " +
+        ((state.update as? UpdateState.Available)?.let { "${it.release.version} is out" } ?: "rg-1")
     SettingsSection.STORAGE -> ""
 }
 
@@ -405,7 +411,7 @@ private const val SHOWN_BROKEN = 50
  * the 10/400 text), the credits last, and under an ink rule the version in 33/700 and the build line.
  */
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
+private fun androidx.compose.foundation.layout.ColumnScope.AboutPage(state: RoomState, actions: RoomActions) {
     Spacer(Modifier.weight(1f))
     val fonts = (if (TeType.isArray) "array by indian type foundry, via fontshare: itf free font license. " else "") +
         "inter and silkscreen: sil open font license."
@@ -441,8 +447,90 @@ private fun androidx.compose.foundation.layout.ColumnScope.AboutPage() {
     Column(Modifier.fillMaxWidth().hairlineTop(Room.Ink).padding(top = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
         BrandText(brandMark() + androidx.compose.ui.text.AnnotatedString(" $VERSION"), Room.Display.copy(fontSize = 33.sp))
         BasicText(if (BuildConfig.DEBUG) "development build · rg-1 v3" else "rg-1 v3", style = Room.LabelQuiet)
+        UpdateLine(state, actions)
     }
 }
+
+/** A newer release, inverted at the top of Settings: its version, and a link to its page. */
+@Composable
+private fun UpdateNotice(release: app.runout.update.Release, actions: RoomActions) {
+    Row(
+        Modifier.fillMaxWidth().background(Room.Ink).padding(horizontal = 16.dp, vertical = 14.dp).testTag("settings-update"),
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText("sonic ${release.version} is out.", style = Room.Text.copy(color = Room.OnInk), modifier = Modifier.weight(1f))
+        TeLink("get it", { actions.openUpdate(release.page) }, tag = "settings-update-get", color = Room.Signal)
+    }
+}
+
+/**
+ * Under the version in About: where the last check left things, and a way to check again. The
+ * first check asks which builds you want (UpdateChannelSheet). F-Droid builds leave it to F-Droid.
+ */
+@Composable
+private fun UpdateLine(state: RoomState, actions: RoomActions) {
+    val update = state.update
+    var choosing by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().testTag("about-update"), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (!BuildConfig.UPDATE_CHECK) {
+            BasicText("updates come through f-droid.", style = Room.LabelQuiet, modifier = Modifier.weight(1f))
+            return@Row
+        }
+        val channel = state.updateChannel?.let { "${it.label} · " }.orEmpty()
+        val (text, colour) = when (update) {
+            UpdateState.Idle -> "${channel}not checked yet." to Room.Quiet
+            UpdateState.Checking -> "asking github…" to Room.Quiet
+            is UpdateState.UpToDate -> "${channel}up to date. checked ${checkedWhen(update.at)}." to Room.Quiet
+            is UpdateState.Available -> "${update.release.version} is out." to Room.Signal
+            is UpdateState.Failed -> update.reason to Room.Danger
+        }
+        BasicText(text, style = Room.Label.copy(color = colour, lineHeight = 15.sp), modifier = Modifier.weight(1f))
+        if (update is UpdateState.Available) TeLink("get it", { actions.openUpdate(update.release.page) }, tag = "about-update-get", color = Room.Signal)
+        else if (update != UpdateState.Checking) TeLink("check", { if (state.updateChannel == null) choosing = true else actions.checkForUpdates() }, tag = "about-update-check")
+    }
+    if (choosing) UpdateChannelSheet(
+        onDismiss = { choosing = false },
+        onChoose = { channel ->
+            choosing = false
+            actions.setUpdateChannel(channel)
+            actions.checkForUpdates()
+        },
+    )
+}
+
+/** Asked once, at the first check: stable releases, or development builds too. Changeable in Flags. */
+@Composable
+private fun UpdateChannelSheet(onDismiss: () -> Unit, onChoose: (app.runout.update.UpdateChannel) -> Unit) {
+    PageSheet("update-channel", onDismiss, title = "which builds?") {
+        BasicText("you can change this later in settings › flags.", style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+        listOf(
+            app.runout.update.UpdateChannel.STABLE to "tested releases. the one to pick if you just want to listen.",
+            app.runout.update.UpdateChannel.DEVELOPMENT to "the newest features first, as pre-releases. rougher edges; you can go back to stable anytime.",
+        ).forEach { (channel, line) ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Room.Ink)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) { onChoose(channel) }
+                    .padding(16.dp)
+                    .testTag("channel-choose:${channel.name}"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                BasicText(channel.label, style = Room.Strong)
+                BasicText(line, style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp))
+            }
+        }
+    }
+}
+
+/** "today", "yesterday", "3 days ago". */
+private fun checkedWhen(at: Long, now: Long = System.currentTimeMillis()): String =
+    when (val days = ((now - at).coerceAtLeast(0) / (24 * 60 * 60 * 1000L)).toInt()) {
+        0 -> "today"
+        1 -> "yesterday"
+        else -> "$days days ago"
+    }
 
 /**
  * TE Toggle Row with its TE Help: a hairline above, 16 dp above and below, the 12/400 title and the

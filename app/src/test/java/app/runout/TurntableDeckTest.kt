@@ -98,6 +98,30 @@ class TurntableDeckTest {
         assertEquals("t4", player.currentMediaItem?.mediaId)
     }
 
+    @Test fun `a song picked on the other side turns the record over and keeps playing`() {
+        deck.load(album())
+        settle()
+        deck.startStop()
+        settle()
+        assertTrue(player.playWhenReady)
+        assertEquals("A1", s.trackCode)
+        deck.playTrack(sideIndex = 1, trackIndex = 1)
+        settle()
+        assertEquals("B2", s.trackCode)
+        assertEquals("t4", player.currentMediaItem?.mediaId)
+        assertTrue(s.needleDown)
+        assertTrue("still playing after the flip", player.playWhenReady)
+    }
+
+    @Test fun `a song picked while the deck is stopped plays too`() {
+        deck.load(album())
+        settle()
+        deck.playTrack(sideIndex = 1, trackIndex = 0)
+        settle()
+        assertEquals("B1", s.trackCode)
+        assertTrue(player.playWhenReady)
+    }
+
     @Test fun `loading a new record cancels the previous needle settling playback`() {
         deck.load(album())
         deck.startStop()

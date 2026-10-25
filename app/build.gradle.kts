@@ -8,6 +8,23 @@ plugins {
     id("androidx.room")
 }
 
+/**
+ * Sonic's version, set once here. Every release is tagged v<version>: "1.1.0" for a release,
+ * "1.2.0-dev.1" for a development build published as a GitHub pre-release. Both are app.sonic and
+ * update each other; the version code follows from the name so a development build always sorts
+ * after the release before it and before its own release:
+ * major × 1,000,000 + minor × 10,000 + patch × 100 + (the dev number, or 99 for a release).
+ */
+val sonicVersion = "1.1.0"
+
+fun versionCodeOf(name: String): Int {
+    val m = Regex("""^(\d+)\.(\d+)\.(\d+)(?:-dev\.(\d+))?$""").matchEntire(name)
+        ?: error("Version $name must look like 1.2.3 or 1.2.3-dev.4")
+    val (major, minor, patch, dev) = m.destructured
+    require(minor.toInt() < 100 && patch.toInt() < 100 && (dev.isEmpty() || dev.toInt() in 1..98)) { "Version $name is out of range" }
+    return major.toInt() * 1_000_000 + minor.toInt() * 10_000 + patch.toInt() * 100 + (dev.toIntOrNull() ?: 99)
+}
+
 android {
     namespace = "app.runout"
     compileSdk = 36
@@ -16,10 +33,20 @@ android {
         applicationId = "app.sonic"
         minSdk = 28
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.0.0"
+        versionCode = versionCodeOf(sonicVersion)
+        versionName = sonicVersion
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["runoutLabel"] = "@string/app_name"
+        // The in-app update check against GitHub. F-Droid builds pass -Psonic.updates=false: F-Droid
+        // brings their updates itself.
+        buildConfigField("boolean", "UPDATE_CHECK", (project.findProperty("sonic.updates") as String? ?: "true").toBoolean().toString())
+    }
+
+    // No dependency metadata blob in the APK, so a build from source can match the published one
+    // byte for byte (F-Droid's reproducible builds).
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     buildTypes {

@@ -1,15 +1,38 @@
 # Releasing Sonic
 
-Releases are published on this repository's [releases page](https://github.com/Abhiroop1122/runout/releases).
+Releases are published on this repository's [releases page](https://github.com/Abhiroop1122/Sonic/releases).
 
-| Kind | Tag | Variant | APK |
-| :--- | :--- | :--- | :--- |
-| **Release** | `v<version>` | `release`: `app.sonic`, label **Sonic.** | `Sonic-<version>.apk` |
-| **Development pre-release** (optional) | `v<version>-dev.<n>` | `debug`: `app.sonic.dev`, label **Sonic. Dev** | `Sonic-<version>-development.apk` |
+| Kind | Version | Tag | GitHub | APK |
+| :--- | :--- | :--- | :--- | :--- |
+| **Release** | `1.1.0` | `v1.1.0` | release, marked Latest | `Sonic-1.1.0.apk` |
+| **Development build** | `1.2.0-dev.1` | `v1.2.0-dev.1` | pre-release | `Sonic-1.2.0-dev.1.apk` |
 
-1.0.0 (version code 15) is the first stable release. Every APK supports Android 9 or newer on
-arm64-v8a, armeabi-v7a, x86_64 and x86. Development pre-releases are only for builds that need to
-be shared before a release; most versions will not have one.
+Versions follow [Semantic Versioning](https://semver.org): a fix bumps the patch (1.1.1), a
+feature the minor (1.2.0), a change that breaks what people rely on the major. A development build
+carries the version it leads up to, numbered from 1 (`1.2.0-dev.1`, `1.2.0-dev.2`, then `1.2.0`).
+
+Both kinds are the release variant, `app.sonic`, label **Sonic.**, so they update each other in
+place. The debug variant (`app.sonic.dev`, **Sonic. Dev**) is for development on your own phone and
+is never published.
+
+The version is set in one place, `sonicVersion` in `app/build.gradle.kts`. The version code follows
+from it (major × 1,000,000 + minor × 10,000 + patch × 100 + the dev number, or 99 for a release), so
+a development build always sorts after the release before it and before its own release:
+1.0.0 was 15, 1.1.0 is 1010099, 1.2.0-dev.1 is 1020001, 1.2.0 is 1020099.
+
+Every APK supports Android 9 or newer on arm64-v8a, armeabi-v7a, x86_64 and x86.
+
+## Update channels
+
+The app checks GitHub itself (Settings › About, and once a day when Settings › Flags › check for
+updates is on). The first time someone checks, they choose:
+
+- **stable**: GitHub's latest release (`/releases/latest`). Pre-releases are never offered.
+- **development**: the newest of all releases, pre-releases included (`/releases`).
+
+So the tag and the pre-release flag are what the app reads. A release must be a full release with
+the Latest label; a development build must be a pre-release that does not take Latest. A newer
+release opens its page in the browser; the app never downloads or installs anything itself.
 
 The release variant is signed with the debug key of the maintainer's machine, so only the
 maintainer builds releases. That keeps the signing certificate the same from one release to the
@@ -18,7 +41,7 @@ next, which Android requires for an update to install over the previous version.
 ## 1. Prepare
 
 1. Start from a reviewed, clean source revision.
-2. Set `versionName` and increase `versionCode` in `app/build.gradle.kts`.
+2. Set `sonicVersion` in `app/build.gradle.kts` (the version code follows).
 3. Update `CHANGELOG.md` and `release/RELEASE_NOTES.md`. The release notes become the GitHub
    release body.
 
@@ -91,46 +114,57 @@ as history.
 
 ## 5. Publish
 
-Push the commit to `Abhiroop1122/runout`, then create the tag and release on that exact commit:
+Push the commit to `Abhiroop1122/Sonic`, then create the tag and release on that exact commit:
 
 ```bash
 gh release create v<version> \
   release/Sonic-<version>.apk \
   release/Sonic-<version>.apk.sha256 \
   release/Sonic-<version>-VERIFICATION.md \
-  --repo Abhiroop1122/runout --target <full-commit-sha> \
-  --title 'Sonic <version>' --latest \
+  --repo Abhiroop1122/Sonic --target <full-commit-sha> \
+  --title 'Sonic. <version>' --latest \
   --notes-file release/RELEASE_NOTES.md
 ```
 
 Download the published APK and check it against the published checksum:
 
 ```bash
-gh release download v<version> --repo Abhiroop1122/runout --pattern 'Sonic-*' --dir /tmp/sonic-check
+gh release download v<version> --repo Abhiroop1122/Sonic --pattern 'Sonic-*' --dir /tmp/sonic-check
 (cd /tmp/sonic-check && shasum -a 256 -c Sonic-<version>.apk.sha256)
 ```
 
 Creating a release is separate from opening a pull request.
 
-## Development pre-releases
+## Development builds
 
-When a build has to be shared before a release, build the debug variant
-(`./gradlew :app:assembleDebug -x buildSoulseekNative`), run the same checks on
-`app/build/outputs/apk/debug/app-debug.apk`, and name the files `Sonic-<version>-development.apk`,
-`.apk.sha256` and `Sonic-<version>-VERIFICATION.md`. Publish it as a pre-release that does not take
-the Latest label:
+A development build goes through the same steps with `sonicVersion = "<next>-dev.<n>"`: the release
+variant, the same checks, `Sonic-<next>-dev.<n>.apk` with its checksum and report. Publish it as a
+pre-release that does not take the Latest label, so only the development channel sees it:
 
 ```bash
-gh release create v<version>-dev.<n> \
-  release/Sonic-<version>-development.apk \
-  release/Sonic-<version>-development.apk.sha256 \
-  release/Sonic-<version>-VERIFICATION.md \
-  --repo Abhiroop1122/runout --target <full-commit-sha> \
-  --prerelease --latest=false --title 'Sonic <version> development' \
+gh release create v<next>-dev.<n> \
+  release/Sonic-<next>-dev.<n>.apk \
+  release/Sonic-<next>-dev.<n>.apk.sha256 \
+  release/Sonic-<next>-dev.<n>-VERIFICATION.md \
+  --repo Abhiroop1122/Sonic --target <full-commit-sha> \
+  --prerelease --latest=false --title 'Sonic. <next> development <n>' \
   --notes-file release/RELEASE_NOTES.md
 ```
 
-The debug variant installs as a separate app (`app.sonic.dev`) beside the release.
+## F-Droid
+
+Sonic is being made ready for F-Droid; it isn't submitted yet. What's in place:
+
+- Store text and pictures in `fastlane/metadata/android/en-US/` (title, short and full description,
+  icon, feature graphic, screenshots) and a changelog per version code in its `changelogs/`
+  (`<versionCode>.txt`, at most 500 characters). Add one for every release.
+- Tags `v<version>` on every release commit. F-Droid's recipe only follows release tags
+  (`UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$`), never development builds.
+- No dependency metadata in the APK (`dependenciesInfo` off), for reproducible builds.
+- F-Droid builds pass `-Psonic.updates=false`: the in-app GitHub check is off and About says
+  updates come through F-Droid.
+- A draft recipe for `fdroiddata` in [`fdroid/app.sonic.yml`](fdroid/app.sonic.yml), and the steps
+  in [docs/FDROID.md](docs/FDROID.md).
 
 ## Older installs and what is still missing
 

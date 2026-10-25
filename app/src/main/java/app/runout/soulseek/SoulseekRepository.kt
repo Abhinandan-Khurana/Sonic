@@ -321,20 +321,34 @@ class SoulseekRepository(
         val next = dao.resumable(owner).firstOrNull { it.state == "QUEUED" && it.error == null } ?: return
         startTransfer(next)
     }
+    /**
+     * Stops every download that's moving or about to: queued or downloading, and also the paused
+     * ones Sonic would start again by itself (a retry or a search for another copy waiting, or a
+     * resume after Android interrupted it). One that can't be paused doesn't stop the rest.
+     */
     fun pauseAll(): Job = work {
         requireSignedIn()
-        val ids = _transfers.value.filter { it.state in setOf(SoulseekTransferState.QUEUED, SoulseekTransferState.DOWNLOADING) }.map { it.id }
-        ids.forEach { pauseOne(it) }
+        val ids = _transfers.value.filter {
+            it.state == SoulseekTransferState.QUEUED || it.state == SoulseekTransferState.DOWNLOADING ||
+                (it.state == SoulseekTransferState.PAUSED && (it.recovery != null || interruptedIds.containsKey(it.id)))
+        }.map { it.id }
+        ids.forEach { id -> runCatching { pauseOne(id) }.onFailure { if (it is CancellationException) throw it } }
     }
+    /** Starts every paused or queued Soulseek download again; one that can't start doesn't hold up the rest. */
     fun resumeAll(): Job = work {
         requireSignedIn()
-        dao.resumable(session.value.username!!).filter { it.provider == "Soulseek" }.forEach { resumeOne(it.id) }
+        var failure: Throwable? = null
+        dao.resumable(session.value.username!!).filter { it.provider == "Soulseek" }.forEach { row ->
+            runCatching { resumeOne(row.id) }.onFailure { if (it is CancellationException) throw it; failure = failure ?: it }
+        }
+        failure?.let { throw it }
     }
     fun setTurtle(enabled: Boolean) { preferences.setTurtle(enabled) }
     fun pause(id: String): Job = work { pauseOne(id); pumpQueue() }
     private suspend fun pauseOne(id: String) {
         interruptedIds.remove(id)
         val row = ownTransfer(id)
+        retryJobs.remove(id)?.cancel()
         seekJobs.remove(id)?.cancel()
         publicationJobs.remove(id)?.cancel()
         archiveJobs.remove(id)?.cancel()

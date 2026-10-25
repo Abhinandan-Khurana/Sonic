@@ -1,0 +1,42 @@
+# DRAFT build recipe for F-Droid (fdroiddata/metadata/app.sonic.yml). Not submitted yet; see
+# docs/FDROID.md for the steps and what to check before the merge request.
+AntiFeatures:
+  NonFreeNet:
+    en-US: Dig and Friends use the Soulseek network, whose server is not open source.
+Categories:
+  - Multimedia
+License: MIT
+AuthorName: Abhiroop1122
+SourceCode: https://github.com/Abhiroop1122/Sonic
+IssueTracker: https://github.com/Abhiroop1122/Sonic/issues
+Changelog: https://github.com/Abhiroop1122/Sonic/blob/HEAD/CHANGELOG.md
+
+AutoName: Sonic.
+
+RepoType: git
+Repo: https://github.com/Abhiroop1122/Sonic.git
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 1010099
+    commit: v1.1.0
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-21-jdk-headless
+      - update-java-alternatives -a
+    srclibs:
+      - rustup@1.27.1
+    prebuild:
+      # Rust 1.91.0 with the four Android targets; the Gradle task builds the Soulseek library.
+      - $$rustup$$/rustup-init.sh -y --no-modify-path --default-toolchain 1.91.0 --target aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+    ndk: r27d
+    gradle:
+      - yes
+    gradleprops:
+      - sonic.updates=false
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+CurrentVersion: 1.1.0
+CurrentVersionCode: 1010099

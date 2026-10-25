@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -257,9 +258,9 @@ private fun Verdict(text: String, lamp: Color, onHelp: (() -> Unit)?) {
 }
 
 /**
- * One station, compact: a 10 dp square node (black, amber where quality changes) on the line of the
- * 12/700 name, the name 11 dp after it and the format at the right; under it the key and the grey
- * detail. The nodes sit under the verdict's lamp and the text under its words, and a 1 dp rail runs
+ * One station: a 10 dp square node (black, amber where quality changes) on the line of the 12/700
+ * name, the name 11 dp after it and the format at the right. Only where quality changes does a grey
+ * line under it say why; a station that keeps the music as it is says nothing more. A 1 dp rail runs
  * through the nodes from the first station to the last.
  */
 @Composable
@@ -274,10 +275,11 @@ private fun StepRow(kicker: String, step: SignalPath.Step, first: Boolean = fals
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
             Box(Modifier.width(10.dp).fillMaxHeight().rail(top = !last, bottom = !last))
-            BasicText(
-                "${kicker.lowercase()} · ${step.detail.lowercase()}",
-                style = Room.LabelQuiet.copy(lineHeight = 15.sp),
-                modifier = Modifier.weight(1f).padding(top = 6.dp, bottom = if (last) 0.dp else 28.dp),
+            if (step.ok) Spacer(Modifier.weight(1f).height(if (last) 0.dp else 22.dp))
+            else BasicText(
+                step.detail.lowercase(),
+                style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
+                modifier = Modifier.weight(1f).padding(top = 6.dp, bottom = if (last) 0.dp else 22.dp).testTag("why:$kicker"),
             )
         }
     }

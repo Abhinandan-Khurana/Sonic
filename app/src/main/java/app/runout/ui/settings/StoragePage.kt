@@ -39,10 +39,10 @@ import app.runout.library.StorageState
 import app.runout.ui.*
 
 /**
- * Settings › Storage, the page two fingers find on Settings: the phone's space with the music and
- * downloads in it, each folder by kind (hi-res and cd-quality flac, other audio, pictures,
- * unfinished downloads, the rest) with its largest records, and Sonic's own files. It measures
- * when it opens; nothing is deleted here but Sonic's cache.
+ * Settings › Storage, the page two fingers find on Settings: your music beside the whole phone, then
+ * the music and download folders, each by kind (hi-res and cd-quality flac, other audio, pictures, unfinished downloads, the rest) with
+ * its records largest first, and Sonic's own files. It measures when it opens; nothing is deleted
+ * here but Sonic's cache and the records you choose.
  */
 @Composable
 internal fun StoragePage(state: RoomState, actions: RoomActions) {
@@ -50,10 +50,6 @@ internal fun StoragePage(state: RoomState, actions: RoomActions) {
     var confirm by remember { mutableStateOf<RecordUsage?>(null) }
     LaunchedEffect(Unit) { if (state.storage !is StorageState.Measuring) actions.analyzeStorage() }
     Column(Modifier.fillMaxWidth().testTag("panel:storage"), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        BasicText(
-            "what your music and downloads take up, read from the folders you picked. only sizes and names are looked at.",
-            style = Room.Label.copy(color = Room.Body, lineHeight = 15.sp),
-        )
         // The way back, as the way in: two fingers, this time down.
         Row(Modifier.fillMaxWidth().testTag("storage-back-hint"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
             androidx.compose.foundation.Canvas(Modifier.size(20.dp)) { drawTwoFingerSwipe(Room.Quiet) }
@@ -112,19 +108,7 @@ private fun SheetKey(text: String, ink: Color, fill: Color, modifier: Modifier, 
 
 @Composable
 private fun Report(r: StorageReport, actions: RoomActions, onDelete: (RecordUsage) -> Unit) {
-    val music = r.music?.bytes ?: 0L
-    val downloads = r.downloads?.bytes ?: 0L
-    r.device?.let { d ->
-        PageSection("01 phone") {
-            val used = (d.total - d.free).coerceAtLeast(0L)
-            StatsStrip(listOf(bytes(d.total) to "total", bytes(used) to "used", bytes(d.free) to "free"))
-            UsageBar(listOf(music to Room.Signal, downloads to Room.Accent, (used - music - downloads).coerceAtLeast(0L) to Room.Quiet, d.free to Room.HairlineSoft))
-            Legend(Room.Signal, "your music", music, d.total)
-            if (r.downloads != null) Legend(Room.Accent, "downloads", downloads, d.total)
-            Legend(Room.Quiet, "everything else", (used - music - downloads).coerceAtLeast(0L), d.total)
-            Legend(Room.HairlineSoft, "free", d.free, d.total)
-        }
-    }
+    r.device?.let { PhoneShare(it, r.music?.bytes ?: 0L, r.downloads?.bytes ?: 0L) }
     PageSection("02 music folder" + (r.music?.label?.let { " · ${it.lowercase()}" } ?: "")) {
         r.music?.let { Folder(it, "storage-music", onDelete) } ?: Quiet("no music folder yet. choose one in library.")
     }
@@ -196,6 +180,38 @@ private fun colourOf(k: StorageKind): Color = when (k) {
     StorageKind.PICTURES -> Room.Quiet
     StorageKind.PARTIAL -> Room.Warning
     StorageKind.OTHER -> Room.Hairline
+}
+
+/**
+ * 01 phone: your music beside the whole phone, in one line and one bar: the music, the downloads,
+ * everything else on the phone, and what's free.
+ */
+@Composable
+private fun PhoneShare(d: app.runout.library.DeviceUsage, music: Long, downloads: Long) {
+    PageSection("01 phone") {
+        val used = (d.total - d.free).coerceAtLeast(0L)
+        val others = (used - music - downloads).coerceAtLeast(0L)
+        val yours = music + downloads
+        BasicText(
+            "your music takes ${bytes(yours)} of ${bytes(d.total)} · ${percent(yours, d.total)}. ${bytes(d.free)} free.",
+            style = Room.Text.copy(lineHeight = 17.sp),
+            modifier = Modifier.testTag("storage-phone"),
+        )
+        UsageBar(listOf(music to Room.Signal, downloads to Room.Accent, others to Room.Quiet, d.free to Room.HairlineSoft))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOfNotNull(
+                Room.Signal to "music",
+                (Room.Accent to "downloads").takeIf { downloads > 0 },
+                Room.Quiet to "everything else",
+                Room.HairlineSoft to "free",
+            ).forEach { (c, label) ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(8.dp).background(c))
+                    BasicText(label, style = Room.LabelQuiet)
+                }
+            }
+        }
+    }
 }
 
 /** A 10 dp bar in a 1 dp ink outline, its parts side by side in proportion. */

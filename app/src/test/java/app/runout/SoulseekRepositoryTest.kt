@@ -606,6 +606,34 @@ class SoulseekRepositoryTest {
         assertEquals("held progress never overwrites a newer state", "QUEUED", row().state)
     }
 
+    @Test fun `pause all also stops downloads waiting to retry, and none of them comes back`() = runBlocking {
+        login()
+        val retryAt = System.currentTimeMillis() + 400
+        db.soulseek().putTransfer(TransferRow("runout-test:retry", "runout-test", "maya", "Music\\Night Drive\\01.flac", 1000,
+            state = "PAUSED", failure = FailureKind.PEER_AWAY.name, recovery = Recovery.RETRY.name, retryAt = retryAt, retries = 1))
+        db.soulseek().putTransfer(TransferRow("runout-test:queued", "runout-test", "maya", "Music\\Night Drive\\02.flac", 1000, state = "QUEUED"))
+        repo.onForegroundChanged(true).join()
+        await("both rows observed and the retry timer set") { repo.transfers.value.size == 2 && repo.pendingRetries == 1 }
+        repo.pauseAll().join()
+        await("both paused for good") {
+            runBlocking { listOf("runout-test:retry", "runout-test:queued").all { db.soulseek().transfer(it)!!.let { r -> r.state == "PAUSED" && r.recovery == null } } }
+        }
+        assertEquals(0, repo.pendingRetries)
+        Thread.sleep(retryAt - System.currentTimeMillis() + 600)
+        assertTrue("nothing restarted", transport.commands.none { it.optString("op") == "download" })
+        assertEquals("PAUSED", db.soulseek().transfer("runout-test:retry")!!.state)
+    }
+
+    @Test fun `resume all starts every paused download even when one of them can't start`() = runBlocking {
+        login(); destination()
+        db.soulseek().putTransfer(TransferRow("runout-test:a", "runout-test", "maya", "Music\\Night Drive\\01.flac", 1000, state = "PAUSED"))
+        db.soulseek().putTransfer(TransferRow("runout-test:b", "runout-test", "maya", "Music\\Night Drive\\02.flac", 1000, state = "PAUSED"))
+        transport.onCommand = { c -> if (c.optString("op") == "download" && c.optString("id") == "runout-test:a") error("peer refused") }
+        repo.resumeAll().join()
+        assertTrue("the second still starts", transport.commands.any { it.optString("op") == "download" && it.optString("id") == "runout-test:b" })
+        assertNotNull("and the failure is still told", repo.error.value)
+    }
+
     @Test fun `a download waiting to retry has one timer however often you come back`() = runBlocking {
         login()
         db.soulseek().putTransfer(TransferRow("runout-test:wait", "runout-test", "maya", "Music\\Night Drive\\01.flac", 1000,

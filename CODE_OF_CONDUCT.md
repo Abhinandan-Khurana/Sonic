@@ -30,7 +30,7 @@ someone is representing the project in public.
 ## Reporting
 
 Report a problem to the maintainer privately through
-[GitHub's security advisory form](https://github.com/Abhiroop1122/runout/security/advisories/new).
+[GitHub's security advisory form](https://github.com/Abhiroop1122/Sonic/security/advisories/new).
 Reports are handled confidentially. Reports about a security problem should go there rather than
 into a public issue.
 

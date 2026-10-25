@@ -88,16 +88,16 @@ import kotlin.math.roundToInt
  * take the whole screen; the rest slide up as glass sheets.
  */
 /**
- * The room's places. Each numbered one is a full page under the nav bar, headed "02 / dig" and so
- * on (the room is 01); Audio quality is a panel over the room.
+ * The room's places. Each is a full page under the nav bar, headed by its name; Audio quality is a
+ * panel over the room.
  */
-enum class Panel(val title: String, val nav: String, val index: String, val inStrip: Boolean = true, val fullPage: Boolean = true) {
-    DIG("Dig", "Dig", "02 / dig"),
-    DROPS("Drops", "Drops", "03 / friday drops"),
-    FRIENDS("Friends", "Friends", "04 / friends"),
-    SETTINGS("Settings", "Settings", "05 / settings"),
-    DOWNLOADS("Downloads", "Downloads", "06 / downloads", inStrip = false),
-    SIGNAL("Audio quality", "Audio", "", inStrip = false, fullPage = false),
+enum class Panel(val title: String, val nav: String, val inStrip: Boolean = true, val fullPage: Boolean = true) {
+    DIG("Dig", "Dig"),
+    DROPS("Drops", "Drops"),
+    FRIENDS("Friends", "Friends"),
+    SETTINGS("Settings", "Settings"),
+    DOWNLOADS("Downloads", "Downloads", inStrip = false),
+    SIGNAL("Audio quality", "Audio", inStrip = false, fullPage = false),
 }
 
 // ---------------------------------------------------------------------------------------------

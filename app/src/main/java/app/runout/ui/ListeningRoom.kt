@@ -46,6 +46,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -205,6 +207,12 @@ data class RoomState(
     val look: Look = Look(),
     /** Settings › Storage (two fingers on Settings): the folders measured. */
     val storage: app.runout.library.StorageState = app.runout.library.StorageState.Idle,
+    /** The last check against GitHub's latest release (Settings › About, and the notice on Settings). */
+    val update: app.runout.update.UpdateState = app.runout.update.UpdateState.Idle,
+    /** The daily update check (Settings › Flags). */
+    val autoUpdates: Boolean = true,
+    /** Stable or development builds; null until you've chosen (asked at your first check). */
+    val updateChannel: app.runout.update.UpdateChannel? = null,
     /** Uploads only on Wi-Fi or Ethernet. */
     val soulseekWifiOnly: Boolean = true,
     /** How many people can download from you at once. */
@@ -228,6 +236,8 @@ interface RoomActions : DeckActions {
     fun discLanded() {}
     /** Puts the record on the platter cued at [trackId], needle up. Only the deck starts the music. */
     fun cueTrack(album: Album, trackId: String?) { load(album) }
+    /** A song from the track wheel, on either side: it plays (Deck.playTrack). */
+    fun playTrack(sideIndex: Int, trackIndex: Int) {}
     fun toggleCrackle()
 
     fun updateSound(transform: (SoundSettings) -> SoundSettings) {}
@@ -278,6 +288,12 @@ interface RoomActions : DeckActions {
     fun setIntroOnLaunch(on: Boolean) {}
     /** Measures the music and download folders for Settings › Storage. */
     fun analyzeStorage() {}
+    /** Asks GitHub for a newer release (Settings › About). */
+    fun checkForUpdates() {}
+    fun setAutoUpdates(enabled: Boolean) {}
+    fun setUpdateChannel(channel: app.runout.update.UpdateChannel) {}
+    /** Opens a release's page in the browser, where its APK is. */
+    fun openUpdate(page: String) {}
     /** Empties Sonic's cache (not covers, not the library). */
     fun clearCache() {}
     /** Deletes a record's folder from the phone (Settings › Storage, after the warning). */
@@ -1097,7 +1113,7 @@ fun RoomScreen(
             // Dig and Friends scroll their own lists; the rest scroll as one page.
             // Sideways, the places that need the phone upright say so instead; turned back, the page is as it was.
             val upright = portrait || shown !in UPRIGHT_ONLY
-            FullPage(shown.index, title, onClose = { closePanel() }, pageSheets, scroll = upright && shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
+            FullPage(title, onClose = { closePanel() }, pageSheets, scroll = upright && shown != Panel.DIG && shown != Panel.FRIENDS, onBack = headBack) {
                 if (!upright) UprightNote(Modifier.fillMaxWidth().weight(1f), large = true)
                 else CompositionLocalProvider(LocalPageSteps provides pageSteps) { key(shown, home) { panelContent(shown) } }
             }
@@ -1443,11 +1459,12 @@ private fun PanelSheet(
 }
 
 /**
- * A place with its own page: the TE screen head ("02 / dig", "close ×", the 44/700 title), then the
+ * A place with its own page: the TE screen head ("close ×" over the 44/700 title), then the
  * body 11 dp below it and 22 dp in, above the keyboard and the nav bar.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, onBack: () -> (() -> Unit)? = { null }, content: @Composable ColumnScope.() -> Unit) {
+private fun FullPage(title: String, onClose: () -> Unit, sheets: PageSheetHost, scroll: Boolean = false, navRoom: Boolean = true, onBack: () -> (() -> Unit)? = { null }, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().background(Room.Background).pointerInput(Unit) { detectTapGestures { } }) {
         Column(
             Modifier
@@ -1457,11 +1474,13 @@ private fun FullPage(index: String, title: String, onClose: () -> Unit, sheets: 
                 // the larger of the two, never both.
                 .windowInsetsPadding(pageBottom(navRoom)),
         ) {
-            TeScreenHead(index, title, onClose, onBack = onBack)
+            TeScreenHead(title, onClose, onBack = onBack)
             val body = Modifier.fillMaxWidth().weight(1f)
+            // With the keyboard up the body sits right on it: no foot margin between a text box and the keys.
+            val foot = if (WindowInsets.isImeVisible) 0.dp else 22.dp
             CompositionLocalProvider(LocalPageSheetHost provides sheets) {
                 Column(
-                    (if (scroll) body.verticalScroll(rememberScrollState()) else body).padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = 22.dp),
+                    (if (scroll) body.verticalScroll(rememberScrollState()) else body).padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = foot),
                     content = content,
                 )
             }
@@ -1520,9 +1539,10 @@ internal const val LANDSCAPE_ROOM = 0.4625f
 /** The nav bar's height: 11 + 20 icon + 8 + a 10 sp line + 11. */
 internal val NAV_HEIGHT = 62.dp
 
-/** A new Friday Drop, or an unread message: an orange square on that place's cell. */
+/** A new Friday Drop, an unread message or a newer release of Sonic: an orange square on that place's cell. */
 internal fun navBadges(state: RoomState): Set<Panel> = buildSet {
     if (state.newDrop) add(Panel.DROPS)
+    if (state.update is app.runout.update.UpdateState.Available) add(Panel.SETTINGS)
     if (state.soulseekConversations.any { it.unread > 0 }) add(Panel.FRIENDS)
 }
 
@@ -1691,14 +1711,17 @@ private fun EmptyRoom(state: RoomState, actions: RoomActions, modifier: Modifier
 }
 
 /**
- * The record's songs, coded by side (a1, a2, b1…): the one playing sharp between ink rules with
- * "▲▼", the others soft and fading. Scroll through them; tap one to drop the needle there.
+ * The record's songs, coded by side (a1, a2, b1…), as a picker: the rows snap to the middle, where
+ * the song under the bar is inverted with "tap to play" (or "playing" for the one that's on). The
+ * playing song's code stays orange wherever it is; the rest soften with distance from the middle.
+ * Only the song under the bar plays on a tap, turning the record over first when it's on the other
+ * side; tapping another song rolls it under the bar.
  */
 @Composable
 private fun TrackWheel(state: RoomState, actions: RoomActions, rows: Int, help: @Composable (Modifier) -> Unit = {}) {
     val deck = state.deck
     val album = deck.album
-    val height = WHEEL_FOCUS + WHEEL_ROW * (rows - 1)
+    val height = WHEEL_ROW * rows
     if (album == null) {
         // Keeps its room, so the crate doesn't jump as records come and go.
         Spacer(Modifier.fillMaxWidth().height(height))
@@ -1706,47 +1729,73 @@ private fun TrackWheel(state: RoomState, actions: RoomActions, rows: Int, help: 
     }
     val list = remember(album.id, deck.sides) { deck.sides.flatMap { side -> side.tracks.mapIndexed { i, t -> Triple(side.index, i, t) } } }
     val current = list.indexOfFirst { (side, i, _) -> side == deck.sideIndex && i == deck.trackIndex }.coerceAtLeast(0)
-    val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
-    LaunchedEffect(current) { scroll.animateScrollToItem((current - 1).coerceAtLeast(0)) }
+    val scroll = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = current)
+    // The song playing comes to the middle whenever it changes.
+    LaunchedEffect(album.id, current) { scroll.animateScrollToItem(current) }
+    // The row nearest the middle of the window is the one under the bar.
+    val middle by remember(scroll) {
+        androidx.compose.runtime.derivedStateOf {
+            val info = scroll.layoutInfo
+            val centre = (info.viewportStartOffset + info.viewportEndOffset) / 2
+            info.visibleItemsInfo.minByOrNull { kotlin.math.abs(it.offset + it.size / 2 - centre) }?.index ?: current
+        }
+    }
     val tick = rememberTick()
-    androidx.compose.foundation.lazy.LazyColumn(state = scroll, modifier = Modifier.fillMaxWidth().height(height).testTag("track-wheel")) {
+    val wheelScope = rememberCoroutineScope()
+    val detent = rememberTick(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
+    LaunchedEffect(scroll) {
+        var last = -1
+        androidx.compose.runtime.snapshotFlow { middle }.collect { n -> if (last >= 0 && n != last && scroll.isScrollInProgress) detent(); last = n }
+    }
+    val pad = (height - WHEEL_ROW) / 2
+    androidx.compose.foundation.lazy.LazyColumn(
+        state = scroll,
+        contentPadding = PaddingValues(vertical = pad),
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(scroll, androidx.compose.foundation.gestures.snapping.SnapPosition.Center),
+        modifier = Modifier.fillMaxWidth().height(height).testTag("track-wheel"),
+    ) {
         items(list.size) { n ->
             val (sideIndex, i, track) = list[n]
-            val focused = n == current
-            val distance = kotlin.math.abs(n - current)
+            val underBar = n == middle
+            val playing = n == current
+            val distance = kotlin.math.abs(n - middle)
+            val ink = if (underBar) Room.OnInk else Room.Ink
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .height(WHEEL_ROW)
                     .then(
-                        if (focused) Modifier.height(WHEEL_FOCUS).hairlineTop(Room.Ink).hairlineBottom(Room.Ink)
-                        else Modifier.height(WHEEL_ROW).blur(if (distance == 1) 0.6.dp else 1.dp).alpha(if (distance == 1) 0.45f else 0.25f),
+                        if (underBar) Modifier.background(Room.Ink)
+                        else Modifier.blur(if (distance == 1) 0.6.dp else 1.dp).alpha(if (distance == 1) 0.45f else 0.25f),
                     )
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button) {
+                    // Like a wheel: only the song under the bar plays. Another one rolls under the bar first.
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = if (underBar) "play" else "move here") {
                         tick()
-                        if (sideIndex == deck.sideIndex) {
-                            val s = deck.side ?: return@clickable
-                            val at = s.positionOf(i, 0) + 1
-                            actions.needleDrop((at.toFloat() / s.durationMs.coerceAtLeast(1)).coerceIn(0f, 0.999f))
-                        } else actions.cueTrack(album, track.id)
+                        if (underBar) actions.playTrack(sideIndex, i) else wheelScope.launch { scroll.animateScrollToItem(n) }
                     }
+                    .padding(horizontal = 8.dp)
                     .testTag("track:${'A' + sideIndex}${i + 1}"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(11.dp),
             ) {
-                BasicText("${'a' + sideIndex}${i + 1}", style = Room.Label.copy(color = if (focused) Room.Signal else Room.Quiet), modifier = Modifier.width(22.dp))
-                BasicText(track.title.lowercase(), style = if (focused) Room.Text else Room.Label, maxLines = 1, modifier = Modifier.weight(1f))
-                if (focused) {
+                BasicText(
+                    "${'a' + sideIndex}${i + 1}",
+                    style = Room.Label.copy(color = if (playing) Room.Signal else if (underBar) ink else Room.Quiet),
+                    modifier = Modifier.width(22.dp),
+                )
+                BasicText(track.title.lowercase(), style = (if (underBar) Room.Text else Room.Label).copy(color = ink), maxLines = 1, modifier = Modifier.weight(1f))
+                if (underBar) {
                     help(Modifier)
-                    BasicText("▲▼", style = Room.LabelQuiet)
+                    if (playing && deck.isPlaying) BasicText("playing", style = Room.Label.copy(color = ink), modifier = Modifier.testTag("wheel-playing"))
+                    else BasicText("tap to play", style = Room.Label.copy(color = Room.Signal), modifier = Modifier.testTag("wheel-tap-to-play"))
                 }
             }
         }
     }
 }
 
-/** The wheel's rows: 10 sp with 6 dp above and below; the playing one 24 + 12 between its rules. */
-private val WHEEL_ROW = 25.dp
-private val WHEEL_FOCUS = 36.dp
+/** The wheel's rows, all one height so they snap evenly under the bar in the middle. */
+private val WHEEL_ROW = 28.dp
 
 private fun clock(ms: Long, pad: Boolean): String {
     val total = (ms / 1000).coerceAtLeast(0)
